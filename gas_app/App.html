@@ -2565,24 +2565,50 @@ function filterPBActions(query) {
   query = (query || '').toLowerCase().trim();
   var panel = document.getElementById('pb-actions-panel');
   if (!panel) return;
+  var allPanels = panel.querySelectorAll('.pb-cat-panel');
   var chips = panel.querySelectorAll('.pb-action-chip');
   var headers = panel.querySelectorAll('.pb-section-header');
+
   if (!query) {
-    // Reset: show all chips
+    // Reset: hide all chips, show only the active category
     for (var i = 0; i < chips.length; i++) chips[i].style.display = '';
     for (var i = 0; i < headers.length; i++) headers[i].style.display = '';
+    // Restore category-based visibility
+    var activeTab = document.querySelector('.pb-action-tab.active');
+    if (activeTab) {
+      var catIdx = activeTab.getAttribute('data-cat');
+      for (var i = 0; i < allPanels.length; i++) allPanels[i].style.display = 'none';
+      var activePanel = document.getElementById('pb-cat-' + catIdx);
+      if (activePanel) activePanel.style.display = '';
+    }
     return;
   }
+
+  // Show ALL category panels when searching
+  for (var i = 0; i < allPanels.length; i++) allPanels[i].style.display = '';
+
   // Filter chips by data-action match
+  var anyMatch = false;
   for (var i = 0; i < chips.length; i++) {
     var match = chips[i].getAttribute('data-action').indexOf(query) !== -1;
     chips[i].style.display = match ? '' : 'none';
+    if (match) anyMatch = true;
   }
-  // Hide headers if no visible chips follow them
+
+  // Hide headers if their section has no visible chips
   for (var i = 0; i < headers.length; i++) {
-    var next = headers[i].parentElement;
-    var visibleSiblings = next ? next.querySelectorAll('.pb-action-chip:not([style*="display: none"])') : [];
-    headers[i].style.display = visibleSiblings.length > 0 ? '' : 'none';
+    var wrapper = headers[i].closest('.pb-cat-panel');
+    if (!wrapper) continue;
+    // Check visible chips in this specific section (between this header and next)
+    var parent = headers[i].parentElement;
+    var visibleInSection = parent ? parent.querySelectorAll('.pb-action-chip:not([style*="display: none"])') : [];
+    headers[i].style.display = visibleInSection.length > 0 ? '' : 'none';
+  }
+
+  // Hide empty category panels
+  for (var i = 0; i < allPanels.length; i++) {
+    var visibleChips = allPanels[i].querySelectorAll('.pb-action-chip:not([style*="display: none"])');
+    allPanels[i].style.display = visibleChips.length > 0 ? '' : 'none';
   }
 }
 
@@ -2610,7 +2636,16 @@ var pbActionSpecs = {
   '*irrigate wound*': { prompt: 'Irrigate which wound?', placeholder: 'e.g. right hand laceration, left forearm bite, facial laceration' },
   '*debride wound*': { prompt: 'Debride which wound?', placeholder: 'e.g. left leg ulcer, right foot burn, sacral wound' },
   '*insert packing (epistaxis)*': { prompt: 'Which side?', placeholder: 'e.g. left, right, bilateral' },
-  '*apply sling*': { prompt: 'Sling which arm?', placeholder: 'e.g. left, right' }
+  '*apply sling*': { prompt: 'Sling which arm?', placeholder: 'e.g. left, right' },
+  '*apply posterior leg splint*': { prompt: 'Which leg?', placeholder: 'e.g. left, right' },
+  '*apply sugar-tong splint*': { prompt: 'Which forearm?', placeholder: 'e.g. left, right' },
+  '*apply thumb spica splint*': { prompt: 'Which hand?', placeholder: 'e.g. left, right' },
+  '*apply ulnar gutter splint*': { prompt: 'Which hand?', placeholder: 'e.g. left, right' },
+  '*apply knee immobilizer*': { prompt: 'Which knee?', placeholder: 'e.g. left, right' },
+  '*remove foreign body*': { prompt: 'Remove what/from where?', placeholder: 'e.g. splinter from right hand, fish bone from throat, glass from left foot' },
+  '*skin biopsy (punch)*': { prompt: 'Biopsy which lesion/where?', placeholder: 'e.g. left forearm lesion, back mole, right shin rash' },
+  '*fine needle aspiration*': { prompt: 'FNA of what?', placeholder: 'e.g. thyroid nodule, left neck lymph node, breast mass' },
+  '*insert pigtail catheter*': { prompt: 'Which side/for what?', placeholder: 'e.g. left pleural effusion, right pneumothorax' }
 };
 
 function insertPBAction(text) {
@@ -2978,14 +3013,15 @@ function renderPBChatInner() {
   if (!App.pbDiagResolved) {
     var categories = [
       { icon: '&#x1FA7A;', name: 'Exam', items: [
-        '---General---','*check vitals*','*general inspection*','*check pupils*','*check reflexes*','*mental status exam*','*GCS assessment*',
-        '---Head/Neck---','*inspect throat*','*otoscope exam*','*fundoscopy*','*palpate lymph nodes*','*palpate thyroid*','*check JVP*','*inspect oral mucosa*',
-        '---Chest---','*auscultate lungs*','*auscultate heart*','*percuss chest*','*inspect chest wall*','*check for chest wall tenderness*',
-        '---Abdomen---','*palpate abdomen*','*percuss abdomen*','*auscultate bowel sounds*','*check for rebound*','*Murphy sign*','*Rovsing sign*','*McBurney point tenderness*','*check for shifting dullness*','*check for hepatomegaly*','*check for splenomegaly*',
-        '---MSK---','*check range of motion*','*straight leg raise*','*palpate joints*','*assess gait*','*Lachman test*','*anterior drawer test*','*Ottawa ankle rules*',
-        '---Neuro---','*neurological exam*','*cranial nerve exam*','*check sensation*','*Romberg test*','*finger-to-nose*','*check Babinski sign*','*check Kernig sign*','*check Brudzinski sign*','*assess pronator drift*',
-        '---Vascular---','*check peripheral pulses*','*check capillary refill*','*Homan sign*','*check for pedal edema*',
-        '---Other---','*inspect skin*','*rectal exam*','*pelvic exam*','*breast exam*','*testicular exam*','*digital rectal exam*'] },
+        '---General---','*check vitals*','*general inspection*','*check pupils (PERRL)*','*check reflexes (DTRs)*','*mental status exam*','*GCS assessment*','*assess hydration status*','*check capillary refill*','*check temperature*',
+        '---HEENT---','*inspect throat/oropharynx*','*otoscope exam (bilateral)*','*fundoscopy*','*palpate cervical lymph nodes*','*palpate all lymph node chains*','*palpate thyroid*','*check JVP*','*inspect oral mucosa/tongue*','*inspect tympanic membrane*','*check visual acuity*','*check visual fields*','*test extraocular movements*','*check for nystagmus*','*inspect nasal septum*','*palpate sinuses*','*palpate TMJ*','*check hearing (whisper test)*','*Weber and Rinne test*',
+        '---Chest---','*auscultate lungs (all fields)*','*auscultate heart (4 areas)*','*percuss chest*','*inspect chest wall*','*check for chest wall tenderness*','*check for tactile fremitus*','*check for egophony*','*palpate trachea (midline)*',
+        '---Abdomen---','*palpate abdomen (all 4 quadrants)*','*deep palpation abdomen*','*percuss abdomen*','*auscultate bowel sounds*','*check for rebound tenderness*','*check for guarding*','*Murphy sign*','*Rovsing sign*','*McBurney point tenderness*','*check for shifting dullness*','*check for hepatomegaly*','*check for splenomegaly*','*check for CVA tenderness*','*check for inguinal hernia*','*check for ascites (fluid wave)*','*psoas sign*','*obturator sign*','*Carnett sign*',
+        '---MSK---','*check range of motion*','*straight leg raise*','*palpate joints*','*assess gait*','*Lachman test*','*anterior drawer test*','*posterior drawer test*','*McMurray test*','*valgus/varus stress test*','*Ottawa ankle rules*','*Ottawa knee rules*','*Thompson test (Achilles)*','*Phalen test*','*Tinel sign*','*Finkelstein test*','*Neer impingement test*','*Hawkins test*','*empty can test*','*FABER test*','*Thomas test*','*palpate spine (spinous processes)*','*assess grip strength*',
+        '---Neuro---','*full neurological exam*','*cranial nerve exam (CN I-XII)*','*check sensation (light touch)*','*check sensation (pin prick)*','*check proprioception*','*check vibration sense*','*Romberg test*','*finger-to-nose test*','*heel-to-shin test*','*rapid alternating movements*','*check Babinski sign*','*check Kernig sign*','*check Brudzinski sign*','*assess pronator drift*','*check tone (upper + lower)*','*assess power (MRC grading)*','*check clonus*','*mini mental status exam (MMSE)*','*Montreal Cognitive Assessment (MoCA)*','*Glasgow Coma Scale assessment*',
+        '---Vascular---','*check peripheral pulses (bilateral)*','*check pedal pulses*','*check radial pulses*','*check ABI (ankle-brachial index)*','*Homan sign*','*check for pedal edema*','*check for pitting edema*','*check for varicose veins*','*Allen test*',
+        '---Skin/Derm---','*inspect skin (full body)*','*inspect rash closely*','*check for skin turgor*','*dermoscopy*','*check for nail changes*','*Wood lamp examination*','*check for petechiae/purpura*','*check for jaundice/icterus*',
+        '---GU/Rectal---','*digital rectal exam*','*pelvic exam (bimanual)*','*speculum exam*','*testicular exam*','*prostate exam*','*external genital exam*','*breast exam (bilateral)*'] },
       { icon: '&#x1F52C;', name: 'Labs', items: [
         '---Routine---','order CBC','order BMP','order CMP','order LFTs','order coags INR PTT','order urinalysis','order serum osmolality',
         '---Cardiac---','draw troponin','order BNP','order D-dimer','order CK and CK-MB',
@@ -2996,11 +3032,26 @@ function renderPBChatInner() {
         '---Hematology---','order blood smear','order reticulocyte count','order haptoglobin','order fibrinogen','order FDP/D-dimer',
         '---Other---','order ABG','order VBG','pregnancy test','type and screen','type and crossmatch','order ferritin and iron studies','order G6PD level','order hemoglobin electrophoresis'] },
       { icon: '&#x1F4F7;', name: 'Imaging', items: [
-        '---X-ray---','order chest X-ray','order abdominal X-ray','order X-ray of extremity','order pelvis X-ray','order C-spine X-ray',
-        '---CT---','order CT head','order CT head with contrast','order CT abdomen/pelvis','order CT chest','order CT angiogram','order CT C-spine','order CT pulmonary angiogram','order CT abdomen with contrast',
-        '---MRI---','order MRI brain','order MRI spine','order MRI joint',
-        '---Ultrasound---','order abdominal ultrasound','order pelvic ultrasound','order Doppler ultrasound','order FAST exam','order bedside echo','order renal ultrasound',
-        '---Cardiac---','order echocardiogram','order EKG','attach cardiac monitor','order stress test'] },
+        '---Chest X-ray---','order chest X-ray PA/lateral','order portable chest X-ray','order chest X-ray AP',
+        '---Abdominal X-ray---','order abdominal X-ray (supine)','order abdominal X-ray (upright)','order abdominal X-ray series (supine + upright + CXR)',
+        '---Extremity X-ray---','order X-ray right hand','order X-ray left hand','order X-ray right wrist','order X-ray left wrist','order X-ray right forearm','order X-ray left forearm','order X-ray right elbow','order X-ray left elbow','order X-ray right shoulder','order X-ray left shoulder','order X-ray right foot','order X-ray left foot','order X-ray right ankle','order X-ray left ankle','order X-ray right tibia/fibula','order X-ray left tibia/fibula','order X-ray right knee','order X-ray left knee','order X-ray right femur','order X-ray left femur','order X-ray right hip','order X-ray left hip',
+        '---Spine X-ray---','order C-spine X-ray (3 view)','order T-spine X-ray','order L-spine X-ray','order pelvis X-ray','order sacrum/coccyx X-ray',
+        '---Other X-ray---','order facial bones X-ray','order nasal bones X-ray','order mandible X-ray','order rib X-ray','order skull X-ray',
+        '---CT Head/Neck---','order CT head without contrast','order CT head with contrast','order CT angiogram head and neck','order CT temporal bones','order CT orbits','order CT sinuses','order CT neck soft tissue',
+        '---CT Chest---','order CT chest without contrast','order CT chest with contrast','order CT pulmonary angiogram (CTPA)','order CT aorta (dissection protocol)',
+        '---CT Abdomen/Pelvis---','order CT abdomen/pelvis with contrast','order CT abdomen/pelvis without contrast','order CT abdomen triple phase (liver)','order CT renal colic protocol (non-contrast)','order CT appendicitis protocol',
+        '---CT Spine---','order CT C-spine','order CT T-spine','order CT L-spine',
+        '---CT Angiography---','order CT angiogram head/neck','order CT angiogram chest (PE)','order CT angiogram abdomen (mesenteric)','order CT angiogram lower extremity',
+        '---MRI Brain---','order MRI brain without contrast','order MRI brain with contrast','order MRI/MRA brain (stroke protocol)',
+        '---MRI Spine---','order MRI cervical spine','order MRI thoracic spine','order MRI lumbar spine','order MRI whole spine',
+        '---MRI Other---','order MRI right knee','order MRI left knee','order MRI right shoulder','order MRI left shoulder','order MRI right hip','order MRI left hip','order MRI right ankle','order MRI left ankle','order MRI right wrist','order MRI left wrist','order MRI pelvis','order MRI abdomen (MRCP)',
+        '---US Abdomen---','order abdominal ultrasound','order RUQ ultrasound','order renal ultrasound','order bladder ultrasound','order appendix ultrasound','order hepatobiliary ultrasound',
+        '---US Pelvis/OB---','order pelvic ultrasound (transabdominal)','order transvaginal ultrasound','order obstetric ultrasound','order first trimester dating US',
+        '---US Vascular---','order Doppler US bilateral lower extremity (DVT)','order Doppler US right lower extremity','order Doppler US left lower extremity','order Doppler US bilateral upper extremity','order carotid Doppler ultrasound','order renal artery Doppler','order aortic ultrasound',
+        '---US Soft Tissue---','order soft tissue ultrasound of neck','order soft tissue ultrasound of groin','order testicular ultrasound','order thyroid ultrasound','order breast ultrasound',
+        '---Bedside/Point of Care---','order FAST exam','order bedside echo (focused)','order bedside lung ultrasound','order bladder scan','order bedside ocular ultrasound',
+        '---Cardiac---','order formal echocardiogram (TTE)','order transesophageal echo (TEE)','order EKG (12-lead)','attach cardiac monitor','order stress test (exercise)','order pharmacologic stress test','order Holter monitor 24hr',
+        '---Nuclear/Special---','order V/Q scan','order bone scan','order HIDA scan','order thyroid uptake scan','order DEXA scan'] },
       { icon: '&#x1F489;', name: 'Meds', items: [
         '---IV Fluids---','normal saline 1L IV bolus','normal saline 500mL IV bolus','lactated ringers 1L IV','D5W 1L IV','D5NS 1L IV','D10W 500mL IV','albumin 5% 500mL IV','3% hypertonic saline 150mL IV',
         '---Blood Products---','transfuse 1 unit pRBC','transfuse 2 units pRBC','give FFP 2 units','give platelets 1 unit','give cryoprecipitate','activate massive transfusion protocol',
@@ -3023,13 +3074,14 @@ function renderPBChatInner() {
         '---Anticoagulants---','heparin bolus + drip','enoxaparin 1mg/kg SC','warfarin 5mg PO','rivaroxaban 15mg PO','apixaban 5mg PO','protamine sulfate IV','vitamin K 10mg IV','tranexamic acid 1g IV',
         '---Other---','diphenhydramine 50mg IV','ranitidine 50mg IV','famotidine 20mg IV','allopurinol 300mg PO','colchicine 0.6mg PO','thiamine 100mg IV','thiamine 500mg IV (Wernicke)','folate 1mg IV','vitamin B12 1000mcg IM','tetanus toxoid IM','rabies immunoglobulin','ceftriaxone 250mg IM (STI)','azithromycin 1g PO (STI)','methotrexate 50mg/m2 IM (ectopic)','oxytocin 10u IM','misoprostol 800mcg PV','magnesium sulfate 4g IV (eclampsia)','terbutaline 0.25mg SC'] },
       { icon: '&#x1FA78;', name: 'Procedures', items: [
-        '---Access---','*start IV access*','*start second IV*','*insert central line*','*insert IO (intraosseous)*','*arterial line insertion*',
-        '---Airway---','*intubate patient*','*rapid sequence intubation*','*bag-mask ventilation*','*insert LMA*','*cricothyrotomy*','*needle cricothyrotomy*','*suction airway*','*insert oral airway (OPA)*','*insert nasal airway (NPA)*',
-        '---Tubes/Catheters---','*insert foley catheter*','*insert NG tube*','*insert OG tube*','*place chest tube*','*insert rectal tube*',
-        '---Diagnostic---','*perform lumbar puncture*','*arthrocentesis*','*perform paracentesis*','*perform thoracentesis*',
-        '---Wound---','*suture laceration*','*perform I&D*','*pack wound*','*apply wound vac*','*staple laceration*','*apply steri-strips*','*irrigate wound*','*debride wound*',
-        '---Ortho---','*apply splint*','*reduce fracture*','*reduce dislocation*','*apply traction*','*buddy tape fingers*',
-        '---Other---','*perform pericardiocentesis*','*emergency thoracotomy*','*needle decompression*','*apply tourniquet*','*perform cardioversion*','*insert packing (epistaxis)*'] },
+        '---Vascular Access---','*start peripheral IV (18g)*','*start peripheral IV (20g)*','*start second IV*','*insert central line*','*insert IO (intraosseous)*','*arterial line insertion*','*insert PICC line*','*ultrasound-guided IV*',
+        '---Airway---','*intubate patient (ETT)*','*rapid sequence intubation*','*bag-mask ventilation*','*insert LMA (supraglottic airway)*','*cricothyrotomy (surgical)*','*needle cricothyrotomy*','*suction airway*','*insert oral airway (OPA)*','*insert nasal airway (NPA)*','*perform jaw thrust*','*fiber-optic intubation*','*video laryngoscopy*',
+        '---Tubes/Drains---','*insert foley catheter*','*insert 3-way foley (irrigation)*','*insert NG tube*','*insert OG tube*','*place chest tube*','*insert pigtail catheter*','*insert rectal tube*','*insert JP drain*',
+        '---Diagnostic Procedures---','*perform lumbar puncture*','*arthrocentesis*','*perform paracentesis*','*perform thoracentesis*','*bone marrow biopsy*','*skin biopsy (punch)*','*fine needle aspiration*',
+        '---Wound Management---','*suture laceration*','*perform I&D*','*pack wound*','*apply wound vac*','*staple laceration*','*apply steri-strips*','*apply dermabond (tissue glue)*','*irrigate wound*','*debride wound*','*remove foreign body*','*apply pressure dressing*','*apply figure-of-eight bandage*',
+        '---Ortho/MSK---','*apply splint*','*reduce fracture*','*reduce dislocation*','*apply traction*','*buddy tape fingers*','*apply posterior leg splint*','*apply sugar-tong splint*','*apply thumb spica splint*','*apply ulnar gutter splint*','*apply knee immobilizer*','*apply sling*',
+        '---Emergency Procedures---','*perform pericardiocentesis*','*emergency thoracotomy (resuscitative)*','*needle decompression*','*apply tourniquet*','*perform synchronized cardioversion*','*insert packing (epistaxis — anterior)*','*insert posterior nasal packing*','*Sengstaken-Blakemore tube insertion*','*emergency trephination (burr hole)*','*lateral canthotomy*','*escharotomy*',
+        '---Bedside---','*bedside glucose check*','*bladder scan*','*point-of-care ultrasound*','*apply cardiac defibrillator pads*','*wound culture swab*','*throat swab*','*NP swab (nasopharyngeal)*'] },
       { icon: '&#x1F4CB;', name: 'Manage', items: [
         '---Disposition---','discharge patient home','admit to medicine ward','admit to surgery','admit to ICU','admit to step-down/telemetry','transfer to OR','transfer to cath lab','transfer to tertiary centre',
         '---Referral---','refer to cardiology','refer to neurology','refer to surgery','refer to psychiatry','refer to OB/GYN','refer to pediatrics','refer to social work','refer to orthopedics','refer to ENT','refer to ophthalmology','refer to GI','refer to respirology','refer to nephrology','refer to urology','refer to infectious disease','refer to toxicology',
@@ -3044,12 +3096,18 @@ function renderPBChatInner() {
       { icon: '&#x1F6CF;', name: 'Position', items: [
         '*elevate head of bed*','*recovery position*','*Trendelenburg position*','*reverse Trendelenburg*','*left lateral decubitus*','*sit patient upright*','*prone positioning*','*sniffing position (airway)*'] },
       { icon: '&#x1F50D;', name: 'Scopes', items: [
-        'order endoscopy','order colonoscopy','order bronchoscopy','order cystoscopy','order EGD','order ERCP','order sigmoidoscopy'] },
+        '---Upper GI---','order upper endoscopy (EGD)','order urgent EGD (GI bleed)','order ERCP',
+        '---Lower GI---','order colonoscopy','order flexible sigmoidoscopy','order rigid sigmoidoscopy',
+        '---Airway---','order bronchoscopy','order rigid bronchoscopy',
+        '---Urologic---','order cystoscopy','order ureteroscopy',
+        '---Other---','order laryngoscopy (direct)','order arthroscopy','order colposcopy','order hysteroscopy','order mediastinoscopy'] },
       { icon: '&#x1F9F0;', name: 'Equip', items: [
-        '---Monitoring---','attach cardiac monitor','apply pulse oximeter','place on telemetry','attach end-tidal CO2','insert temperature probe','attach automatic BP cuff',
-        '---Oxygen---','*apply nasal cannula 2L/min*','*apply nasal cannula 4L/min*','*apply simple face mask 8L*','*apply non-rebreather mask 15L*','*start high-flow nasal cannula*','*apply CPAP*','*apply BiPAP*','*apply venturi mask*',
-        '---Immobilization---','*apply cervical collar*','*apply pelvic binder*','*full spinal precautions*','*apply sling*',
-        '---Other---','*insert nasopharyngeal airway*','*insert oropharyngeal airway*','*warming blanket*','*cooling blanket*','*apply cardiac defibrillator pads*','*set up rapid infuser*','*apply 12-lead EKG*'] }
+        '---Monitoring---','attach cardiac monitor','apply pulse oximeter','place on continuous telemetry','attach end-tidal CO2 (capnography)','insert temperature probe (esophageal)','insert temperature probe (rectal)','attach automatic BP cuff (q5min)','attach arterial line to transducer','attach ICP monitor',
+        '---Oxygen Delivery---','*apply nasal cannula 1L/min*','*apply nasal cannula 2L/min*','*apply nasal cannula 4L/min*','*apply nasal cannula 6L/min*','*apply simple face mask 6-10L*','*apply non-rebreather mask 15L*','*start high-flow nasal cannula (HFNC) 40L*','*start high-flow nasal cannula (HFNC) 60L*','*apply CPAP 5-10 cmH2O*','*apply BiPAP 10/5*','*apply BiPAP 15/5*','*apply venturi mask 28%*','*apply venturi mask 35%*','*apply venturi mask 40%*','*blow-by oxygen*','*apply tracheostomy mask*',
+        '---Immobilization---','*apply cervical collar (rigid)*','*apply pelvic binder*','*full spinal precautions (board + collar)*','*apply sling*','*apply Kendrick extrication device*','*vacuum splint*',
+        '---Warming/Cooling---','*warming blanket (Bair Hugger)*','*cooling blanket*','*warm IV fluids*','*cold saline infusion (TTM)*','*ice packs to groin/axillae*',
+        '---Infusion---','*set up rapid infuser (Level 1)*','*set up IV pump*','*set up PCA (patient-controlled analgesia)*','*set up syringe driver*',
+        '---Other---','*apply 12-lead EKG*','*apply defibrillator pads*','*set up suction (wall)*','*set up chest drainage system (Pleur-evac)*','*apply sequential compression devices (SCDs)*','*apply TED stockings*','*insert bite block*','*prepare code cart at bedside*'] }
     ];
 
     // Quick action tabs — always visible

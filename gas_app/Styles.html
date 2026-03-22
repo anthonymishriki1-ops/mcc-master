@@ -960,8 +960,8 @@ body {
 .pb-action-tab:nth-child(10).active { background: #795548; border-color: #795548; }
 .pb-action-tab:nth-child(11).active { background: #455a64; border-color: #455a64; }
 /* Action panel search */
-.pb-action-search { width: 100%; padding: 8px 14px; border: none; border-bottom: 1px solid var(--border); font-size: 14px; font-family: inherit; background: var(--bg); color: var(--text); outline: none; }
-.pb-action-search:focus { background: var(--card-bg); }
+.pb-action-search { width: 100%; padding: 10px 14px; border: none; border-bottom: 1px solid var(--border); font-size: 14px; font-family: inherit; background: var(--bg); color: var(--text); outline: none; position: sticky; top: 0; z-index: 5; }
+.pb-action-search:focus { background: var(--card-bg); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
 .pb-action-search::placeholder { color: var(--text-light); }
 
 /* --- Resources --- */

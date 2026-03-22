@@ -192,34 +192,38 @@ function ensureUserDataSheet_() {
   return sheet;
 }
 
-function getRandomPatientName_() {
-  var names = [
-    // South Asian
-    'Aarav','Ananya','Rohan','Meera','Vikram','Sunita','Arjun','Kavya','Nikhil','Pooja','Ravi','Lakshmi','Sanjay','Deepa','Harsh','Nisha',
-    // East Asian
-    'Wei','Mei Lin','Jun','Yuki','Hiro','Sakura','Min-jun','Ji-yeon','Tao','Xiao','Kenji','Aiko','Soo-jin','Bao','Linh','Thanh',
-    // Middle Eastern / Persian
-    'Yasmin','Farhad','Nasreen','Omid','Leila','Dariush','Shirin','Reza','Parisa','Kamran','Soraya','Bahram','Nazanin','Saeed','Maryam','Hassan',
-    // Arabic
-    'Omar','Fatima','Khalid','Noor','Tariq','Amira','Youssef','Hana','Ibrahim','Layla','Mustafa','Zahra','Samir','Dina','Bassam','Rania',
-    // African
-    'Kwame','Ama','Kofi','Adwoa','Chidi','Ngozi','Tendai','Aisha','Emeka','Folake','Jabari','Zuri','Sekou','Amara','Olu','Chiamaka',
-    // Latin American
-    'Santiago','Valentina','Mateo','Camila','Diego','Isabella','Alejandro','Lucia','Carlos','Gabriela','Fernando','Sofia','Ricardo','Daniela','Miguel','Elena',
-    // European
-    'Liam','Emma','Noah','Olivia','Ethan','Ava','Lucas','Mia','Oliver','Charlotte','James','Amelia','Benjamin','Harper','Jack','Ella',
-    // Eastern European
-    'Dmitri','Natasha','Andrei','Katya','Pavel','Irina','Sergei','Olga','Viktor','Tatiana','Nikolai','Anya','Bogdan','Mila','Aleksei','Daria',
-    // Indigenous
-    'Koda','Winona','Takoda','Aiyana','Chayton','Nizhoni','Ahanu','Aponi','Istas','Kaya','Mika','Nuna','Sequoia','Tallulah','Wren','Dakota',
-    // Caribbean
-    'Marlon','Keisha','Dwayne','Shanice','Leroy','Tamika','Winston','Sade','Errol','Nadine','Delroy','Patrice','Byron','Shelly','Neville','Claudette',
-    // French Canadian
-    'Jean-Luc','Genevieve','Mathieu','Elodie','Francois','Amelie','Sebastien','Celeste','Antoine','Juliette','Maxime','Margaux','Olivier','Colette','Tristan','Simone',
-    // Turkish / Central Asian
-    'Emre','Elif','Berk','Defne','Kerem','Zeynep','Cem','Ece','Murat','Aylin','Burak','Selin','Deniz','Pelin','Kaan','Naz'
-  ];
-  return names[Math.floor(Math.random() * names.length)];
+// Name bank organized by ethnicity AND gender for proper correlation
+var PATIENT_NAMES_ = {
+  'South Asian':     { M: ['Aarav','Rohan','Vikram','Arjun','Nikhil','Ravi','Sanjay','Harsh','Aditya','Pranav'], F: ['Ananya','Meera','Sunita','Kavya','Pooja','Lakshmi','Deepa','Nisha','Priya','Anika'], N: ['Kiran','Preet','Jaya','Samar','Noor'] },
+  'East Asian':      { M: ['Wei','Jun','Hiro','Min-jun','Tao','Kenji','Bao','Takeshi','Hyun','Akira'], F: ['Mei Lin','Yuki','Sakura','Ji-yeon','Xiao','Aiko','Soo-jin','Linh','Hana','Minji'], N: ['Thanh','Ren','Sora','Kai','Yue'] },
+  'Middle Eastern':  { M: ['Farhad','Omid','Dariush','Reza','Kamran','Bahram','Saeed','Hassan','Amir','Navid'], F: ['Yasmin','Nasreen','Leila','Shirin','Parisa','Soraya','Nazanin','Maryam','Golnaz','Setareh'], N: ['Dara','Shayan','Kian'] },
+  'Arabic':          { M: ['Omar','Khalid','Tariq','Youssef','Ibrahim','Mustafa','Samir','Bassam','Ahmed','Jamal'], F: ['Fatima','Noor','Amira','Hana','Layla','Zahra','Dina','Rania','Salma','Lina'], N: ['Nour','Salam'] },
+  'Black/African':   { M: ['Kwame','Kofi','Chidi','Emeka','Jabari','Sekou','Olu','Tendai','Dayo','Amadi'], F: ['Ama','Adwoa','Ngozi','Aisha','Folake','Zuri','Amara','Chiamaka','Nneka','Adaeze'], N: ['Akili','Imani'] },
+  'Latin American':  { M: ['Santiago','Mateo','Diego','Alejandro','Carlos','Fernando','Ricardo','Miguel','Luis','Andres'], F: ['Valentina','Camila','Isabella','Lucia','Gabriela','Sofia','Daniela','Elena','Mariana','Paula'], N: ['Angel','Cruz','Guadalupe'] },
+  'White/European':  { M: ['Liam','Noah','Ethan','Lucas','Oliver','James','Benjamin','Jack','Ryan','Connor'], F: ['Emma','Olivia','Ava','Mia','Charlotte','Amelia','Harper','Ella','Grace','Chloe'], N: ['Alex','Jordan','Taylor','Riley'] },
+  'Eastern European':{ M: ['Dmitri','Andrei','Pavel','Sergei','Viktor','Nikolai','Bogdan','Aleksei','Oleg','Ivan'], F: ['Natasha','Katya','Irina','Olga','Tatiana','Anya','Mila','Daria','Svetlana','Yulia'], N: ['Sasha','Zhenya'] },
+  'Indigenous':      { M: ['Koda','Takoda','Chayton','Ahanu','Mika','Dakota','River','Hunter','Chase','Jesse'], F: ['Winona','Aiyana','Nizhoni','Aponi','Kaya','Nuna','Tallulah','Sequoia','Wren','Sage'], N: ['Dakota','River','Sky','Sage'] },
+  'Caribbean':       { M: ['Marlon','Dwayne','Leroy','Winston','Errol','Delroy','Byron','Neville','Andre','Desmond'], F: ['Keisha','Shanice','Tamika','Sade','Nadine','Patrice','Shelly','Claudette','Monique','Simone'], N: ['Courtney','Kelly'] },
+  'French Canadian': { M: ['Jean-Luc','Mathieu','Francois','Sebastien','Antoine','Maxime','Olivier','Tristan','Gabriel','Philippe'], F: ['Genevieve','Elodie','Amelie','Celeste','Juliette','Margaux','Colette','Simone','Camille','Isabelle'], N: ['Dominique','Claude','Camille'] },
+  'Turkish':         { M: ['Emre','Berk','Kerem','Cem','Murat','Burak','Kaan','Yusuf','Baris','Alp'], F: ['Elif','Defne','Zeynep','Ece','Aylin','Selin','Pelin','Naz','Ceren','Ebru'], N: ['Deniz','Evren'] }
+};
+
+function getRandomPatientName_(sexOverride) {
+  // Pick a random ethnicity
+  var ethnicities = Object.keys(PATIENT_NAMES_);
+  var ethnicity = ethnicities[Math.floor(Math.random() * ethnicities.length)];
+
+  // Determine gender bucket
+  var genderKey = 'M';
+  if (sexOverride === 'female' || sexOverride === 'trans_f') genderKey = 'F';
+  else if (sexOverride === 'male' || sexOverride === 'trans_m') genderKey = 'M';
+  else if (sexOverride === 'nonbinary') genderKey = 'N';
+  else genderKey = Math.random() < 0.5 ? 'M' : 'F'; // random
+
+  var nameList = PATIENT_NAMES_[ethnicity][genderKey] || PATIENT_NAMES_[ethnicity]['M'];
+  var name = nameList[Math.floor(Math.random() * nameList.length)];
+
+  return { name: name, ethnicity: ethnicity, gender: genderKey };
 }
 
 function shuffleArray_(arr) {
@@ -1503,28 +1507,74 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
   ];
   var chosenDemo = demographics[Math.floor(Math.random() * demographics.length)];
 
-  // Apply sex/age custom overrides
+  // ============================
+  // PATIENT IDENTITY GENERATION (name + sex + ethnicity + age — all correlated, locked before AI sees it)
+  // ============================
+
+  // Generate correlated name/ethnicity/gender
+  var patientIdentity = getRandomPatientName_(customOpts.sex || null);
+  var patientName = patientIdentity.name;
+  var patientEthnicity = patientIdentity.ethnicity;
+  var patientGenderKey = patientIdentity.gender; // M, F, or N
+
+  // Build the sex/gender enforcement string
+  var sexJsonVal = patientGenderKey === 'N' ? 'NB' : patientGenderKey;
   var customSexStr = '';
-  if (customOpts.sex === 'male') customSexStr = '\nIMPORTANT: The patient MUST be MALE (cis male). Choose a male name and use he/him pronouns.';
-  else if (customOpts.sex === 'female') customSexStr = '\nIMPORTANT: The patient MUST be FEMALE (cis female). Choose a female name and use she/her pronouns.';
-  else if (customOpts.sex === 'nonbinary') customSexStr = '\nIMPORTANT: The patient is NON-BINARY. They use they/them pronouns. Randomly assign them either male or female primary/secondary sexual characteristics (assigned sex at birth) — this is medically relevant (e.g. prostate if AMAB, uterus/ovaries if AFAB). In the JSON, set sex to "NB" and set assigned_sex to "M" or "F" based on which you chose. If asked about sex, they should say something like "I\'m non-binary — but I was assigned [male/female] at birth if that matters medically." The student should use correct pronouns — if they misgender the patient, the patient should gently correct them. Name should be gender-neutral.';
-  else if (customOpts.sex === 'trans_m') customSexStr = '\nIMPORTANT: The patient is a TRANSGENDER MAN (assigned female at birth, identifies as male). Uses he/him pronouns. May or may not be on testosterone. Has relevant anatomy (uterus, ovaries) that could be medically significant depending on the case. If asked about sex, he may say "I\'m trans" or mention his assigned sex if medically relevant. The student should use correct pronouns and be respectful.';
-  else if (customOpts.sex === 'trans_f') customSexStr = '\nIMPORTANT: The patient is a TRANSGENDER WOMAN (assigned male at birth, identifies as female). Uses she/her pronouns. May or may not be on HRT (estrogen). Has relevant anatomy (prostate) that could be medically significant. If asked about sex, she may say "I\'m trans" or mention her assigned sex if medically relevant. The student should use correct pronouns and be respectful.';
+  var pronounStr = '';
+  if (customOpts.sex === 'male' || (!customOpts.sex && patientGenderKey === 'M')) {
+    customSexStr = 'LOCKED SEX: MALE (cis male). Use he/him pronouns. The JSON sex field MUST be "M".';
+    pronounStr = 'he/him';
+    sexJsonVal = 'M';
+  } else if (customOpts.sex === 'female' || (!customOpts.sex && patientGenderKey === 'F')) {
+    customSexStr = 'LOCKED SEX: FEMALE (cis female). Use she/her pronouns. The JSON sex field MUST be "F".';
+    pronounStr = 'she/her';
+    sexJsonVal = 'F';
+  } else if (customOpts.sex === 'nonbinary') {
+    customSexStr = 'LOCKED SEX: NON-BINARY. Use they/them pronouns. Set sex to "NB" in the JSON. You MUST also set assigned_sex to "M" or "F" (pick one) for clinical relevance (e.g. prostate if AMAB, uterus/ovaries if AFAB). If asked about sex, they say "I\'m non-binary — I was assigned [male/female] at birth if that matters medically." If the student misgenders them, gently correct.';
+    pronounStr = 'they/them';
+    sexJsonVal = 'NB';
+  } else if (customOpts.sex === 'trans_m') {
+    customSexStr = 'LOCKED SEX: TRANSGENDER MAN (assigned female at birth, identifies as male). Use he/him pronouns. JSON sex MUST be "M", assigned_sex MUST be "F". Has relevant anatomy (uterus, ovaries). May or may not be on testosterone. If asked about sex, he may say "I\'m trans" or mention assigned sex if medically relevant.';
+    pronounStr = 'he/him';
+    sexJsonVal = 'M';
+  } else if (customOpts.sex === 'trans_f') {
+    customSexStr = 'LOCKED SEX: TRANSGENDER WOMAN (assigned male at birth, identifies as female). Use she/her pronouns. JSON sex MUST be "F", assigned_sex MUST be "M". Has relevant anatomy (prostate). May or may not be on HRT. If asked about sex, she may say "I\'m trans" or mention assigned sex if medically relevant.';
+    pronounStr = 'she/her';
+    sexJsonVal = 'F';
+  }
 
+  // Build the age enforcement string
   var customAgeStr = '';
-  if (customOpts.age === 'child') customAgeStr = '\nIMPORTANT: The patient MUST be a CHILD (2-12 years old). A parent brings them in and is the primary historian.';
-  else if (customOpts.age === 'young') customAgeStr = '\nIMPORTANT: The patient MUST be a YOUNG ADULT (18-30 years old).';
-  else if (customOpts.age === 'middle') customAgeStr = '\nIMPORTANT: The patient MUST be MIDDLE-AGED (30-60 years old).';
-  else if (customOpts.age === 'elderly') customAgeStr = '\nIMPORTANT: The patient MUST be ELDERLY (60+ years old).';
-  else if (customOpts.age === 'pediatric') customAgeStr = '\nIMPORTANT: The patient MUST be a PEDIATRIC patient (newborn to 17). A parent is present and may be the primary historian.';
+  if (customOpts.age === 'child') customAgeStr = 'LOCKED AGE: CHILD (2-12 years old). A parent brings them in and is the primary historian. The JSON age MUST be between 2 and 12.';
+  else if (customOpts.age === 'young') customAgeStr = 'LOCKED AGE: YOUNG ADULT (18-30 years old). The JSON age MUST be between 18 and 30.';
+  else if (customOpts.age === 'middle') customAgeStr = 'LOCKED AGE: MIDDLE-AGED (30-60 years old). The JSON age MUST be between 30 and 60.';
+  else if (customOpts.age === 'elderly') customAgeStr = 'LOCKED AGE: ELDERLY (60+ years old). The JSON age MUST be 60 or above.';
+  else if (customOpts.age === 'pediatric') customAgeStr = 'LOCKED AGE: PEDIATRIC (newborn to 17). A parent is present and may be the primary historian. The JSON age MUST be 0-17.';
 
-  chosenDemo += customSexStr + customAgeStr;
+  // Filter demographics by gender — no "pregnant woman" for male patients, etc.
+  var genderFilteredDemos = demographics.filter(function(d) {
+    if (patientGenderKey === 'M') return d.indexOf('Pregnant woman') === -1 && d.indexOf('Single mother') === -1;
+    if (patientGenderKey === 'F') return d.indexOf('tough guy') === -1;
+    return true;
+  });
+  if (genderFilteredDemos.length > 0) chosenDemo = genderFilteredDemos[Math.floor(Math.random() * genderFilteredDemos.length)];
 
-  // Ethnicity + general appearance — clinically relevant for epidemiology and doorway assessment
-  var appearancePrompt = '\nPATIENT ETHNICITY & APPEARANCE:\n' +
-    'You MUST generate a specific ethnicity and a brief "general appearance" (the doorway assessment — what the doctor sees the moment they walk in).\n' +
-    'Include these in the JSON as "ethnicity" (e.g. "South Asian", "Black/Afro-Caribbean", "East Asian", "Indigenous", "White/European", "Middle Eastern", "Latin American", "Mixed") and "appearance" (1 brief sentence describing how the patient LOOKS right now — e.g. "Pale, diaphoretic male clutching his chest", "Well-appearing child sitting on mother\'s lap", "Thin elderly woman in mild respiratory distress", "Agitated young man pacing the room").\n' +
-    'The ethnicity MUST be consistent with the patient name and background. It SHOULD influence disease choice when epidemiologically relevant (e.g. sickle cell in Black patients, Tay-Sachs in Ashkenazi Jewish, Behçet\'s in Middle Eastern, Kawasaki in East Asian children, etc.) — but do NOT force a rare ethnicity-linked diagnosis every time. Most cases should still be common conditions.\n' +
+  // Build the locked identity block — this is NON-NEGOTIABLE for the AI
+  var identityBlock = '\n\n========== LOCKED PATIENT IDENTITY (DO NOT CHANGE ANY OF THESE) ==========\n' +
+    'LOCKED NAME: ' + patientName + '. The JSON "name" field MUST be exactly "' + patientName + '". Do NOT pick a different name.\n' +
+    'LOCKED ETHNICITY: ' + patientEthnicity + '. The JSON "ethnicity" field MUST be exactly "' + patientEthnicity + '". Do NOT change the ethnicity.\n' +
+    customSexStr + '\n' +
+    (customAgeStr ? customAgeStr + '\n' : '') +
+    'These fields are PRE-DETERMINED by the system. You have ZERO creative liberty over name, sex, or ethnicity. They are already set. Your job is to create the clinical scenario, vitals, diagnosis, and appearance — nothing else about the patient\'s identity.\n' +
+    '==========================================================================\n';
+
+  chosenDemo += identityBlock;
+
+  // Appearance prompt — ethnicity is already locked, just need the doorway assessment
+  var appearancePrompt = '\nPATIENT APPEARANCE (DOORWAY ASSESSMENT):\n' +
+    'Generate a brief "general appearance" — what the doctor sees the moment they walk in.\n' +
+    'Include this in the JSON as "appearance" (1 brief sentence, e.g. "Pale, diaphoretic male clutching his chest", "Well-appearing child sitting on mother\'s lap", "Thin elderly woman in mild respiratory distress", "Agitated young man pacing the room").\n' +
+    'The ethnicity (' + patientEthnicity + ') SHOULD influence disease choice when epidemiologically relevant (e.g. sickle cell in Black patients, Tay-Sachs in Ashkenazi Jewish, Behçet\'s in Middle Eastern, Kawasaki in East Asian children) — but do NOT force rare ethnicity-linked diagnoses every time. Most cases should still be common conditions.\n' +
     'The appearance MUST be consistent with the diagnosis and severity. A patient with a PE should NOT look "well-appearing." A patient with a minor laceration should NOT look "in extremis."\n';
 
   // Difficulty modifier
@@ -1548,8 +1598,7 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
     presentationPrompt +
     chosenDemo + '\n' +
     appearancePrompt + '\n' +
-    'IMPORTANT: The patient name, age, sex, ethnicity, and appearance in the JSON MUST match this background.\n' +
-    'USE THIS NAME: ' + getRandomPatientName_() + '. You MUST use this exact name. Do NOT change it.\n\n' +
+    'The patient identity (name, sex, ethnicity) is ALREADY LOCKED above. Do NOT override it.\n\n' +
     difficultyPrompt +
     chosenStyle + '\n\n' +
     (chosenDemeanor ? chosenDemeanor + '\n\n' : '') +
@@ -1585,13 +1634,19 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
     'FIRST MESSAGE FORMAT (mandatory):\n' +
     'Your very first message MUST start with a JSON block on its own line, then the patient presentation:\n' +
     '```patient\n' +
-    '{"name":"<first name>","age":<number>,"sex":"<M/F/NB>","assigned_sex":"<M/F>","ethnicity":"<ethnicity>","appearance":"<1 sentence doorway assessment>","hr":<number>,"bp":"<sys/dia>","rr":<number>,"temp":<number>,"spo2":<number>,"diagnosis":"<the correct diagnosis>"}\n' +
-    'Note: Use sex:"NB" ONLY when the patient is non-binary. For NB patients, assigned_sex indicates their birth sex for clinical relevance. For M/F patients, assigned_sex should match sex.\n' +
+    '{"name":"' + patientName + '","age":<number>,"sex":"' + sexJsonVal + '","assigned_sex":"<M/F>","ethnicity":"' + patientEthnicity + '","appearance":"<1 sentence doorway assessment>","hr":<number>,"bp":"<sys/dia>","rr":<number>,"temp":<number>,"spo2":<number>,"diagnosis":"<the correct diagnosis>"}\n' +
     '```\n' +
+    'MANDATORY JSON FIELDS — THESE ARE PRE-FILLED AND MUST NOT BE CHANGED:\n' +
+    '- "name" MUST be exactly "' + patientName + '" — do NOT substitute, shorten, or modify this name\n' +
+    '- "sex" MUST be exactly "' + sexJsonVal + '"\n' +
+    '- "ethnicity" MUST be exactly "' + patientEthnicity + '"\n' +
+    '- "assigned_sex" should match sex for cis patients, or be set to birth sex for trans/NB patients\n' +
+    'YOU FILL IN: age (must match any age constraint above), appearance, vitals (hr/bp/rr/temp/spo2), and diagnosis.\n\n' +
     'CRITICAL CONSISTENCY RULES:\n' +
     '1. The diagnosis in the JSON MUST match the clinical scenario you present. Every detail you give (symptoms, history, medications, timeline) must be consistent with that exact diagnosis. If the diagnosis is "opioid overdose" then the patient took opioids, not acetaminophen. If it\'s "appendicitis" then the pain is in the right lower quadrant, not the chest. NEVER contradict the diagnosis you wrote in the JSON.\n' +
-    '2. YOU ARE the patient whose name, age, and sex are in the JSON. If your JSON says name:"Amir" age:14 sex:"M", then YOU are Amir, a 14-year-old boy. If sex is "NB", you are non-binary — use the assigned_sex field for any anatomy-relevant clinical details. NEVER claim to be someone else. NEVER invent other characters. If the doctor asks "what\'s your name?" you say YOUR name from the JSON. If they call you a wrong name, correct them with YOUR real name. Your identity is LOCKED to the JSON.\n' +
-    '3. If a parent/guardian brought you in (because you are a child), the PARENT is not the patient — YOU are. The parent can speak, but you are always Amir (or whatever name you chose). Never confuse yourself with the parent.\n\n' +
+    '2. YOU ARE ' + patientName + '. Your name, sex, and ethnicity are LOCKED. If the doctor asks your name, you say "' + patientName + '." If they call you a wrong name, correct them. NEVER claim to be someone else. NEVER invent other characters.\n' +
+    '3. If a parent/guardian brought you in (because you are a child), the PARENT is not the patient — YOU are. The parent can speak, but you are always ' + patientName + '. Never confuse yourself with the parent.\n' +
+    '4. Your sex/gender is LOCKED. Do NOT switch pronouns, do NOT change your sex mid-conversation. ' + (pronounStr ? 'Use ' + pronounStr + ' pronouns consistently.' : '') + '\n\n' +
     'Then on the next line, begin the patient encounter in character with ONLY the chief complaint.\n' +
     'The chief complaint should be ONE main symptom in 1-2 short sentences. Example: "Hey doc, I\'ve been feeling really crummy this past week. Just can\'t shake this fever."\n' +
     'Do NOT mention more than one symptom in the opening. Let the student ask follow-up questions to discover the rest.\n' +
