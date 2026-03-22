@@ -98,7 +98,7 @@ var POINTS = {
 var APP_VERSION = '2.0';
 var APP_CHANGELOG = [
   { version: '2.0', date: 'Mar 2026', items: ['Duolingo-style skill map dashboard', 'Mastery tracking per specialty', 'PatientBot with MCCQE clinical presentations', 'OSCE scorecard', 'Partial credit diagnosis', 'Management actions (discharge, prescribe, refer)', 'Library ebook viewer', 'Medical term translations (Persian/Arabic)', 'Colorful action palette'] },
-  { version: '1.0', date: 'Feb 2026', items: ['Initial release', 'Flashcards, Quiz, PatientBot, Daily Challenge', 'Leaderboard and achievements', 'Search and Dr. Data AI'] }
+  { version: '1.0', date: 'Mar 2026', items: ['Initial release', 'Flashcards, Quiz, PatientBot, Daily Challenge', 'Leaderboard and achievements', 'Search and Dr. Data AI'] }
 ];
 
 var SKILL_MAP = [
@@ -1751,7 +1751,11 @@ function finishQuiz() {
   var points = correct * POINTS.QUIZ_CORRECT;
   if (correct === total) points += POINTS.QUIZ_PERFECT_BONUS;
 
-  serverCall('saveQuizResult', { specialty: App.quizSetupSpecialty, version: App.quizSetupVersion, score: correct, total: total, percentage: percentage, points: points })
+  // Save wrong answers for review later
+  var wrongOnly = details.filter(function(d) { return !d.isCorrect; }).map(function(d) {
+    return { q: d.question, yours: d.userAnswer, correct: d.correctAnswer, rationale: d.rationale || '', specialty: d.specialty || '' };
+  });
+  serverCall('saveQuizResult', { specialty: App.quizSetupSpecialty, version: App.quizSetupVersion, score: correct, total: total, percentage: percentage, points: points, wrongAnswers: wrongOnly })
     .catch(function(e) { console.error('Failed to save:', e); });
 
   // Fire-and-forget: get AI study recommendation
@@ -1784,9 +1788,9 @@ function showQuizResults(score, total, percentage, points) {
   html += '<div id="quiz-ai-rec" class="card" style="padding:20px;margin-top:16px;background:var(--bg);border-left:4px solid var(--primary)"><span style="color:var(--text-light);font-size:13px">Analyzing your results...</span></div>';
 
   html += '<div class="result-tabs">';
-  html += '<button class="result-tab active" onclick="showResultsView(\'score\', this)">By Specialty</button>';
-  html += '<button class="result-tab" onclick="showResultsView(\'wrong\', this)">Wrong Answers</button>';
-  html += '<button class="result-tab" onclick="showResultsView(\'all\', this)">All Questions</button>';
+  html += '<button class="result-tab active" onclick="event.stopPropagation();showResultsView(\'score\', this)">By Specialty</button>';
+  html += '<button class="result-tab" onclick="event.stopPropagation();showResultsView(\'wrong\', this)">Wrong Answers (' + App.quizResultDetails.filter(function(d){return !d.isCorrect}).length + ')</button>';
+  html += '<button class="result-tab" onclick="event.stopPropagation();showResultsView(\'all\', this)">All Questions</button>';
   html += '</div><div id="results-detail"></div>';
 
   html += '<div style="display:flex;gap:12px;margin-top:24px">';
@@ -1861,15 +1865,48 @@ function loadQuizHistory() {
       var r = results[i];
       var color = r.percentage >= 80 ? 'var(--success)' : r.percentage >= 60 ? 'var(--warning)' : 'var(--error)';
       var dateStr = r.date ? new Date(r.date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown';
-      html += '<div class="card" style="padding:16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">';
+      var hasWrong = r.wrongAnswers && r.wrongAnswers.length > 0;
+      var wrongCount = hasWrong ? r.wrongAnswers.length : (r.total - r.score);
+
+      html += '<div class="card" style="padding:0;margin-bottom:10px;overflow:hidden">';
+      html += '<div onclick="' + (hasWrong ? 'this.parentElement.classList.toggle(\'qh-open\')' : '') + '" style="padding:16px;display:flex;justify-content:space-between;align-items:center;cursor:' + (hasWrong ? 'pointer' : 'default') + '">';
       html += '<div><strong>' + escapeHtml(r.specialty || 'Mixed') + '</strong>';
       if (r.version) html += ' <span style="color:var(--text-light);font-size:12px">' + escapeHtml(r.version) + '</span>';
-      html += '<br><span style="font-size:12px;color:var(--text-light)">' + dateStr + '</span></div>';
-      html += '<div style="text-align:right"><span style="font-size:22px;font-weight:800;color:' + color + '">' + r.percentage + '%</span>';
+      html += '<br><span style="font-size:12px;color:var(--text-light)">' + dateStr + '</span>';
+      if (wrongCount > 0) html += ' <span style="font-size:12px;color:var(--error)">&bull; ' + wrongCount + ' wrong</span>';
+      html += '</div>';
+      html += '<div style="text-align:right;display:flex;align-items:center;gap:12px">';
+      html += '<div><span style="font-size:22px;font-weight:800;color:' + color + '">' + r.percentage + '%</span>';
       html += '<br><span style="font-size:12px;color:var(--text-light)">' + r.score + '/' + r.total + '</span></div>';
+      if (hasWrong) html += '<span style="font-size:12px;color:var(--text-light)">&#x25BC;</span>';
+      html += '</div></div>';
+
+      // Expandable wrong answers section
+      if (hasWrong) {
+        html += '<div class="qh-wrong-detail" style="display:none;border-top:1px solid var(--border);padding:16px;background:var(--bg)">';
+        html += '<h4 style="margin:0 0 12px;font-size:14px;color:var(--error)">Wrong Answers</h4>';
+        for (var wi = 0; wi < r.wrongAnswers.length; wi++) {
+          var w = r.wrongAnswers[wi];
+          html += '<div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;line-height:1.6">';
+          html += '<p style="font-weight:600;margin:0 0 4px">' + escapeHtml(w.q || '') + '</p>';
+          html += '<p style="margin:0;color:var(--error)">Your answer: <strong>' + escapeHtml(w.yours || '?') + '</strong></p>';
+          html += '<p style="margin:0;color:var(--success)">Correct: <strong>' + escapeHtml(w.correct || '?') + '</strong></p>';
+          if (w.rationale) html += '<p style="margin:6px 0 0;color:var(--text-light);font-style:italic">' + escapeHtml(w.rationale) + '</p>';
+          html += '</div>';
+        }
+        html += '</div>';
+      }
       html += '</div>';
     }
     el.innerHTML = html;
+
+    // Add CSS for toggle
+    if (!document.getElementById('qh-style')) {
+      var style = document.createElement('style');
+      style.id = 'qh-style';
+      style.textContent = '.qh-open .qh-wrong-detail { display: block !important; } .qh-open span:last-child { transform: rotate(180deg); }';
+      document.head.appendChild(style);
+    }
   }).catch(function(e) {
     el.innerHTML = '<div class="card"><p>Error loading history: ' + escapeHtml(e.message || String(e)) + '</p></div>';
   });
@@ -2545,8 +2582,8 @@ function submitPBDiagnosis() {
 
     if (result.expired) { App.pbCaseId = null; showPatientBotSetup(); return; }
 
-    if (result.partial && !App.pbPartialUsed) {
-      // Partial credit — push feedback into chat as system message, let them try once more
+    if (result.score >= 40 && result.score < 80 && !App.pbPartialUsed) {
+      // Partial credit — let them keep investigating and try once more
       App.pbPartialUsed = true;
       App.pbHistory.push({ role: 'partial', content: { score: result.score, feedback: result.feedback } });
       renderFn();
@@ -2739,10 +2776,10 @@ function renderPBChatInner() {
       var pc = m.content;
       html += '<div style="background:rgba(255,193,7,0.12);border:2px solid #f9a825;color:var(--text);padding:16px 20px;margin:12px 0;border-radius:12px;font-size:14px;line-height:1.6">';
       html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
-      html += '<strong style="color:#e65100;font-size:16px">&#x1F7E1; Close!</strong>';
+      html += '<strong style="color:#e65100;font-size:16px">&#x1F7E1; Not quite</strong>';
       html += '<span style="background:#e65100;color:white;padding:3px 10px;border-radius:8px;font-size:13px;font-weight:700">' + (pc.score || '?') + '/100</span>';
       html += '</div>';
-      html += escapeHtml(pc.feedback);
+      html += 'Your answer is on the right track but incomplete. Keep investigating — order more tests, ask more questions, then try again.';
       html += '<div style="margin-top:8px;font-size:13px;color:var(--text-light)">You can try once more with the Diagnose button.</div>';
       html += '</div>';
     } else if (m.role === 'system') {
@@ -2929,6 +2966,13 @@ function renderPBChatInner() {
         html += '<ul style="margin:0;padding-left:20px;font-size:14px;line-height:1.7">';
         for (var mi = 0; mi < sc.missed.length; mi++) html += '<li>' + escapeHtml(sc.missed[mi]) + '</li>';
         html += '</ul></div>';
+      }
+
+      if (sc.examTip) {
+        html += '<div style="margin-top:20px;padding:16px 20px;background:rgba(99,102,241,0.08);border:1px solid var(--accent);border-radius:12px">';
+        html += '<strong style="color:var(--accent)">&#x1F4A1; MCCQE Tip:</strong> ';
+        html += '<span style="font-size:14px">' + escapeHtml(sc.examTip) + '</span>';
+        html += '</div>';
       }
 
       html += '</div>';
