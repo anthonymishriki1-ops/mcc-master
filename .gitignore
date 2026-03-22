@@ -1,0 +1,9 @@
+*.pdf
+*.txt
+diagram_images/
+diagram_pages/
+images/
+*.json
+!gas_app/appsscript.json
+!gas_app/.clasp.json
+node_modules/

@@ -1,0 +1,3167 @@
+<script>
+// =============================================
+// MCC MASTER - Client-Side Application
+// =============================================
+
+var App = {
+  currentPage: 'dashboard',
+  user: null,
+  specialties: null,
+  stats: null,
+
+  // Flashcards
+  flashcards: [],
+  flashcardsAll: [],
+  flashcardIndex: 0,
+  flashcardFlipped: false,
+
+  // Bullet Notes
+  bulletNotes: [],
+
+  // Quiz
+  quizQuestions: [],
+  quizAnswers: {},
+  quizCurrentIndex: 0,
+  quizActive: false,
+  quizResultDetails: [],
+  quizSetupSpecialty: 'All',
+  quizSetupVersion: 'Random',
+
+  // Don't Miss
+  dontMissItems: [],
+  dmQuizMode: false,
+  dmQuizIndex: 0,
+  dmQuizFlipped: false,
+  dmQuizKnew: 0,
+  dmQuizMissed: 0,
+
+  // Dr. Data
+  drDataHistory: [],
+
+  // Diagrams
+  diagramChapters: null,
+  diagramCurrentSlug: null,
+  diagramPage: 1,
+
+  // PatientBot
+  pbCaseId: null,
+  pbHistory: [],
+  pbSpecialty: null,
+  pbCheatMode: false,
+  pbDifficulty: 'medium',
+  pbTotalCases: 1,
+  pbCurrentCase: 0,
+  pbCaseScores: [],
+  pbPatientInfo: null,
+  pbDiagnosis: null,
+  pbDiagnosing: false,
+  pbDiagAttempts: 0,
+  pbDiagResolved: false,
+  pbPartialUsed: false,
+  pbPartialFeedback: null,
+  pbPartialScore: null,
+  pbScorecard: null,
+
+  // Medical Glossary
+  glossary: null,
+  glossaryLang: '',
+  glossaryRegex: null,
+
+  // Daily Challenge
+  dailyData: null,
+  dailyPhase: null, // 'cards', 'quiz', 'pb', 'done'
+  dailyCardIndex: 0,
+  dailyCardFlipped: false,
+  dailyCardRatings: [],
+  dailyQuizIndex: 0,
+  dailyQuizAnswers: {},
+  dailyPBIndex: 0
+};
+
+// Point values
+var POINTS = {
+  FLASHCARD_GOT_IT: 3,
+  FLASHCARD_REVIEW: 1,
+  DAILY_CARD_KNEW: 3,
+  DAILY_CARD_SHAKY: 1,
+  QUIZ_CORRECT: 10,
+  QUIZ_PERFECT_BONUS: 25,
+  PB_CORRECT: 20,
+  PB_FIRST_TRY: 10,
+  DAILY_COMPLETE: 50
+};
+
+// =============================================
+// VERSION & CHANGELOG
+// =============================================
+
+var APP_VERSION = '2.0';
+var APP_CHANGELOG = [
+  { version: '2.0', date: 'Mar 2026', items: ['Duolingo-style skill map dashboard', 'Mastery tracking per specialty', 'PatientBot with MCCQE clinical presentations', 'OSCE scorecard', 'Partial credit diagnosis', 'Management actions (discharge, prescribe, refer)', 'Library ebook viewer', 'Medical term translations (Persian/Arabic)', 'Colorful action palette'] },
+  { version: '1.0', date: 'Feb 2026', items: ['Initial release', 'Flashcards, Quiz, PatientBot, Daily Challenge', 'Leaderboard and achievements', 'Search and Dr. Data AI'] }
+];
+
+var SKILL_MAP = [
+  { key: 'Cardiology', short: 'Cardio', icon: '\u2764\uFE0F' },
+  { key: 'Respirology', short: 'Resp', icon: '\uD83E\uDEC1' },
+  { key: 'Gastroenterology', short: 'GI', icon: '\uD83E\uDEC4' },
+  { key: 'Neurology', short: 'Neuro', icon: '\uD83E\uDDE0' },
+  { key: 'Psychiatry', short: 'Psych', icon: '\uD83D\uDCAD' },
+  { key: 'Nephrology', short: 'Renal', icon: '\uD83E\uDED8' },
+  { key: 'Endocrinology', short: 'Endo', icon: '\uD83E\uDD8B' },
+  { key: 'Hematology', short: 'Heme', icon: '\uD83E\uDE78' },
+  { key: 'Infectious Disease', short: 'ID', icon: '\uD83E\uDDA0' },
+  { key: 'Dermatology', short: 'Derm', icon: '\uD83E\uDDF4' },
+  { key: 'MSK', short: 'MSK', icon: '\uD83E\uDDB4' },
+  { key: 'OB/GYN', short: 'OB/GYN', icon: '\uD83E\uDD30' },
+  { key: 'Pediatrics', short: 'Peds', icon: '\uD83D\uDC76' },
+  { key: 'Surgery', short: 'Surg', icon: '\uD83D\uDD2A' },
+  { key: 'Emergency', short: 'Emerg', icon: '\uD83D\uDE91' },
+  { key: 'Ophthalmology', short: 'Eye', icon: '\uD83D\uDC41' },
+  { key: 'ENT', short: 'ENT', icon: '\uD83D\uDC42' },
+  { key: 'Family Medicine', short: 'FM', icon: '\uD83C\uDFE0' }
+];
+
+// =============================================
+// NAVIGATION
+// =============================================
+
+function navigateTo(page) {
+  var pages = document.querySelectorAll('.page');
+  for (var i = 0; i < pages.length; i++) pages[i].classList.remove('active');
+
+  var links = document.querySelectorAll('.nav-links li');
+  for (var i = 0; i < links.length; i++) links[i].classList.remove('active');
+
+  var target = document.getElementById('page-' + page);
+  if (target) target.classList.add('active');
+
+  var link = document.querySelector('.nav-links [data-page="' + page + '"]');
+  if (link) link.classList.add('active');
+
+  App.currentPage = page;
+  document.getElementById('sidebar').classList.remove('open');
+
+  // Update bottom nav active state
+  var bottomBtns = document.querySelectorAll('#bottom-nav button');
+  for (var i = 0; i < bottomBtns.length; i++) {
+    bottomBtns[i].classList.toggle('active', bottomBtns[i].getAttribute('data-page') === page);
+  }
+
+  // Add back button to non-dashboard pages (mobile-friendly navigation)
+  var headers = document.querySelectorAll('.page-header');
+  for (var h = 0; h < headers.length; h++) {
+    var existing = headers[h].querySelector('.back-btn');
+    if (existing) existing.remove();
+  }
+  if (page !== 'dashboard') {
+    var activeHeader = document.querySelector('#page-' + page + ' .page-header');
+    if (activeHeader) {
+      var backBtn = document.createElement('button');
+      backBtn.className = 'btn btn-sm btn-outline back-btn';
+      backBtn.innerHTML = '&larr; Back';
+      backBtn.onclick = function() { navigateTo('dashboard'); };
+      backBtn.style.cssText = 'margin-right:12px;padding:6px 14px;font-size:14px;vertical-align:middle';
+      activeHeader.insertBefore(backBtn, activeHeader.firstChild);
+    }
+  }
+
+  switch (page) {
+    case 'dashboard': loadDashboard(); break;
+    case 'daily': loadDailyChallenge(); break;
+    case 'flashcards': if (App.flashcards.length === 0) loadFlashcards('All'); break;
+    case 'notes': if (App.bulletNotes.length === 0) loadBulletNotes('All'); break;
+    case 'quiz':
+      if (!App.quizActive) {
+        var savedQuiz = restoreQuizState_();
+        if (savedQuiz) {
+          App.quizQuestions = savedQuiz.questions;
+          App.quizAnswers = savedQuiz.answers;
+          App.quizCurrentIndex = savedQuiz.index;
+          App.quizSetupSpecialty = savedQuiz.specialty;
+          App.quizSetupVersion = savedQuiz.version;
+          App.quizActive = true;
+          renderQuizQuestion();
+        } else {
+          showQuizSetup();
+        }
+      }
+      break;
+    case 'dontmiss': if (App.dontMissItems.length === 0) loadDontMiss('All'); break;
+    case 'search': document.getElementById('search-input').focus(); break;
+    case 'patientbot': if (!App.pbCaseId) showPatientBotSetup(); break;
+    case 'diagrams': if (!App.diagramChapters) loadDiagramChapters(); break;
+    case 'leaderboard': loadLeaderboard(); break;
+    case 'achievements': loadAchievements(); break;
+    case 'devpanel': loadDevPanel(); break;
+  }
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+}
+
+function toggleDarkMode() {
+  var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  if (isDark) {
+    document.documentElement.removeAttribute('data-theme');
+    localStorage.setItem('mcc_theme', 'light');
+    document.getElementById('dark-mode-btn').innerHTML = '&#x1F319; Dark Mode';
+  } else {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    localStorage.setItem('mcc_theme', 'dark');
+    document.getElementById('dark-mode-btn').innerHTML = '&#x2600; Light Mode';
+  }
+}
+
+// Apply saved theme on load
+(function() {
+  var saved = localStorage.getItem('mcc_theme');
+  if (saved === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    // Update button text after DOM ready
+    document.addEventListener('DOMContentLoaded', function() {
+      var btn = document.getElementById('dark-mode-btn');
+      if (btn) btn.innerHTML = '&#x2600; Light Mode';
+    });
+  }
+})();
+
+// =============================================
+// SERVER CALL WRAPPER
+// =============================================
+
+function serverCall(funcName) {
+  var args = Array.prototype.slice.call(arguments, 1);
+  return new Promise(function(resolve, reject) {
+    var runner = google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(reject);
+    runner[funcName].apply(runner, args);
+  });
+}
+
+// =============================================
+// INIT
+// =============================================
+
+var PROFILES = [
+  { id: 'tony', name: 'Tony' },
+  { id: 'roxanna', name: 'Roxanna' },
+  { id: 'soroosh', name: 'Soroosh' },
+  { id: 'amin', name: 'Amin' },
+  { id: 'noha', name: 'Noha' }
+];
+
+function getGuestId() {
+  var profile = localStorage.getItem('mcc_profile');
+  if (profile) return 'profile_' + profile;
+  var id = localStorage.getItem('mcc_guest_id');
+  if (!id) { id = 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); localStorage.setItem('mcc_guest_id', id); }
+  return id;
+}
+
+function showProfileSelect() {
+  var content = document.getElementById('content');
+  var sidebar = document.getElementById('sidebar');
+  var bottomNav = document.getElementById('bottom-nav');
+  if (sidebar) sidebar.style.display = 'none';
+  if (bottomNav) bottomNav.style.display = 'none';
+  content.style.marginLeft = '0';
+
+  var html = '<div style="max-width:400px;margin:0 auto;padding:60px 20px;text-align:center">';
+  html += '<h1 style="font-size:28px;font-weight:900;color:var(--primary);margin-bottom:8px">MCC Master</h1>';
+  html += '<p style="color:var(--text-light);margin-bottom:32px;font-size:15px">Select your profile</p>';
+
+  html += '<select id="profile-dropdown" class="specialty-select" style="width:100%;padding:14px 16px;font-size:16px;font-weight:600;border-radius:12px;margin-bottom:20px;cursor:pointer">';
+  html += '<option value="">Choose your name...</option>';
+  for (var i = 0; i < PROFILES.length; i++) {
+    html += '<option value="' + PROFILES[i].id + '">' + PROFILES[i].name + '</option>';
+  }
+  html += '</select>';
+
+  html += '<button class="btn btn-primary" onclick="confirmProfileSelect()" style="width:100%;padding:14px;font-size:16px;font-weight:700">Start Studying</button>';
+  html += '</div>';
+
+  document.querySelectorAll('.page').forEach(function(pg) { pg.classList.remove('active'); });
+  var profilePage = document.getElementById('profile-select-page');
+  if (!profilePage) {
+    profilePage = document.createElement('div');
+    profilePage.id = 'profile-select-page';
+    content.appendChild(profilePage);
+  }
+  profilePage.innerHTML = html;
+  profilePage.style.display = 'block';
+}
+
+function confirmProfileSelect() {
+  var sel = document.getElementById('profile-dropdown');
+  var profileId = sel ? sel.value : '';
+  if (!profileId) { sel.style.borderColor = 'var(--error)'; return; }
+  loginAsProfile(profileId);
+}
+
+function loginAsProfile(profileId) {
+  var profile = PROFILES.find(function(p) { return p.id === profileId; });
+  localStorage.setItem('mcc_profile', profileId);
+  App.guestId = 'profile_' + profileId;
+  App.user = { name: profile.name, email: profile.name, isGuest: true };
+
+  var sidebar = document.getElementById('sidebar');
+  var bottomNav = document.getElementById('bottom-nav');
+  var content = document.getElementById('content');
+  if (sidebar) sidebar.style.display = '';
+  if (bottomNav) bottomNav.style.display = '';
+  content.style.marginLeft = '';
+
+  var profilePage = document.getElementById('profile-select-page');
+  if (profilePage) profilePage.remove();
+
+  document.getElementById('user-email').textContent = profile.name;
+  finishInit();
+
+  // Show tutorial on first login
+  var tutorialSeen = localStorage.getItem('mcc_tutorial_' + profileId);
+  if (!tutorialSeen) {
+    setTimeout(function() { startTutorial(); }, 800);
+  }
+}
+
+function switchProfile() {
+  localStorage.removeItem('mcc_profile');
+  showProfileSelect();
+}
+
+// ===== TUTORIAL =====
+
+function startTutorial() {
+  var steps = [
+    { title: 'Quick Overview', text: 'This is MCC Master, a study tool for MCCQE Part I. Here\'s how it works.', target: null },
+    { title: 'Flashcards', text: 'Over 10,000 flashcards organized by specialty. You flip each card and mark whether you got it right or wrong. The app tracks which topics you\'re weak in and adjusts accordingly.', target: 'flashcards' },
+    { title: 'Practice Quiz', text: 'Multiple choice questions in the same format as the actual exam. After each quiz, you\'ll see which areas need more work.', target: 'quiz' },
+    { title: 'PatientBot', text: 'Simulated patient encounters powered by AI. You interview the patient, order tests, and submit a diagnosis. You get scored on history taking, clinical reasoning, and communication.', target: 'patientbot' },
+    { title: 'Daily Challenge', text: 'A daily set of flashcards, quiz questions, and a patient case. Completing it each day keeps your streak going and covers material across all specialties.', target: 'daily' },
+    { title: 'Skill Map', text: 'The dashboard tracks your mastery percentage for each specialty based on your quiz scores and flashcard accuracy. Focus on the areas showing red or yellow.', target: 'dashboard' },
+    { title: 'Ready', text: 'Start with the Daily Challenge to get a feel for everything, or go straight to Flashcards. Set a daily goal and stick to it.', target: null }
+  ];
+
+  App.tutorialSteps = steps;
+  App.tutorialIndex = 0;
+  renderTutorialStep();
+}
+
+function renderTutorialStep() {
+  var step = App.tutorialSteps[App.tutorialIndex];
+  var total = App.tutorialSteps.length;
+  var current = App.tutorialIndex + 1;
+
+  // Remove existing overlay
+  var existing = document.getElementById('tutorial-overlay');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'tutorial-overlay';
+  overlay.className = 'tutorial-overlay';
+
+  var html = '<div class="tutorial-card">';
+  html += '<div class="tutorial-progress">';
+  for (var i = 0; i < total; i++) {
+    html += '<div class="tutorial-dot' + (i <= App.tutorialIndex ? ' active' : '') + '"></div>';
+  }
+  html += '</div>';
+  html += '<h3 style="margin:0 0 8px;font-size:20px">' + step.title + '</h3>';
+  html += '<p style="color:var(--text-light);margin:0 0 24px;font-size:15px;line-height:1.6">' + step.text + '</p>';
+  html += '<div style="display:flex;gap:12px;justify-content:space-between">';
+  html += '<button class="btn btn-outline" onclick="endTutorial()" style="font-size:14px">Skip</button>';
+  if (App.tutorialIndex < total - 1) {
+    html += '<button class="btn btn-primary" onclick="nextTutorialStep()" style="font-size:14px;flex:1">Next (' + current + '/' + total + ')</button>';
+  } else {
+    html += '<button class="btn btn-success" onclick="endTutorial()" style="font-size:14px;flex:1">Let\'s Go! &#x1F680;</button>';
+  }
+  html += '</div></div>';
+
+  overlay.innerHTML = html;
+  document.body.appendChild(overlay);
+}
+
+function nextTutorialStep() {
+  App.tutorialIndex++;
+  if (App.tutorialIndex >= App.tutorialSteps.length) {
+    endTutorial();
+  } else {
+    renderTutorialStep();
+  }
+}
+
+function endTutorial() {
+  var profileId = localStorage.getItem('mcc_profile');
+  if (profileId) localStorage.setItem('mcc_tutorial_' + profileId, '1');
+  var overlay = document.getElementById('tutorial-overlay');
+  if (overlay) overlay.remove();
+}
+
+function init() {
+  // Check if profile is selected
+  var savedProfile = localStorage.getItem('mcc_profile');
+  if (!savedProfile) {
+    showProfileSelect();
+    // Still load specialties in background
+    serverCall('getSpecialties').then(function(specs) {
+      App.specialties = specs;
+      populateSpecialtyDropdowns();
+    });
+    return;
+  }
+
+  // Load profile
+  var profile = PROFILES.find(function(p) { return p.id === savedProfile; });
+  if (profile) {
+    App.guestId = 'profile_' + savedProfile;
+    App.user = { name: profile.name, email: profile.name, isGuest: true };
+    document.getElementById('user-email').textContent = profile.name;
+  } else {
+    App.guestId = getGuestId();
+    App.user = { name: 'Guest', email: 'Guest', isGuest: true };
+    document.getElementById('user-email').textContent = 'Guest';
+  }
+
+  serverCall('getCurrentUser').then(function(user) {
+    if (!user.isGuest) {
+      App.user = user;
+      document.getElementById('user-email').textContent = user.email;
+    }
+    if (user.isDev) {
+      var devNav = document.getElementById('nav-dev');
+      if (devNav) devNav.style.display = '';
+    }
+  });
+
+  finishInit();
+}
+
+function finishInit() {
+  serverCall('getSpecialties').then(function(specs) {
+    App.specialties = specs;
+    populateSpecialtyDropdowns();
+  });
+
+  // Restore language setting and load glossary
+  var savedLang = localStorage.getItem('mcc_lang');
+  if (savedLang) {
+    App.glossaryLang = savedLang;
+    var langSelect = document.getElementById('lang-select');
+    if (langSelect) langSelect.value = savedLang;
+    loadGlossary();
+  }
+
+  loadDashboard();
+
+  var lastVersion = localStorage.getItem('mcc_last_version');
+  if (lastVersion !== APP_VERSION) {
+    showVersionBanner();
+  }
+}
+
+function showVersionBanner() {
+  var existing = document.getElementById('version-banner');
+  if (existing) existing.remove();
+
+  var itemsHtml = '';
+  for (var c = 0; c < APP_CHANGELOG.length; c++) {
+    var entry = APP_CHANGELOG[c];
+    itemsHtml += '<div class="version-entry">';
+    itemsHtml += '<strong>v' + entry.version + '</strong> <span style="opacity:0.8">(' + entry.date + ')</span>';
+    itemsHtml += '<ul>';
+    for (var i = 0; i < entry.items.length; i++) {
+      itemsHtml += '<li>' + escapeHtml(entry.items[i]) + '</li>';
+    }
+    itemsHtml += '</ul></div>';
+  }
+
+  var banner = document.createElement('div');
+  banner.id = 'version-banner';
+  banner.className = 'version-banner';
+  banner.innerHTML =
+    '<div class="version-banner-header">' +
+      '<h3>MCC Master v' + APP_VERSION + '</h3>' +
+      '<button class="version-toggle-btn" onclick="document.getElementById(\'version-changelog\').classList.toggle(\'open\')">What\'s New &#x25BC;</button>' +
+    '</div>' +
+    '<div id="version-changelog" class="version-changelog">' + itemsHtml + '</div>' +
+    '<button class="btn version-got-it" onclick="dismissVersionBanner()">Got it!</button>';
+
+  var dashboard = document.getElementById('dashboard-content');
+  dashboard.parentNode.insertBefore(banner, dashboard);
+}
+
+function dismissVersionBanner() {
+  localStorage.setItem('mcc_last_version', APP_VERSION);
+  var banner = document.getElementById('version-banner');
+  if (banner) banner.remove();
+}
+
+function populateSpecialtyDropdowns() {
+  var mapping = {
+    'flashcard-specialty': App.specialties.flashcards || [],
+    'notes-specialty': App.specialties.bullet_notes || [],
+    'dontmiss-specialty': App.specialties.dont_miss || []
+  };
+
+  Object.keys(mapping).forEach(function(id) {
+    var sel = document.getElementById(id);
+    if (!sel) return;
+    var specs = mapping[id];
+    sel.innerHTML = '<option value="All">All Specialties</option>';
+    for (var i = 0; i < specs.length; i++) {
+      sel.innerHTML += '<option value="' + escapeHtml(specs[i]) + '">' + escapeHtml(specs[i]) + '</option>';
+    }
+  });
+}
+
+// =============================================
+// DASHBOARD
+// =============================================
+
+function dismissGuide() {
+  localStorage.setItem('mcc_guide_dismissed', '1');
+  var g = document.getElementById('guide-card');
+  if (g) g.style.display = 'none';
+}
+
+function loadDashboard() {
+  var el = document.getElementById('dashboard-content');
+  el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
+
+  serverCall('getUserStats').then(function(stats) {
+    App.stats = stats;
+    renderDashboard(stats);
+    updateSidebarLevel(stats.level);
+  }).catch(function(e) {
+    el.innerHTML = '<div class="card"><p>Error loading dashboard: ' + escapeHtml(e.message || String(e)) + '</p></div>';
+  });
+}
+
+function updateSidebarLevel(level) {
+  var el = document.getElementById('sidebar-level');
+  if (!el || !level) return;
+  el.innerHTML = 'Lvl ' + (level.number || 1) + ' &bull; ' + escapeHtml(level.name) +
+    '<div class="level-bar"><div class="level-fill" style="width:' + level.progress + '%"></div></div>' +
+    '<span class="level-pts">' + level.points + ' XP</span>';
+}
+
+function getSkillMastery(stats) {
+  var masteryMap = {};
+  // Build mastery from weakAreas (which has {specialty, avgScore})
+  if (stats.weakAreas && stats.weakAreas.length > 0) {
+    for (var i = 0; i < stats.weakAreas.length; i++) {
+      masteryMap[stats.weakAreas[i].specialty] = stats.weakAreas[i].avgScore;
+    }
+  }
+  return masteryMap;
+}
+
+function buildSkillRingSvg(pct, colorClass) {
+  var r = 38, c = 2 * Math.PI * r;
+  var offset = c - (pct / 100) * c;
+  var strokeColor = colorClass === 'skill-green' ? '#4caf50' : colorClass === 'skill-yellow' ? '#ff9800' : colorClass === 'skill-red' ? '#f44336' : '#bdbdbd';
+  var trackColor = 'rgba(0,0,0,0.06)';
+  return '<svg class="skill-ring-svg" viewBox="0 0 88 88" width="88" height="88">' +
+    '<circle cx="44" cy="44" r="' + r + '" fill="none" stroke="' + trackColor + '" stroke-width="7"/>' +
+    '<circle cx="44" cy="44" r="' + r + '" fill="none" stroke="' + strokeColor + '" stroke-width="7" ' +
+    'stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + offset.toFixed(1) + '" ' +
+    'stroke-linecap="round" transform="rotate(-90 44 44)" style="transition:stroke-dashoffset 0.6s ease"/>' +
+    '</svg>';
+}
+
+function renderDashboard(stats) {
+  var el = document.getElementById('dashboard-content');
+  var name = App.user ? (App.user.name || '').split('.')[0] || 'Student' : 'Student';
+  // Capitalize first letter
+  name = name.charAt(0).toUpperCase() + name.slice(1);
+
+  var lvl = stats.level || {};
+  var lvlNum = lvl.number || 1;
+  var dailyCards = getDailyCardCount_();
+
+  var html = '';
+
+  // Compact header with streak + level
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:8px">';
+  html += '<div><h3 style="margin:0">Hey ' + escapeHtml(name) + ' &#x1F44B;</h3>';
+  html += '<span style="font-size:13px;color:var(--text-light)">Lvl ' + lvlNum + ' &bull; ' + escapeHtml(lvl.name || 'Medical Student') + ' &bull; ' + (stats.totalPoints || 0) + ' XP</span></div>';
+  if (stats.streak > 0) {
+    html += '<div class="dash-streak">' + stats.streak + ' day streak! &#x1F525;</div>';
+  }
+  html += '</div>';
+
+  // XP progress bar (compact)
+  html += '<div class="progress-bar" style="margin-bottom:24px;height:6px"><div class="progress-fill" style="width:' + (lvl.progress || 0) + '%"></div></div>';
+
+  // ===== QUICK ACTIONS - 4 big cards =====
+  html += '<div class="quick-actions">';
+
+  // Flashcards
+  html += '<div class="quick-action-card" onclick="navigateTo(\'flashcards\')" style="background:linear-gradient(135deg,#667eea,#764ba2)">';
+  html += '<div class="qa-icon">&#x1F4DA;</div>';
+  html += '<div class="qa-label">Study</div>';
+  html += '<div class="qa-sub">Card ' + (loadFlashcardProgress_() ? loadFlashcardProgress_().index + 1 : 1) + ' of 10K</div>';
+  html += '</div>';
+
+  // Quiz
+  html += '<div class="quick-action-card" onclick="navigateTo(\'quiz\')" style="background:linear-gradient(135deg,#f093fb,#f5576c)">';
+  html += '<div class="qa-icon">&#x270F;&#xFE0F;</div>';
+  html += '<div class="qa-label">Quiz</div>';
+  html += '<div class="qa-sub">' + (stats.avgScore || 0) + '% avg &bull; ' + stats.totalQuizzes + ' done</div>';
+  html += '</div>';
+
+  // PatientBot
+  html += '<div class="quick-action-card" onclick="navigateTo(\'patientbot\')" style="background:linear-gradient(135deg,#4facfe,#00f2fe)">';
+  html += '<div class="qa-icon">&#x1FA7A;</div>';
+  html += '<div class="qa-label">PatientBot</div>';
+  html += '<div class="qa-sub">' + (stats.pbCorrect || 0) + '/' + (stats.pbTotal || 0) + ' diagnosed</div>';
+  html += '</div>';
+
+  // Daily Challenge
+  var dailyDone = stats.dailyCompleted;
+  html += '<div class="quick-action-card" onclick="navigateTo(\'daily\')" style="background:linear-gradient(135deg,' + (dailyDone ? '#11998e,#38ef7d' : '#fc4a1a,#f7b733') + ')">';
+  html += '<div class="qa-icon">' + (dailyDone ? '&#x2705;' : '&#x2B50;') + '</div>';
+  html += '<div class="qa-label">Daily</div>';
+  html += '<div class="qa-sub">' + (dailyDone ? 'Complete!' : 'Not done yet') + '</div>';
+  html += '</div>';
+
+  html += '</div>';
+
+  // Daily card goal meter (compact)
+  html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:24px;padding:12px 16px;background:var(--card);border-radius:12px;border:1px solid var(--border)">';
+  var dashGoal = getDailyGoal_();
+  html += '<span style="font-size:13px;font-weight:700;white-space:nowrap;cursor:pointer" onclick="promptDailyGoal()">Today: ' + dailyCards + '/' + dashGoal + '</span>';
+  var goalPct = Math.min(100, Math.round((dailyCards / dashGoal) * 100));
+  html += '<div class="progress-bar" style="flex:1;height:6px"><div class="progress-fill" style="width:' + goalPct + '%;background:' + (goalPct >= 100 ? 'var(--success)' : 'var(--accent)') + '"></div></div>';
+  if (goalPct >= 100) html += '<span style="font-size:13px;color:var(--success);font-weight:700">&#x2705;</span>';
+  html += '</div>';
+
+  // ===== SKILL MAP (compact) =====
+  var masteryMap = getSkillMastery(stats);
+  html += '<h3 class="section-title" style="margin-bottom:16px">Skill Map</h3>';
+  html += '<div class="skill-map">';
+
+  var weakestKey = null, weakestPct = 101;
+  for (var s = 0; s < SKILL_MAP.length; s++) {
+    var sk = SKILL_MAP[s];
+    var pct = masteryMap[sk.key] !== undefined ? Math.round(masteryMap[sk.key]) : 0;
+    var colorClass = pct === 0 ? 'skill-grey' : pct > 70 ? 'skill-green' : pct >= 40 ? 'skill-yellow' : 'skill-red';
+    if (pct < weakestPct) { weakestPct = pct; weakestKey = sk; }
+
+    html += '<div class="skill-node ' + colorClass + '" onclick="navigateTo(\'flashcards\')" title="' + escapeHtml(sk.key) + ' - ' + pct + '%">';
+    html += '<div class="skill-ring">';
+    html += buildSkillRingSvg(pct, colorClass);
+    html += '<div class="skill-ring-icon">' + sk.icon + '</div>';
+    html += '</div>';
+    html += '<div class="skill-node-label">' + escapeHtml(sk.short) + '</div>';
+    html += '<div class="skill-node-pct">' + pct + '%</div>';
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // Suggested study
+  if (weakestKey && weakestPct < 70) {
+    html += '<div class="card suggested-next">';
+    html += '<div class="suggested-next-inner">';
+    html += '<div><strong>Focus on:</strong> ' + weakestKey.icon + ' ' + escapeHtml(weakestKey.key) + ' (' + weakestPct + '%)</div>';
+    html += '<button class="btn btn-primary btn-sm" onclick="navigateTo(\'flashcards\')">Study</button>';
+    html += '</div></div>';
+  }
+
+  // Stats (always visible, compact)
+  html += '<div class="stat-grid" style="margin-top:20px">';
+  html += '<div class="stat-card"><div class="stat-number">' + (stats.totalCardsReviewed || 0) + '</div><div class="stat-label">Cards</div></div>';
+  html += '<div class="stat-card"><div class="stat-number">' + stats.totalQuizzes + '</div><div class="stat-label">Quizzes</div></div>';
+  html += '<div class="stat-card"><div class="stat-number">' + stats.avgScore + '%</div><div class="stat-label">Avg</div></div>';
+  html += '<div class="stat-card"><div class="stat-number">' + (stats.dailyChallengesCompleted || 0) + '</div><div class="stat-label">Dailies</div></div>';
+  html += '</div>';
+
+  // Achievements preview
+  if (stats.achievements && stats.achievements.length > 0) {
+    html += '<div class="card"><h3 class="section-title">Recent Achievements</h3>';
+    html += '<div class="achievement-row">';
+    var show = stats.achievements.slice(-5);
+    for (var i = 0; i < show.length; i++) {
+      html += '<div class="achievement-badge" title="' + escapeHtml(show[i].desc) + '">';
+      html += '<span class="achievement-icon">' + show[i].icon + '</span>';
+      html += '<span class="achievement-name">' + escapeHtml(show[i].name) + '</span>';
+      html += '</div>';
+    }
+    html += '</div>';
+    if (stats.achievements.length > 5) {
+      html += '<button class="btn btn-sm" style="margin-top:8px" onclick="navigateTo(\'achievements\')">See all ' + stats.achievements.length + ' achievements</button>';
+    }
+    html += '</div>';
+  }
+
+  // Recent quizzes
+  if (stats.recentQuizzes.length > 0) {
+    html += '<div class="card"><h3 class="section-title">Recent Quizzes</h3>';
+    for (var i = 0; i < stats.recentQuizzes.length; i++) {
+      var q = stats.recentQuizzes[i];
+      html += '<div class="weak-area-row">';
+      html += '<span>' + escapeHtml(q.specialty) + ' (v' + escapeHtml(q.version) + ')</span>';
+      html += '<span style="font-weight:700">' + q.percentage + '% (' + q.score + '/' + q.total + ')</span>';
+      html += '</div>';
+    }
+    html += '</div>';
+  } else {
+    html += '<div class="card" style="text-align:center;padding:40px">';
+    html += '<h3>Get Started!</h3>';
+    html += '<p style="color:var(--text-light);margin:8px 0 20px">Take a quiz or try the Daily Challenge</p>';
+    html += '<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">';
+    html += '<button class="btn btn-primary" onclick="navigateTo(\'daily\')">Daily Challenge</button>';
+    html += '<button class="btn btn-accent" onclick="navigateTo(\'quiz\')">Start a Quiz</button>';
+    html += '</div></div>';
+  }
+
+  el.innerHTML = html;
+}
+
+// =============================================
+// DAILY CHALLENGE
+// =============================================
+
+function loadDailyChallenge() {
+  var el = document.getElementById('daily-content');
+  el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
+
+  serverCall('getDailyChallenge').then(function(data) {
+    App.dailyData = data;
+    if (data.completed) {
+      showDailyCompleted();
+    } else {
+      showDailyOverview();
+    }
+  }).catch(function(e) {
+    el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>';
+  });
+}
+
+function showDailyCompleted() {
+  var el = document.getElementById('daily-content');
+  el.innerHTML = '<div class="card" style="text-align:center;padding:50px">' +
+    '<div style="font-size:64px;margin-bottom:16px">&#x2705;</div>' +
+    '<h2>Daily Challenge Complete!</h2>' +
+    '<p style="color:var(--text-light);margin:12px 0">You\'ve already completed today\'s challenge. Come back tomorrow!</p>' +
+    '<p style="font-size:14px;color:var(--text-light)">Date: ' + escapeHtml(App.dailyData.date) + '</p>' +
+    '<button class="btn btn-primary" style="margin-top:20px" onclick="navigateTo(\'dashboard\')">Dashboard</button>' +
+    '</div>';
+}
+
+function showDailyOverview() {
+  var el = document.getElementById('daily-content');
+  var d = App.dailyData;
+
+  var html = '<div class="card" style="text-align:center;padding:40px">';
+  html += '<div style="font-size:48px;margin-bottom:12px">&#x2B50;</div>';
+  html += '<h2>Today\'s Challenge</h2>';
+  html += '<p style="color:var(--text-light);margin:12px 0 24px">' + escapeHtml(d.date) + '</p>';
+
+  html += '<div class="daily-tasks">';
+  html += '<div class="daily-task"><span class="daily-task-icon">&#x1F0CF;</span> <strong>20</strong> Flashcards (self-eval)</div>';
+  html += '<div class="daily-task"><span class="daily-task-icon">&#x1F4CB;</span> <strong>10</strong> MCQ Questions</div>';
+  html += '<div class="daily-task"><span class="daily-task-icon">&#x1F3E5;</span> <strong>2</strong> PatientBot Cases</div>';
+  html += '</div>';
+
+  html += '<p style="font-size:14px;color:var(--accent);margin:20px 0">Earn <strong>' + POINTS.DAILY_COMPLETE + ' bonus XP</strong> for completing!</p>';
+  html += '<button class="btn btn-success" style="width:100%;max-width:300px;padding:14px;font-size:16px" onclick="startDailyCards()">Start Challenge</button>';
+  html += '</div>';
+
+  el.innerHTML = html;
+}
+
+function startDailyCards() {
+  App.dailyPhase = 'cards';
+  App.dailyCardIndex = 0;
+  App.dailyCardFlipped = false;
+  App.dailyCardRatings = [];
+  renderDailyCard();
+}
+
+function renderDailyCard() {
+  var el = document.getElementById('daily-content');
+  var cards = App.dailyData.flashcards;
+
+  if (App.dailyCardIndex >= cards.length) {
+    startDailyQuiz();
+    return;
+  }
+
+  var card = cards[App.dailyCardIndex];
+  var progress = (App.dailyCardIndex + 1) + ' / ' + cards.length;
+
+  var html = '<div class="daily-phase-bar"><span>Phase 1/3: Flashcards</span><span>' + progress + '</span></div>';
+  html += '<div class="daily-card-progress-bar"><div class="daily-card-progress-fill" style="width:' + ((App.dailyCardIndex / cards.length) * 100) + '%"></div></div>';
+
+  html += '<div class="flashcard-meta">' + (card.isWeak ? '<span class="badge badge-hy" style="background:var(--warning)">Review</span> ' : '') + '<span>' + escapeHtml(card.specialty || '') + (card.topic ? ' &mdash; ' + escapeHtml(card.topic) : '') + '</span></div>';
+  html += '<div class="flashcard-container"><div class="flashcard' + (App.dailyCardFlipped ? ' flipped' : '') + '" onclick="flipDailyCard()">';
+  html += '<div class="flashcard-front"><div>' + escapeHtml(card.front) + '</div></div>';
+  html += '<div class="flashcard-back"><div>' + escapeHtml(card.back) + '</div></div>';
+  html += '</div></div>';
+
+  if (App.dailyCardFlipped) {
+    html += '<div class="flashcard-nav">';
+    html += '<button class="btn btn-error" onclick="rateDailyCard(\'missed\')" style="flex:1;padding:14px;font-size:15px">Missed</button>';
+    html += '<button class="btn btn-warning" onclick="rateDailyCard(\'shaky\')" style="flex:1;padding:14px;font-size:15px">Shaky</button>';
+    html += '<button class="btn btn-success" onclick="rateDailyCard(\'knew\')" style="flex:1;padding:14px;font-size:15px">Knew It</button>';
+    html += '</div>';
+    html += '<div style="text-align:center;margin-top:8px;color:var(--text-light);font-size:12px">Keyboard: 1 = Missed &bull; 2 = Shaky &bull; 3 = Knew It</div>';
+  } else {
+    html += '<div class="flashcard-nav">';
+    html += '<button class="btn btn-accent" onclick="flipDailyCard()" style="flex:1;padding:14px;font-size:15px">Tap to Flip</button>';
+    html += '</div>';
+    html += '<div style="text-align:center;margin-top:8px;color:var(--text-light);font-size:12px">Keyboard: Space to flip</div>';
+  }
+
+  el.innerHTML = html;
+}
+
+function flipDailyCard() {
+  App.dailyCardFlipped = !App.dailyCardFlipped;
+  renderDailyCard();
+}
+
+function rateDailyCard(rating) {
+  App.dailyCardRatings.push(rating);
+  // Save for spaced repetition (fire-and-forget)
+  var card = App.dailyData.flashcards[App.dailyCardIndex];
+  if (card) serverCall('saveCardRating', card.front, rating, 'daily').catch(function(){});
+  App.dailyCardIndex++;
+  App.dailyCardFlipped = false;
+  renderDailyCard();
+}
+
+function startDailyQuiz() {
+  App.dailyPhase = 'quiz';
+  App.dailyQuizIndex = 0;
+  App.dailyQuizAnswers = {};
+  renderDailyQuiz();
+}
+
+function renderDailyQuiz() {
+  var el = document.getElementById('daily-content');
+  var questions = App.dailyData.mcq;
+
+  if (App.dailyQuizIndex >= questions.length) {
+    startDailyPB();
+    return;
+  }
+
+  var q = questions[App.dailyQuizIndex];
+  var total = questions.length;
+  var current = App.dailyQuizIndex + 1;
+  var selected = App.dailyQuizAnswers[App.dailyQuizIndex] || '';
+
+  var html = '<div class="daily-phase-bar"><span>Phase 2/3: Quiz</span><span>' + current + ' / ' + total + '</span></div>';
+  html += '<div class="progress-bar" style="margin-bottom:20px"><div class="progress-fill" style="width:' + ((current / total) * 100) + '%"></div></div>';
+
+  html += '<div class="card">';
+  html += '<p style="font-size:14px;color:var(--text-light);margin-bottom:4px">' + escapeHtml(q.specialty) + '</p>';
+  html += '<p style="font-size:15px;line-height:1.7;margin-bottom:20px">' + medHtml(q.question) + '</p>';
+
+  var opts = ['A', 'B', 'C', 'D', 'E'];
+  for (var i = 0; i < opts.length; i++) {
+    var opt = opts[i];
+    if (!q.options[opt]) continue;
+    var cls = 'quiz-option' + (selected === opt ? ' selected' : '');
+    html += '<div class="' + cls + '" onclick="selectDailyQuizAnswer(\'' + opt + '\')">';
+    html += '<strong>' + opt + '.</strong> ' + escapeHtml(q.options[opt]);
+    html += '</div>';
+  }
+  html += '</div>';
+
+  html += '<div class="quiz-q-nav">';
+  if (App.dailyQuizIndex > 0) {
+    html += '<button class="btn btn-outline" onclick="App.dailyQuizIndex--;renderDailyQuiz()">Prev</button>';
+  } else {
+    html += '<span></span>';
+  }
+  var answered = Object.keys(App.dailyQuizAnswers).length;
+  html += '<span style="color:var(--text-light);font-size:13px">' + answered + '/' + total + '</span>';
+  if (current === total) {
+    html += '<button class="btn btn-success" onclick="startDailyPB()">Next Phase</button>';
+  } else {
+    html += '<button class="btn btn-primary" onclick="App.dailyQuizIndex++;renderDailyQuiz()">Next</button>';
+  }
+  html += '</div>';
+
+  el.innerHTML = html;
+}
+
+function selectDailyQuizAnswer(opt) {
+  App.dailyQuizAnswers[App.dailyQuizIndex] = opt;
+  renderDailyQuiz();
+}
+
+function startDailyPB() {
+  App.dailyPhase = 'pb';
+  App.dailyPBIndex = 0;
+  App.pbCaseScores = [];
+  startDailyPBCase();
+}
+
+function startDailyPBCase() {
+  var el = document.getElementById('daily-content');
+  var specs = App.dailyData.pbSpecialties;
+
+  if (App.dailyPBIndex >= specs.length) {
+    finishDailyChallenge();
+    return;
+  }
+
+  el.innerHTML = '<div class="daily-phase-bar"><span>Phase 3/3: PatientBot</span><span>Case ' + (App.dailyPBIndex + 1) + ' / ' + specs.length + '</span></div>' +
+    '<div class="loading-overlay"><div class="spinner"></div><p style="margin-top:12px;color:var(--text-light)">Generating case...</p></div>';
+
+  serverCall('startPatientBotCase', specs[App.dailyPBIndex], false, 'medium').then(function(result) {
+    App.pbCaseId = result.caseId;
+    App.pbSpecialty = result.specialty;
+    App.pbDiagnosis = null;
+    App.pbPatientInfo = null;
+    App.pbDiagnosing = false;
+    App.pbDiagAttempts = 0;
+    App.pbDiagResolved = false;
+    App.pbPartialUsed = false;
+    App.pbPartialFeedback = null;
+    App.pbPartialScore = null;
+    App.pbScorecard = null;
+    App.pbCurrentCase = App.dailyPBIndex + 1;
+    App.pbTotalCases = specs.length;
+
+    var msg = stripPatientJSON(result.initialMessage);
+    if (result.patientInfo) {
+      App.pbPatientInfo = result.patientInfo;
+      App.pbDiagnosis = result.patientInfo.diagnosis;
+    }
+
+    App.pbHistory = [{ role: 'assistant', content: msg }];
+    renderDailyPBChat();
+  }).catch(function(e) {
+    el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p><button class="btn btn-primary" onclick="startDailyPBCase()">Retry</button></div>';
+  });
+}
+
+function renderDailyPBChat() {
+  var el = document.getElementById('daily-content');
+  var html = '<div class="daily-phase-bar"><span>Phase 3/3: PatientBot</span><span>Case ' + (App.dailyPBIndex + 1) + ' / ' + App.dailyData.pbSpecialties.length + '</span></div>';
+
+  // Reuse PB rendering
+  html += renderPBChatInner();
+  el.innerHTML = html;
+
+  var msgs = document.getElementById('pb-messages');
+  if (msgs) msgs.scrollTop = msgs.scrollHeight;
+  if (App.pbDiagnosing) {
+    var dinput = document.getElementById('pb-diag-input');
+    if (dinput) dinput.focus();
+  }
+}
+
+function finishDailyPBCase() {
+  if (!App.pbDiagResolved) {
+    App.pbCaseScores.push({ specialty: App.pbSpecialty, caseNum: App.dailyPBIndex + 1, correct: false, diagnosis: App.pbDiagnosis, attempts: 0, skipped: true });
+  }
+  App.dailyPBIndex++;
+  App.pbCaseId = null;
+  App.pbHistory = [];
+  startDailyPBCase();
+}
+
+function finishDailyChallenge() {
+  // Calculate scores
+  var cardKnew = App.dailyCardRatings.filter(function(r) { return r === 'knew'; }).length;
+  var cardShaky = App.dailyCardRatings.filter(function(r) { return r === 'shaky'; }).length;
+  var cardPoints = cardKnew * POINTS.DAILY_CARD_KNEW + cardShaky * POINTS.DAILY_CARD_SHAKY;
+
+  var quizCorrect = 0;
+  var quizQuestions = App.dailyData.mcq;
+  for (var i = 0; i < quizQuestions.length; i++) {
+    if (App.dailyQuizAnswers[i] === quizQuestions[i].correct) quizCorrect++;
+  }
+  var quizPoints = quizCorrect * POINTS.QUIZ_CORRECT;
+
+  var pbCorrect = App.pbCaseScores.filter(function(s) { return s.correct; }).length;
+  var pbPoints = pbCorrect * POINTS.PB_CORRECT;
+  App.pbCaseScores.forEach(function(s) { if (s.correct && s.attempts === 1) pbPoints += POINTS.PB_FIRST_TRY; });
+
+  var totalPoints = cardPoints + quizPoints + pbPoints + POINTS.DAILY_COMPLETE;
+
+  // Save result
+  serverCall('saveProgress', 'daily_result', {
+    date: App.dailyData.date,
+    cardKnew: cardKnew,
+    cardShaky: cardShaky,
+    cardTotal: App.dailyCardRatings.length,
+    quizCorrect: quizCorrect,
+    quizTotal: quizQuestions.length,
+    pbCorrect: pbCorrect,
+    pbTotal: App.pbCaseScores.length,
+    points: totalPoints
+  });
+
+  // Show summary
+  var el = document.getElementById('daily-content');
+  var html = '<div class="card" style="text-align:center;padding:40px">';
+  html += '<div style="font-size:64px;margin-bottom:12px">&#x1F389;</div>';
+  html += '<h2>Challenge Complete!</h2>';
+  html += '<div class="daily-score-big">+' + totalPoints + ' XP</div>';
+  html += '</div>';
+
+  html += '<div class="card">';
+  html += '<h3 class="section-title">Breakdown</h3>';
+  html += '<div class="weak-area-row"><span>Flashcards (' + cardKnew + ' knew, ' + cardShaky + ' shaky)</span><span>+' + cardPoints + ' XP</span></div>';
+  html += '<div class="weak-area-row"><span>Quiz (' + quizCorrect + '/' + quizQuestions.length + ' correct)</span><span>+' + quizPoints + ' XP</span></div>';
+  html += '<div class="weak-area-row"><span>PatientBot (' + pbCorrect + '/' + App.pbCaseScores.length + ' diagnosed)</span><span>+' + pbPoints + ' XP</span></div>';
+  html += '<div class="weak-area-row" style="border-top:2px solid var(--border);font-weight:700"><span>Completion Bonus</span><span>+' + POINTS.DAILY_COMPLETE + ' XP</span></div>';
+  html += '</div>';
+
+  html += '<div style="display:flex;gap:12px;margin-top:20px;flex-wrap:wrap">';
+  html += '<button class="btn btn-primary" onclick="navigateTo(\'dashboard\')">Dashboard</button>';
+  html += '<button class="btn btn-accent" onclick="navigateTo(\'leaderboard\')">Leaderboard</button>';
+  html += '</div>';
+
+  el.innerHTML = html;
+}
+
+// =============================================
+// PATIENTBOT CASE LIBRARY
+// =============================================
+
+function togglePBLibrary() {
+  var pbEl = document.getElementById('patientbot-content');
+  var libEl = document.getElementById('pb-library-content');
+  var btn = document.getElementById('pb-library-btn');
+
+  if (libEl.style.display === 'none') {
+    pbEl.style.display = 'none'; libEl.style.display = 'block';
+    btn.classList.add('btn-primary');
+    loadPBLibrary();
+  } else {
+    pbEl.style.display = 'block'; libEl.style.display = 'none';
+    btn.classList.remove('btn-primary');
+  }
+}
+
+function loadPBLibrary() {
+  var el = document.getElementById('pb-library-content');
+  el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
+  serverCall('getPBCaseLibrary').then(function(cases) {
+    if (!cases || cases.length === 0) {
+      el.innerHTML = '<p class="empty-state">No completed cases yet. Finish a PatientBot case (with diagnosis) to see it here!</p>';
+      return;
+    }
+    var html = '<div style="margin-bottom:16px;color:var(--text-light)">' + cases.length + ' past cases</div>';
+    for (var i = 0; i < cases.length; i++) {
+      var c = cases[i];
+      var dateStr = c.date ? new Date(c.date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : '';
+      var icon = c.correct ? '✅' : '❌';
+      html += '<div class="card" style="padding:16px;margin-bottom:10px;cursor:pointer" onclick="viewPBCase(' + i + ')">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center">';
+      html += '<div><strong>' + icon + ' ' + escapeHtml(c.specialty) + '</strong>';
+      html += '<br><span style="font-size:13px;color:var(--text-light)">Dx: ' + escapeHtml(c.diagnosis || 'Unknown') + '</span></div>';
+      html += '<span style="font-size:12px;color:var(--text-light)">' + dateStr + '</span>';
+      html += '</div></div>';
+    }
+    el.innerHTML = html;
+    App.pbLibraryCases = cases;
+  }).catch(function(e) {
+    el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>';
+  });
+}
+
+function viewPBCase(idx) {
+  var c = App.pbLibraryCases[idx]; if (!c) return;
+  var el = document.getElementById('pb-library-content');
+  var dateStr = c.date ? new Date(c.date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  var html = '<button class="btn btn-sm" onclick="loadPBLibrary()" style="margin-bottom:16px">&larr; Back to Cases</button>';
+  html += '<div class="card" style="padding:16px;margin-bottom:16px">';
+  html += '<h3>' + (c.correct ? '✅' : '❌') + ' ' + escapeHtml(c.specialty) + ' &mdash; ' + escapeHtml(c.diagnosis || 'Unknown') + '</h3>';
+  html += '<p style="font-size:13px;color:var(--text-light)">' + dateStr + ' &bull; ' + c.attempts + ' attempt(s)</p>';
+  if (c.feedback) html += '<p style="margin-top:8px;font-size:14px">' + escapeHtml(c.feedback) + '</p>';
+  html += '</div>';
+
+  // Render transcript
+  html += '<div class="chat-container" style="max-height:500px;overflow-y:auto">';
+  html += '<div class="chat-messages" style="padding:16px">';
+  for (var i = 0; i < c.transcript.length; i++) {
+    var m = c.transcript[i];
+    var cls = m.role === 'user' ? 'user-message' : 'bot-message';
+    html += '<div class="chat-bubble ' + cls + '">' + escapeHtml(m.content) + '</div>';
+  }
+  html += '</div></div>';
+  el.innerHTML = html;
+}
+
+// =============================================
+// LEADERBOARD
+// =============================================
+
+function loadLeaderboard() {
+  var el = document.getElementById('leaderboard-content');
+  el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
+
+  serverCall('getLeaderboard').then(function(data) {
+    var html = '';
+    if (data.length === 0) {
+      html = '<div class="card" style="text-align:center;padding:40px"><h3>No data yet</h3><p style="color:var(--text-light)">Start studying to get on the board!</p></div>';
+    } else {
+      html = '<div class="card">';
+      for (var i = 0; i < data.length; i++) {
+        var u = data[i];
+        var medal = i === 0 ? '&#x1F947;' : i === 1 ? '&#x1F948;' : i === 2 ? '&#x1F949;' : '<span style="color:var(--text-light)">#' + (i + 1) + '</span>';
+        var isMe = App.user && u.email === App.user.email;
+        html += '<div class="lb-row' + (isMe ? ' lb-me' : '') + '">';
+        html += '<span class="lb-rank">' + medal + '</span>';
+        html += '<div class="lb-info">';
+        html += '<span class="lb-name">' + escapeHtml(u.name) + (isMe ? ' (you)' : '') + '</span>';
+        html += '<span class="lb-detail">' + u.quizzes + ' quizzes | ' + u.pbCorrect + ' diagnoses | ' + u.cards + ' cards</span>';
+        html += '</div>';
+        html += '<span class="lb-points">' + u.points + ' XP</span>';
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+    el.innerHTML = html;
+  }).catch(function(e) {
+    el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>';
+  });
+}
+
+// =============================================
+// ACHIEVEMENTS
+// =============================================
+
+function loadAchievements() {
+  var el = document.getElementById('achievements-content');
+
+  if (!App.stats) {
+    el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
+    serverCall('getUserStats').then(function(stats) {
+      App.stats = stats;
+      renderAchievements(stats);
+    });
+    return;
+  }
+
+  renderAchievements(App.stats);
+}
+
+function renderAchievements(stats) {
+  var el = document.getElementById('achievements-content');
+  var achieved = stats.achievements || [];
+
+  // All possible achievements
+  var allAchievements = [
+    { id: 'cards_100', name: 'Card Shark', desc: 'Review 100 flashcards', icon: '&#x1F0CF;' },
+    { id: 'cards_500', name: 'Card Master', desc: 'Review 500 flashcards', icon: '&#x1F3B4;' },
+    { id: 'cards_1k', name: 'Flash Legend', desc: 'Review 1,000 flashcards', icon: '&#x26A1;' },
+    { id: 'cards_5k', name: 'Card God', desc: 'Review 5,000 flashcards', icon: '&#x1F451;' },
+    { id: 'fc_session_100', name: 'Centurion', desc: 'Finish a 100+ card session', icon: '&#x1F6E1;' },
+    { id: 'fc_perfect', name: 'Flawless', desc: 'Got It on every card in a session (20+)', icon: '&#x2728;' },
+    { id: 'quiz_5', name: 'Quiz Rookie', desc: 'Complete 5 quizzes', icon: '&#x1F4DD;' },
+    { id: 'quiz_25', name: 'Quiz Pro', desc: 'Complete 25 quizzes', icon: '&#x1F3C6;' },
+    { id: 'perfect', name: 'Perfect Score', desc: 'Score 100% on a quiz', icon: '&#x1F4AF;' },
+    { id: 'pb_5', name: 'Junior Doc', desc: 'Correctly diagnose 5 cases', icon: '&#x1FA7B;' },
+    { id: 'pb_25', name: 'Diagnostician', desc: 'Correctly diagnose 25 cases', icon: '&#x1F50D;' },
+    { id: 'pb_50', name: 'House MD', desc: 'Correctly diagnose 50 cases', icon: '&#x1F3E5;' },
+    { id: 'first_try_10', name: 'Sharp Eye', desc: '10 first-try diagnoses', icon: '&#x1F3AF;' },
+    { id: 'streak_3', name: 'On a Roll', desc: '3-day study streak', icon: '&#x1F525;' },
+    { id: 'streak_7', name: 'Week Warrior', desc: '7-day study streak', icon: '&#x1F4AA;' },
+    { id: 'streak_30', name: 'Iron Will', desc: '30-day study streak', icon: '&#x1F3C5;' },
+    { id: 'daily_1', name: 'Daily Grinder', desc: 'Complete 1 daily challenge', icon: '&#x1F4C5;' },
+    { id: 'daily_7', name: 'Consistent', desc: 'Complete 7 daily challenges', icon: '&#x1F4C6;' },
+    { id: 'daily_30', name: 'Unstoppable', desc: 'Complete 30 daily challenges', icon: '&#x1F5D3;' }
+  ];
+
+  var achievedIds = {};
+  achieved.forEach(function(a) { achievedIds[a.id] = true; });
+
+  var html = '<p style="color:var(--text-light);margin-bottom:20px">' + achieved.length + ' of ' + allAchievements.length + ' unlocked</p>';
+
+  html += '<div class="achievements-grid">';
+  for (var i = 0; i < allAchievements.length; i++) {
+    var a = allAchievements[i];
+    var unlocked = achievedIds[a.id];
+    html += '<div class="achievement-card' + (unlocked ? ' unlocked' : ' locked') + '">';
+    html += '<div class="achievement-big-icon">' + a.icon + '</div>';
+    html += '<div class="achievement-card-name">' + escapeHtml(a.name) + '</div>';
+    html += '<div class="achievement-card-desc">' + escapeHtml(a.desc) + '</div>';
+    html += '</div>';
+  }
+  html += '</div>';
+
+  el.innerHTML = html;
+}
+
+// =============================================
+// DEV PANEL (admin only)
+// =============================================
+
+function loadDevPanel() {
+  var el = document.getElementById('devpanel-content');
+  if (!App.user || !App.user.isDev) { el.innerHTML = '<p class="empty-state">Access denied.</p>'; return; }
+  el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
+
+  serverCall('getDevStats').then(function(stats) {
+    if (stats.error) { el.innerHTML = '<p class="empty-state">' + escapeHtml(stats.error) + '</p>'; return; }
+    renderDevPanel(stats);
+  }).catch(function(e) { el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>'; });
+}
+
+function renderDevPanel(stats) {
+  var el = document.getElementById('devpanel-content');
+
+  var html = '<div class="stat-grid" style="margin-bottom:24px">';
+  html += '<div class="stat-card"><div class="stat-number">' + stats.totalUsers + '</div><div class="stat-label">Users</div></div>';
+  html += '<div class="stat-card"><div class="stat-number">' + stats.totalRows + '</div><div class="stat-label">Data Rows</div></div>';
+
+  var guestCount = 0; var realCount = 0;
+  Object.keys(stats.users).forEach(function(uid) { if (stats.users[uid].isGuest) guestCount++; else realCount++; });
+  html += '<div class="stat-card"><div class="stat-number">' + realCount + '</div><div class="stat-label">Signed In</div></div>';
+  html += '<div class="stat-card"><div class="stat-number">' + guestCount + '</div><div class="stat-label">Guests</div></div>';
+  html += '</div>';
+
+  // User profiles table
+  html += '<h3 style="margin-bottom:16px">User Profiles</h3>';
+
+  var userList = Object.keys(stats.users).sort(function(a, b) {
+    return (stats.users[b].lastActive || '') > (stats.users[a].lastActive || '') ? 1 : -1;
+  });
+
+  for (var i = 0; i < userList.length; i++) {
+    var uid = userList[i];
+    var u = stats.users[uid];
+    var displayName = uid.indexOf('guest_') === 0 ? '&#x1F464; Guest' : uid.split('@')[0];
+    var isGuest = u.isGuest;
+    var lastDate = u.lastActive ? new Date(u.lastActive).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Never';
+    var totalActivity = u.quizzes + u.pb + u.daily + u.cards;
+
+    html += '<div class="card" style="padding:16px 20px;margin-bottom:10px">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">';
+    html += '<div>';
+    html += '<strong style="font-size:16px">' + displayName + '</strong>';
+    if (!isGuest) html += '<span style="font-size:12px;color:var(--text-light);margin-left:8px">' + escapeHtml(uid) + '</span>';
+    html += '<br><span style="font-size:13px;color:var(--text-light)">Last active: ' + lastDate + '</span>';
+    html += '</div>';
+    html += '<div style="display:flex;gap:16px;font-size:13px;color:var(--text-light)">';
+    if (u.quizzes > 0) html += '<span title="Quizzes">&#x1F4DD; ' + u.quizzes + '</span>';
+    if (u.pb > 0) html += '<span title="PatientBot cases">&#x1FA7A; ' + u.pb + '</span>';
+    if (u.daily > 0) html += '<span title="Daily challenges">&#x2B50; ' + u.daily + '</span>';
+    if (u.cards > 0) html += '<span title="Cards reviewed">&#x1F0CF; ' + u.cards + '</span>';
+    if (totalActivity === 0) html += '<span style="opacity:0.5">No activity</span>';
+    html += '</div></div></div>';
+  }
+
+  // Activity by day chart (simple text version)
+  html += '<h3 style="margin:24px 0 16px">Activity by Day</h3>';
+  html += '<div class="card" style="padding:20px">';
+  var days = Object.keys(stats.activityByDay).sort().slice(-14); // last 14 days
+  if (days.length === 0) {
+    html += '<p style="color:var(--text-light)">No activity data yet.</p>';
+  } else {
+    var maxCount = Math.max.apply(null, days.map(function(d) { return stats.activityByDay[d]; }));
+    for (var d = 0; d < days.length; d++) {
+      var day = days[d];
+      var count = stats.activityByDay[day];
+      var barWidth = maxCount > 0 ? Math.round((count / maxCount) * 100) : 0;
+      html += '<div style="display:flex;align-items:center;gap:12px;margin:6px 0">';
+      html += '<span style="font-size:13px;color:var(--text-light);min-width:80px">' + day.slice(5) + '</span>';
+      html += '<div style="flex:1;height:20px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="width:' + barWidth + '%;height:100%;background:var(--accent);border-radius:4px"></div></div>';
+      html += '<span style="font-size:13px;font-weight:700;min-width:30px;text-align:right">' + count + '</span>';
+      html += '</div>';
+    }
+  }
+  html += '</div>';
+
+  el.innerHTML = html;
+}
+
+// =============================================
+// FLASHCARDS
+// =============================================
+
+function getFlashcardProgressKey_(specialty) {
+  return 'mcc_fc_progress_' + (specialty || 'All');
+}
+
+function saveFlashcardProgress_() {
+  var key = getFlashcardProgressKey_(App.flashcardSpecialty);
+  var progress = {
+    index: App.flashcardIndex,
+    gotIt: App.flashcardGotIt || 0,
+    review: App.flashcardReview || 0,
+    total: App.flashcards.length,
+    timestamp: Date.now()
+  };
+  localStorage.setItem(key, JSON.stringify(progress));
+}
+
+function loadFlashcardProgress_() {
+  var key = getFlashcardProgressKey_(App.flashcardSpecialty);
+  try {
+    var saved = JSON.parse(localStorage.getItem(key));
+    // Only require index < current length — allow card count to change slightly
+    if (saved && saved.index > 0 && saved.index < App.flashcards.length) {
+      return saved;
+    }
+  } catch(e) {}
+  return null;
+}
+
+function loadFlashcards(specialty) {
+  specialty = specialty || 'All';
+  App.flashcardSpecialty = specialty;
+  var el = document.getElementById('flashcard-content');
+  el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
+  serverCall('getFlashcards', specialty).then(function(data) {
+    App.flashcardsAll = data; App.flashcards = data;
+    if (document.getElementById('flashcard-hy-only').checked) App.flashcards = data.filter(function(c) { return c.hyFlag; });
+
+    // Resume saved progress
+    var saved = loadFlashcardProgress_();
+    if (saved && saved.index > 0) {
+      App.flashcardIndex = saved.index;
+      App.flashcardGotIt = saved.gotIt;
+      App.flashcardReview = saved.review;
+      App.flashcardReviewCards = [];
+      App.flashcardFlipped = false;
+      App.flashcardResumed = true;
+    } else {
+      App.flashcardIndex = 0; App.flashcardFlipped = false; App.flashcardGotIt = 0; App.flashcardReview = 0; App.flashcardReviewCards = [];
+      App.flashcardResumed = false;
+    }
+    renderFlashcard();
+  }).catch(function(e) { el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>'; });
+}
+
+function filterHYFlashcards() {
+  App.flashcards = document.getElementById('flashcard-hy-only').checked ? App.flashcardsAll.filter(function(c) { return c.hyFlag; }) : App.flashcardsAll;
+  App.flashcardIndex = 0; App.flashcardFlipped = false; App.flashcardGotIt = 0; App.flashcardReview = 0; App.flashcardReviewCards = [];
+  localStorage.removeItem(getFlashcardProgressKey_(App.flashcardSpecialty));
+  renderFlashcard();
+}
+
+function getDailyGoal_() {
+  return parseInt(localStorage.getItem('mcc_daily_goal')) || 100;
+}
+
+function setDailyGoal_(val) {
+  var goal = Math.max(10, Math.min(500, parseInt(val) || 100));
+  localStorage.setItem('mcc_daily_goal', goal);
+  return goal;
+}
+
+function getDailyCardCount_() {
+  var today = new Date().toISOString().split('T')[0];
+  try {
+    var saved = JSON.parse(localStorage.getItem('mcc_fc_daily'));
+    if (saved && saved.date === today) return saved.count;
+  } catch(e) {}
+  return 0;
+}
+
+function promptDailyGoal() {
+  var current = getDailyGoal_();
+  var input = prompt('Set your daily flashcard goal (10-500):', current);
+  if (input !== null && input !== '') {
+    var newGoal = setDailyGoal_(input);
+    // Re-render current page
+    if (App.currentPage === 'dashboard') loadDashboard();
+    else if (App.currentPage === 'flashcards') renderFlashcard();
+  }
+}
+
+function incrementDailyCardCount_() {
+  var today = new Date().toISOString().split('T')[0];
+  var count = getDailyCardCount_() + 1;
+  localStorage.setItem('mcc_fc_daily', JSON.stringify({ date: today, count: count }));
+  return count;
+}
+
+function renderFlashcard() {
+  var el = document.getElementById('flashcard-content');
+  if (App.flashcards.length === 0) { el.innerHTML = '<p class="empty-state">No flashcards found for this selection.</p>'; return; }
+
+  if (App.flashcardIndex >= App.flashcards.length) { renderFlashcardDone(); return; }
+
+  var card = App.flashcards[App.flashcardIndex];
+  var total = App.flashcards.length;
+  var current = App.flashcardIndex + 1;
+  var dailyCount = getDailyCardCount_();
+  var dailyGoal = getDailyGoal_();
+  var dailyPct = Math.min(100, Math.round((dailyCount / dailyGoal) * 100));
+
+  var html = '';
+
+  // Daily goal meter
+  html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:10px 16px;background:var(--card);border:1px solid var(--border);border-radius:10px">';
+  html += '<span style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;cursor:pointer" onclick="promptDailyGoal()" title="Click to change goal">Today: ' + dailyCount + '/' + dailyGoal + '</span>';
+  html += '<div class="progress-bar" style="flex:1;height:8px"><div class="progress-fill" style="width:' + dailyPct + '%;background:' + (dailyPct >= 100 ? 'var(--success)' : 'var(--primary)') + '"></div></div>';
+  if (dailyPct >= 100) html += '<span style="font-size:13px;font-weight:700;color:var(--success)">&#x2705;</span>';
+  html += '</div>';
+
+  if (App.flashcardResumed && App.flashcardIndex > 0) {
+    html += '<div style="background:rgba(0,188,212,0.1);border:1px solid var(--accent);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">';
+    html += '<span style="font-size:14px;color:var(--text)">Resumed from card ' + current + ' of ' + total + '</span>';
+    html += '<button class="btn btn-sm btn-outline" onclick="restartFlashcards()">Start Over</button>';
+    html += '</div>';
+  }
+
+  // Card counter + back button
+  html += '<div class="flashcard-meta">';
+  if (App.flashcardIndex > 0) {
+    html += '<button class="btn btn-outline" onclick="prevFlashcard()" style="padding:10px 20px;font-size:15px;margin-right:12px;font-weight:700">&#x2190; Back</button>';
+  }
+  html += '<span>' + current + ' / ' + total + '</span>';
+  if (card.hyFlag) html += ' <span class="hy-badge">&#x2B50; Important</span>';
+  html += '<br><span>' + escapeHtml(card.specialty) + ' &mdash; ' + escapeHtml(card.topic) + '</span></div>';
+  html += '<div class="progress-bar" style="margin-bottom:20px"><div class="progress-fill" style="width:' + ((current / total) * 100) + '%"></div></div>';
+  html += '<div class="flashcard-container"><div class="flashcard' + (App.flashcardFlipped ? ' flipped' : '') + '" onclick="flipFlashcard()">';
+  html += '<div class="flashcard-front"><div>' + medHtml(card.front) + '</div></div>';
+  html += '<div class="flashcard-back"><div>' + medHtml(card.back) + '</div></div>';
+  html += '</div></div>';
+
+  if (App.flashcardFlipped) {
+    html += '<div class="flashcard-nav">';
+    html += '<button class="btn btn-error" onclick="rateFlashcard(false)" style="flex:1;padding:14px;font-size:15px">&#x274C; I Was Wrong</button>';
+    html += '<button class="btn btn-success" onclick="rateFlashcard(true)" style="flex:1;padding:14px;font-size:15px">&#x2705; I Was Right</button>';
+    html += '</div>';
+    html += '<div style="text-align:center;margin-top:10px;color:var(--text-light);font-size:12px;line-height:1.5;max-width:500px;margin-left:auto;margin-right:auto">';
+    html += '&#x1F4CA; Your responses are tracked to build your weak areas profile. Cards you miss will appear more often in Daily Challenges.';
+    html += '<br>Keyboard: 1 = Wrong &bull; 2 = Right &bull; &#x2190; Back</div>';
+  } else {
+    html += '<div class="flashcard-nav">';
+    html += '<button class="btn btn-accent" onclick="flipFlashcard()" style="flex:1;padding:14px;font-size:15px">Tap to Flip</button>';
+    html += '</div>';
+    html += '<div style="text-align:center;margin-top:8px;color:var(--text-light);font-size:12px">Keyboard: Space to flip &bull; &#x2190; Back</div>';
+  }
+  el.innerHTML = html;
+}
+
+function renderFlashcardDone() {
+  var el = document.getElementById('flashcard-content');
+  var total = App.flashcards.length;
+  var got = App.flashcardGotIt || 0;
+  var review = App.flashcardReview || 0;
+  var pct = total > 0 ? Math.round((got / total) * 100) : 0;
+  var points = got * POINTS.FLASHCARD_GOT_IT + review * POINTS.FLASHCARD_REVIEW;
+
+  var html = '<div class="card" style="text-align:center;padding:40px 24px">';
+  html += '<div class="daily-card-score-ring"><div class="daily-card-score-number">' + got + '/' + total + '</div><div class="daily-card-score-label">' + pct + '% Got It</div></div>';
+  html += '<p style="margin:16px 0;color:var(--text-light)">' + review + ' cards to review again</p>';
+  html += '<p style="margin:8px 0;color:var(--accent);font-weight:700">+' + points + ' XP earned</p>';
+  html += '<div style="margin-top:20px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">';
+  if (review > 0) {
+    html += '<button class="btn btn-primary" onclick="restartFlashcardsReview()">Study Review Cards (' + review + ')</button>';
+  }
+  html += '<button class="btn btn-outline" onclick="restartFlashcards()">Restart All</button>';
+  html += '</div></div>';
+  el.innerHTML = html;
+
+  // Save points and clear progress (session complete)
+  localStorage.removeItem(getFlashcardProgressKey_(App.flashcardSpecialty));
+  if (points > 0) {
+    serverCall('saveProgress', 'flashcard_result', { got: got, review: review, total: total, points: points, specialty: App.flashcardSpecialty }, App.guestId);
+  }
+}
+
+function flipFlashcard() { App.flashcardFlipped = !App.flashcardFlipped; renderFlashcard(); }
+
+function rateFlashcard(gotIt) {
+  if (!App.flashcardGotIt) App.flashcardGotIt = 0;
+  if (!App.flashcardReview) App.flashcardReview = 0;
+  if (!App.flashcardReviewCards) App.flashcardReviewCards = [];
+
+  var card = App.flashcards[App.flashcardIndex];
+  if (gotIt) {
+    App.flashcardGotIt++;
+  } else {
+    App.flashcardReview++;
+    App.flashcardReviewCards.push(card);
+  }
+
+  // Save card rating server-side for spaced repetition
+  if (card) {
+    serverCall('saveCardRating', card.front, gotIt ? 'knew' : 'missed', 'flashcard', App.guestId).catch(function(){});
+  }
+
+  incrementDailyCardCount_();
+  App.flashcardIndex++;
+  App.flashcardFlipped = false;
+  App.flashcardResumed = false;
+  saveFlashcardProgress_();
+  renderFlashcard();
+}
+
+function restartFlashcards() {
+  App.flashcardIndex = 0; App.flashcardFlipped = false;
+  App.flashcardGotIt = 0; App.flashcardReview = 0; App.flashcardReviewCards = [];
+  App.flashcardResumed = false;
+  localStorage.removeItem(getFlashcardProgressKey_(App.flashcardSpecialty));
+  renderFlashcard();
+}
+
+function restartFlashcardsReview() {
+  App.flashcards = App.flashcardReviewCards.slice();
+  App.flashcardIndex = 0; App.flashcardFlipped = false;
+  App.flashcardGotIt = 0; App.flashcardReview = 0; App.flashcardReviewCards = [];
+  App.flashcardResumed = false;
+  localStorage.removeItem(getFlashcardProgressKey_(App.flashcardSpecialty));
+  renderFlashcard();
+}
+
+function prevFlashcard() { if (App.flashcardIndex > 0) { App.flashcardIndex--; App.flashcardFlipped = false; renderFlashcard(); } }
+function nextFlashcard() { if (App.flashcardIndex < App.flashcards.length - 1) { App.flashcardIndex++; App.flashcardFlipped = false; renderFlashcard(); } }
+
+// =============================================
+// BULLET NOTES
+// =============================================
+
+function loadBulletNotes(specialty) {
+  var el = document.getElementById('notes-content');
+  el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
+  serverCall('getBulletNotes', specialty || 'All').then(function(data) { App.bulletNotes = data; renderBulletNotes(); })
+    .catch(function(e) { el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>'; });
+}
+
+function renderBulletNotes(filterText) {
+  var el = document.getElementById('notes-content');
+  var notes = App.bulletNotes;
+  var longForm = document.getElementById('notes-long-form') && document.getElementById('notes-long-form').checked;
+
+  if (filterText) { var q = filterText.toLowerCase(); notes = notes.filter(function(n) { return n.note.toLowerCase().indexOf(q) !== -1 || n.topic.toLowerCase().indexOf(q) !== -1 || (n.specialty && n.specialty.toLowerCase().indexOf(q) !== -1); }); }
+  if (notes.length === 0) { el.innerHTML = '<p class="empty-state">No notes found.</p>'; return; }
+
+  // Group by specialty → topic
+  var specGroups = {}; var specOrder = [];
+  notes.forEach(function(n) {
+    var spec = n.specialty || 'General';
+    if (!specGroups[spec]) { specGroups[spec] = {}; specOrder.push(spec); }
+    var topic = n.topic || 'General';
+    if (!specGroups[spec][topic]) specGroups[spec][topic] = [];
+    specGroups[spec][topic].push(n);
+  });
+
+  var html = '<p style="color:var(--text-light);margin-bottom:16px">' + notes.length + ' notes across ' + specOrder.length + ' specialties</p>';
+
+  for (var si = 0; si < specOrder.length; si++) {
+    var spec = specOrder[si];
+    var topics = specGroups[spec];
+    var topicKeys = Object.keys(topics);
+    var specCount = 0;
+    topicKeys.forEach(function(t) { specCount += topics[t].length; });
+
+    html += '<div class="card" style="margin-bottom:12px;padding:0;overflow:hidden">';
+    // Specialty header (clickable to expand/collapse)
+    html += '<div class="notes-topic-header" onclick="this.classList.toggle(\'open\');this.nextElementSibling.classList.toggle(\'open\')" style="padding:16px 20px;cursor:pointer;display:flex;align-items:center;gap:10px">';
+    html += '<span class="arrow" style="font-size:12px;color:var(--text-light);transition:transform 0.2s">&#x25B6;</span>';
+    html += '<strong style="font-size:16px;flex:1">' + escapeHtml(spec) + '</strong>';
+    html += '<span style="background:var(--primary);color:white;border-radius:12px;padding:2px 10px;font-size:12px;font-weight:700">' + specCount + '</span>';
+    html += '</div>';
+
+    // Topics within specialty
+    html += '<div class="notes-list" style="display:none;padding:0 20px 16px;border-top:1px solid var(--border)">';
+    for (var ti = 0; ti < topicKeys.length; ti++) {
+      var topic = topicKeys[ti];
+      var items = topics[topic];
+      html += '<div style="margin-top:12px">';
+      html += '<div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:6px">' + escapeHtml(topic) + ' <span style="color:var(--text-light);font-weight:400">(' + items.length + ')</span></div>';
+
+      if (longForm) {
+        // Long form: full text for each note
+        for (var j = 0; j < items.length; j++) {
+          html += '<div style="padding:8px 0;border-bottom:1px solid rgba(0,0,0,0.05);font-size:14px;line-height:1.7">' + escapeHtml(items[j].note) + '</div>';
+        }
+      } else {
+        // Short form: compact bullets
+        html += '<ul style="padding-left:18px;margin:0">';
+        for (var j = 0; j < items.length; j++) {
+          var shortNote = items[j].note.length > 120 ? items[j].note.substring(0, 120) + '...' : items[j].note;
+          html += '<li style="margin:3px 0;font-size:13px;line-height:1.5;color:var(--text)">' + escapeHtml(shortNote) + '</li>';
+        }
+        html += '</ul>';
+      }
+      html += '</div>';
+    }
+    html += '</div></div>';
+  }
+
+  // Auto-expand if filtering or only a few specialties
+  if (filterText || specOrder.length <= 3) {
+    setTimeout(function() {
+      document.querySelectorAll('.notes-topic-header').forEach(function(h) {
+        h.classList.add('open');
+        if (h.nextElementSibling) { h.nextElementSibling.classList.add('open'); h.nextElementSibling.style.display = ''; }
+      });
+    }, 50);
+  }
+
+  el.innerHTML = html;
+}
+
+function filterBulletNotes(text) { renderBulletNotes(text); }
+function toggleNotesForm() { var search = document.getElementById('notes-search'); renderBulletNotes(search ? search.value : ''); }
+
+// =============================================
+// MCQ QUIZ
+// =============================================
+
+function showQuizSetup() {
+  App.quizActive = false;
+  var el = document.getElementById('quiz-content');
+  var specs = App.specialties ? App.specialties.mcq || [] : [];
+
+  var html = '<div class="quiz-setup card">';
+  html += '<h3 style="margin-bottom:20px;text-align:center">Quiz Setup</h3>';
+
+  html += '<div class="form-group"><label>Specialty</label>';
+  html += '<select id="quiz-specialty" style="width:100%"><option value="All">All Specialties (Random Mix)</option>';
+  for (var i = 0; i < specs.length; i++) html += '<option value="' + escapeHtml(specs[i]) + '">' + escapeHtml(specs[i]) + '</option>';
+  html += '</select></div>';
+
+  html += '<div class="form-group"><label>Version</label>';
+  html += '<select id="quiz-version" style="width:100%">';
+  html += '<option value="Random">Random Mix</option><option value="A">Version A (Official MCC)</option><option value="B">Version B</option><option value="C">Version C</option><option value="D">Version D</option>';
+  html += '</select></div>';
+
+  html += '<div class="form-group"><label>Difficulty</label>';
+  html += '<div class="quiz-count-btns">';
+  html += '<button class="quiz-count-btn" onclick="setQuizDiff(\'easy\',this)">Easy</button>';
+  html += '<button class="quiz-count-btn active" onclick="setQuizDiff(\'medium\',this)">MCCQE &#x2705;</button>';
+  html += '<button class="quiz-count-btn" onclick="setQuizDiff(\'hard\',this)">Hard</button>';
+  html += '</div></div>';
+
+  html += '<div class="form-group"><label>Number of Questions</label>';
+  html += '<div class="quiz-count-btns">';
+  html += '<button class="quiz-count-btn active" onclick="setQuizCount(10, this)">Quick 10</button>';
+  html += '<button class="quiz-count-btn" onclick="setQuizCount(25, this)">Short 25</button>';
+  html += '<button class="quiz-count-btn" onclick="setQuizCount(50, this)">Medium 50</button>';
+  html += '<button class="quiz-count-btn" onclick="setQuizCount(100, this)">Long 100</button>';
+  html += '</div>';
+  html += '<input type="number" id="quiz-count" placeholder="Or enter custom number..." value="10" min="1" max="999">';
+  html += '</div>';
+
+  html += '<button class="btn btn-success" style="width:100%;padding:14px;font-size:16px;margin-top:8px" onclick="startQuiz()">Start Quiz</button>';
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function setQuizCount(n, btn) {
+  document.getElementById('quiz-count').value = n;
+  var btns = btn.parentElement.querySelectorAll('.quiz-count-btn');
+  for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+  if (btn) btn.classList.add('active');
+}
+
+function setQuizDiff(diff, btn) {
+  App.quizDifficulty = diff;
+  var btns = btn.parentElement.querySelectorAll('.quiz-count-btn');
+  for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+  btn.classList.add('active');
+}
+
+function saveQuizState_() {
+  if (!App.quizActive || !App.quizQuestions) return;
+  localStorage.setItem('mcc_quiz_state', JSON.stringify({
+    questions: App.quizQuestions,
+    answers: App.quizAnswers,
+    index: App.quizCurrentIndex,
+    specialty: App.quizSetupSpecialty,
+    version: App.quizSetupVersion,
+    timestamp: Date.now()
+  }));
+}
+
+function restoreQuizState_() {
+  try {
+    var saved = JSON.parse(localStorage.getItem('mcc_quiz_state'));
+    if (saved && saved.questions && saved.questions.length > 0 && (Date.now() - saved.timestamp) < 3600000) {
+      return saved; // valid if less than 1 hour old
+    }
+  } catch(e) {}
+  localStorage.removeItem('mcc_quiz_state');
+  return null;
+}
+
+function clearQuizState_() {
+  localStorage.removeItem('mcc_quiz_state');
+}
+
+function startQuiz() {
+  var specialty = document.getElementById('quiz-specialty').value;
+  var version = document.getElementById('quiz-version').value;
+  var count = parseInt(document.getElementById('quiz-count').value) || 10;
+  App.quizSetupSpecialty = specialty; App.quizSetupVersion = version;
+  var el = document.getElementById('quiz-content');
+  el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
+
+  serverCall('getMCQQuiz', specialty, version, count).then(function(data) {
+    App.quizQuestions = data; App.quizAnswers = {}; App.quizCurrentIndex = 0; App.quizActive = true;
+    if (data.length === 0) { el.innerHTML = '<div class="card" style="text-align:center;padding:40px"><h3>No questions found</h3><button class="btn btn-primary" onclick="showQuizSetup()">Back</button></div>'; return; }
+    saveQuizState_();
+    renderQuizQuestion();
+  }).catch(function(e) { el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>'; });
+}
+
+function renderQuizQuestion() {
+  var el = document.getElementById('quiz-content');
+  var q = App.quizQuestions[App.quizCurrentIndex];
+  var total = App.quizQuestions.length; var current = App.quizCurrentIndex + 1;
+  var selected = App.quizAnswers[App.quizCurrentIndex] || '';
+
+  var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">';
+  html += '<span style="font-weight:700">Question ' + current + ' of ' + total + '</span>';
+  html += '<span style="color:var(--text-light);font-size:13px">' + escapeHtml(q.specialty) + '</span></div>';
+  html += '<div class="progress-bar" style="margin-bottom:20px"><div class="progress-fill" style="width:' + ((current / total) * 100) + '%"></div></div>';
+
+  html += '<div class="card"><p style="font-size:15px;line-height:1.7;margin-bottom:20px">' + escapeHtml(q.question) + '</p>';
+  var opts = ['A', 'B', 'C', 'D', 'E'];
+  for (var i = 0; i < opts.length; i++) {
+    var opt = opts[i]; if (!q.options[opt]) continue;
+    html += '<div class="quiz-option' + (selected === opt ? ' selected' : '') + '" onclick="selectQuizAnswer(\'' + opt + '\')"><strong>' + opt + '.</strong> ' + escapeHtml(q.options[opt]) + '</div>';
+  }
+  html += '</div>';
+
+  html += '<div class="quiz-q-nav">';
+  html += '<button class="btn btn-outline" onclick="prevQuizQuestion()"' + (App.quizCurrentIndex === 0 ? ' disabled' : '') + '>&larr; Previous</button>';
+  var answered = Object.keys(App.quizAnswers).length;
+  html += '<span style="color:var(--text-light);font-size:13px">' + answered + '/' + total + ' answered</span>';
+  html += current === total ? '<button class="btn btn-success" onclick="finishQuiz()" style="padding:10px 24px">Finish Quiz</button>' : '<button class="btn btn-primary" onclick="nextQuizQuestion()">Next &rarr;</button>';
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function selectQuizAnswer(opt) { App.quizAnswers[App.quizCurrentIndex] = opt; saveQuizState_(); renderQuizQuestion(); }
+function prevQuizQuestion() { if (App.quizCurrentIndex > 0) { App.quizCurrentIndex--; renderQuizQuestion(); } }
+function nextQuizQuestion() { if (App.quizCurrentIndex < App.quizQuestions.length - 1) { App.quizCurrentIndex++; renderQuizQuestion(); } }
+
+function finishQuiz() {
+  var correct = 0; var details = [];
+  for (var i = 0; i < App.quizQuestions.length; i++) {
+    var q = App.quizQuestions[i]; var userAnswer = App.quizAnswers[i] || ''; var isCorrect = userAnswer === q.correct;
+    if (isCorrect) correct++;
+    details.push({ question: q.question, userAnswer: userAnswer, correctAnswer: q.correct, isCorrect: isCorrect, rationale: q.rationale, options: q.options, specialty: q.specialty });
+  }
+  var total = App.quizQuestions.length; var percentage = Math.round((correct / total) * 100);
+  App.quizActive = false; App.quizResultDetails = details; clearQuizState_();
+
+  var points = correct * POINTS.QUIZ_CORRECT;
+  if (correct === total) points += POINTS.QUIZ_PERFECT_BONUS;
+
+  serverCall('saveQuizResult', { specialty: App.quizSetupSpecialty, version: App.quizSetupVersion, score: correct, total: total, percentage: percentage, points: points })
+    .catch(function(e) { console.error('Failed to save:', e); });
+
+  // Fire-and-forget: get AI study recommendation
+  serverCall('analyzeQuizResults', details).then(function(result) {
+    if (result && result.recommendation) {
+      var recEl = document.getElementById('quiz-ai-rec');
+      if (recEl) {
+        recEl.innerHTML = '<div style="display:flex;gap:12px;align-items:flex-start"><span style="font-size:24px;flex-shrink:0">&#x1F4A1;</span><div><strong style="font-size:13px;color:var(--primary)">Study Tip</strong><p style="margin:4px 0 0;font-size:14px;line-height:1.6;color:var(--text)">' + escapeHtml(result.recommendation) + '</p></div></div>';
+      }
+    }
+  }).catch(function(){});
+
+  showQuizResults(correct, total, percentage, points);
+}
+
+function showQuizResults(score, total, percentage, points) {
+  var el = document.getElementById('quiz-content');
+  var color = percentage >= 80 ? 'var(--success)' : percentage >= 60 ? 'var(--warning)' : 'var(--error)';
+  var passText = percentage >= 73 ? 'PASS' : 'Below Pass Threshold';
+  var passColor = percentage >= 73 ? 'var(--success)' : 'var(--error)';
+
+  var html = '<div class="card" style="text-align:center;padding:40px">';
+  html += '<h2>Quiz Complete!</h2>';
+  html += '<div class="score-big" style="color:' + color + '">' + percentage + '%</div>';
+  html += '<p style="font-size:18px;color:var(--text-light)">' + score + ' correct out of ' + total + '</p>';
+  html += '<p style="margin-top:4px;font-weight:700;color:' + passColor + '">' + passText + ' (pass: 73%)</p>';
+  html += '<p style="color:var(--accent);font-weight:700;margin-top:8px">+' + points + ' XP</p>';
+  html += '</div>';
+
+  html += '<div id="quiz-ai-rec" class="card" style="padding:20px;margin-top:16px;background:var(--bg);border-left:4px solid var(--primary)"><span style="color:var(--text-light);font-size:13px">Analyzing your results...</span></div>';
+
+  html += '<div class="result-tabs">';
+  html += '<button class="result-tab active" onclick="showResultsView(\'score\', this)">By Specialty</button>';
+  html += '<button class="result-tab" onclick="showResultsView(\'wrong\', this)">Wrong Answers</button>';
+  html += '<button class="result-tab" onclick="showResultsView(\'all\', this)">All Questions</button>';
+  html += '</div><div id="results-detail"></div>';
+
+  html += '<div style="display:flex;gap:12px;margin-top:24px">';
+  html += '<button class="btn btn-primary" onclick="showQuizSetup()">New Quiz</button>';
+  html += '<button class="btn btn-accent" onclick="navigateTo(\'dashboard\')">Dashboard</button>';
+  html += '</div>';
+  el.innerHTML = html;
+  showResultsView('score');
+}
+
+function showResultsView(view, btn) {
+  var el = document.getElementById('results-detail'); var details = App.quizResultDetails;
+  if (btn) { var tabs = document.querySelectorAll('.result-tab'); for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active'); btn.classList.add('active'); }
+
+  if (view === 'score') {
+    var specScores = {};
+    details.forEach(function(d) { if (!specScores[d.specialty]) specScores[d.specialty] = { correct: 0, total: 0 }; specScores[d.specialty].total++; if (d.isCorrect) specScores[d.specialty].correct++; });
+    var html = '<div class="card">';
+    Object.keys(specScores).forEach(function(spec) {
+      var s = specScores[spec]; var pct = Math.round((s.correct / s.total) * 100); var color = pct >= 80 ? 'var(--success)' : pct >= 60 ? 'var(--warning)' : 'var(--error)';
+      html += '<div class="weak-area-row"><span>' + escapeHtml(spec) + '</span><div class="weak-area-score"><div class="progress-bar" style="width:80px"><div class="progress-fill" style="width:' + pct + '%"></div></div><span style="font-weight:700;color:' + color + '">' + s.correct + '/' + s.total + '</span></div></div>';
+    });
+    html += '</div>'; el.innerHTML = html;
+  } else {
+    var items = view === 'wrong' ? details.filter(function(d) { return !d.isCorrect; }) : details;
+    if (items.length === 0 && view === 'wrong') { el.innerHTML = '<div class="card" style="text-align:center;padding:30px">Perfect score!</div>'; return; }
+    var html = '';
+    for (var i = 0; i < items.length; i++) {
+      var d = items[i];
+      html += '<div class="result-item ' + (d.isCorrect ? 'correct' : 'incorrect') + '">';
+      html += '<p style="font-weight:600;margin-bottom:6px;font-size:14px">Q' + (details.indexOf(d) + 1) + ': ' + escapeHtml(truncate(d.question, 250)) + '</p>';
+      html += '<p style="font-size:13px">Your answer: <strong style="color:' + (d.isCorrect ? 'var(--success)' : 'var(--error)') + '">' + (d.userAnswer || 'None') + '</strong>';
+      if (!d.isCorrect) html += ' | Correct: <strong style="color:var(--success)">' + d.correctAnswer + '</strong>';
+      html += '</p>';
+      if (d.rationale) html += '<p style="margin-top:8px;color:var(--text-light);font-size:13px;line-height:1.5">' + escapeHtml(d.rationale) + '</p>';
+      html += '</div>';
+    }
+    el.innerHTML = html;
+  }
+}
+
+// =============================================
+// QUIZ HISTORY
+// =============================================
+
+function showQuizTab(tab) {
+  var newBtn = document.getElementById('quiz-tab-new');
+  var histBtn = document.getElementById('quiz-tab-history');
+  var quizEl = document.getElementById('quiz-content');
+  var histEl = document.getElementById('quiz-history-content');
+
+  if (tab === 'history') {
+    newBtn.classList.remove('btn-primary'); histBtn.classList.add('btn-primary');
+    quizEl.style.display = 'none'; histEl.style.display = 'block';
+    loadQuizHistory();
+  } else {
+    histBtn.classList.remove('btn-primary'); newBtn.classList.add('btn-primary');
+    quizEl.style.display = 'block'; histEl.style.display = 'none';
+  }
+}
+
+function loadQuizHistory() {
+  var el = document.getElementById('quiz-history-content');
+  el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
+  serverCall('getUserQuizHistory').then(function(results) {
+    if (!results || results.length === 0) {
+      el.innerHTML = '<p class="empty-state">No quiz history yet. Take a practice quiz to see your results here!</p>';
+      return;
+    }
+    var html = '<div style="margin-bottom:16px;color:var(--text-light)">' + results.length + ' quizzes taken</div>';
+    for (var i = 0; i < results.length; i++) {
+      var r = results[i];
+      var color = r.percentage >= 80 ? 'var(--success)' : r.percentage >= 60 ? 'var(--warning)' : 'var(--error)';
+      var dateStr = r.date ? new Date(r.date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown';
+      html += '<div class="card" style="padding:16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">';
+      html += '<div><strong>' + escapeHtml(r.specialty || 'Mixed') + '</strong>';
+      if (r.version) html += ' <span style="color:var(--text-light);font-size:12px">' + escapeHtml(r.version) + '</span>';
+      html += '<br><span style="font-size:12px;color:var(--text-light)">' + dateStr + '</span></div>';
+      html += '<div style="text-align:right"><span style="font-size:22px;font-weight:800;color:' + color + '">' + r.percentage + '%</span>';
+      html += '<br><span style="font-size:12px;color:var(--text-light)">' + r.score + '/' + r.total + '</span></div>';
+      html += '</div>';
+    }
+    el.innerHTML = html;
+  }).catch(function(e) {
+    el.innerHTML = '<div class="card"><p>Error loading history: ' + escapeHtml(e.message || String(e)) + '</p></div>';
+  });
+}
+
+// =============================================
+// DON'T MISS
+// =============================================
+
+function loadDontMiss(specialty) {
+  var el = document.getElementById('dontmiss-content');
+  el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
+  serverCall('getDontMiss', specialty || 'All').then(function(data) { App.dontMissItems = data; renderDontMiss(); })
+    .catch(function(e) { el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>'; });
+}
+
+function renderDontMiss(filterText) {
+  var el = document.getElementById('dontmiss-content'); var items = App.dontMissItems;
+  if (items.length === 0) { el.innerHTML = '<p class="empty-state">No key topics found for this selection.</p>'; return; }
+
+  var isCondensed = items[0] && items[0].condensed;
+
+  // Apply search filter
+  var filtered = items;
+  if (filterText && filterText.length >= 2) {
+    var q = filterText.toLowerCase();
+    filtered = items.filter(function(item) {
+      return item.item.toLowerCase().indexOf(q) !== -1 || item.specialty.toLowerCase().indexOf(q) !== -1 ||
+        (item.title && item.title.toLowerCase().indexOf(q) !== -1) ||
+        (item.points && item.points.toLowerCase().indexOf(q) !== -1);
+    });
+  }
+
+  // Priority filter
+  if (App.ktPriorityFilter && App.ktPriorityFilter !== 'all' && isCondensed) {
+    filtered = filtered.filter(function(item) { return item.priority === App.ktPriorityFilter; });
+  }
+
+  var groups = {}; var order = [];
+  filtered.forEach(function(item) { if (!groups[item.specialty]) { groups[item.specialty] = []; order.push(item.specialty); } groups[item.specialty].push(item); });
+
+  // Priority filter tabs
+  var html = '<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">';
+  html += '<span style="color:var(--text-light);font-size:14px">' + filtered.length + (isCondensed ? ' concept cards' : ' topics') + '</span>';
+  if (isCondensed) {
+    var pf = App.ktPriorityFilter || 'all';
+    html += '<button class="btn btn-sm' + (pf === 'all' ? ' btn-primary' : '') + '" onclick="setKTPriority(\'all\')">All</button>';
+    html += '<button class="btn btn-sm' + (pf === 'Must Know' ? ' btn-error' : '') + '" onclick="setKTPriority(\'Must Know\')" style="' + (pf !== 'Must Know' ? 'border-color:#f44336;color:#f44336' : '') + '">Must Know</button>';
+    html += '<button class="btn btn-sm' + (pf === 'Should Know' ? ' btn-warning' : '') + '" onclick="setKTPriority(\'Should Know\')" style="' + (pf !== 'Should Know' ? 'border-color:#ff9800;color:#ff9800' : '') + '">Should Know</button>';
+    html += '<button class="btn btn-sm' + (pf === 'Good to Know' ? ' btn-success' : '') + '" onclick="setKTPriority(\'Good to Know\')" style="' + (pf !== 'Good to Know' ? 'border-color:#4caf50;color:#4caf50' : '') + '">Good to Know</button>';
+  }
+  html += '</div>';
+
+  for (var i = 0; i < order.length; i++) {
+    var spec = order[i]; var specItems = groups[spec];
+    html += '<div class="kt-section card" style="margin-bottom:12px;padding:0;overflow:hidden">';
+    html += '<div class="kt-section-header" onclick="this.parentElement.classList.toggle(\'kt-collapsed\')" style="padding:16px 20px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none">';
+    html += '<h4 style="margin:0;font-size:15px;font-weight:700">' + escapeHtml(spec) + '</h4>';
+    html += '<span style="display:flex;align-items:center;gap:8px"><span class="kt-count" style="background:var(--primary);color:white;border-radius:12px;padding:2px 10px;font-size:12px;font-weight:700">' + specItems.length + '</span><span class="kt-arrow" style="font-size:12px;color:var(--text-light);transition:transform 0.2s">&#x25BC;</span></span>';
+    html += '</div>';
+    html += '<div class="kt-section-body" style="padding:4px 20px 16px;border-top:1px solid var(--border)">';
+
+    if (isCondensed) {
+      for (var j = 0; j < specItems.length; j++) {
+        var card = specItems[j];
+        var prColor = card.priority === 'Must Know' ? 'var(--error)' : card.priority === 'Should Know' ? 'var(--warning)' : 'var(--success)';
+        html += '<div class="kt-card" style="padding:14px 0;border-bottom:1px solid var(--border)">';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+        html += '<strong style="font-size:15px">' + escapeHtml(card.title) + '</strong>';
+        html += '<span style="font-size:11px;font-weight:700;color:' + prColor + ';white-space:nowrap;padding:2px 8px;border-radius:6px;border:1px solid ' + prColor + '">' + escapeHtml(card.priority) + '</span>';
+        html += '</div>';
+        var sections = (card.points || '').split('|').map(function(s) { return s.trim(); }).filter(Boolean);
+        html += '<div style="font-size:13px;line-height:1.7;color:var(--text)">';
+        for (var k = 0; k < sections.length; k++) {
+          html += '<div style="margin:2px 0">' + escapeHtml(sections[k]) + '</div>';
+        }
+        html += '</div></div>';
+      }
+    } else {
+      for (var j = 0; j < specItems.length; j++) {
+        html += '<div class="kt-item" style="padding:10px 0;border-bottom:1px solid var(--border);font-size:14px;line-height:1.6;color:var(--text)">' + escapeHtml(specItems[j].item) + '</div>';
+      }
+    }
+    html += '</div></div>';
+  }
+  el.innerHTML = html;
+
+  // Collapse sections by default if showing all specialties
+  if (!filterText && !App.ktPriorityFilter && order.length > 3) {
+    document.querySelectorAll('.kt-section').forEach(function(s) { s.classList.add('kt-collapsed'); });
+  }
+}
+
+function filterKeyTopics(val) {
+  renderDontMiss(val);
+}
+
+function setKTPriority(priority) {
+  App.ktPriorityFilter = priority === 'all' ? null : priority;
+  var searchVal = document.getElementById('keytopics-search');
+  renderDontMiss(searchVal ? searchVal.value : '');
+}
+
+// =============================================
+// DON'T MISS QUIZ MODE
+// =============================================
+
+function toggleDontMissQuiz() {
+  if (App.dontMissItems.length === 0) return;
+  App.dmQuizMode = !App.dmQuizMode;
+  if (App.dmQuizMode) {
+    // Shuffle items for quiz
+    App.dmQuizItems = App.dontMissItems.slice();
+    for (var i = App.dmQuizItems.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = App.dmQuizItems[i]; App.dmQuizItems[i] = App.dmQuizItems[j]; App.dmQuizItems[j] = t; }
+    App.dmQuizItems = App.dmQuizItems.slice(0, 30); // cap at 30 per round
+    App.dmQuizIndex = 0; App.dmQuizFlipped = false; App.dmQuizKnew = 0; App.dmQuizMissed = 0;
+    document.getElementById('dontmiss-quiz-btn').textContent = '📋 List Mode';
+    renderDmQuiz();
+  } else {
+    document.getElementById('dontmiss-quiz-btn').innerHTML = '&#x26A1; Quiz Mode';
+    renderDontMiss();
+  }
+}
+
+function renderDmQuiz() {
+  var el = document.getElementById('dontmiss-content');
+  var items = App.dmQuizItems;
+  if (App.dmQuizIndex >= items.length) { renderDmQuizDone(); return; }
+  var item = items[App.dmQuizIndex];
+  var pct = ((App.dmQuizIndex / items.length) * 100).toFixed(0);
+
+  var html = '<div class="flashcard-meta">' + (App.dmQuizIndex + 1) + ' / ' + items.length + ' &bull; ' + escapeHtml(item.specialty) + '</div>';
+  html += '<div class="progress-bar" style="margin-bottom:20px"><div class="progress-fill" style="width:' + pct + '%"></div></div>';
+  html += '<div class="flashcard-container"><div class="flashcard' + (App.dmQuizFlipped ? ' flipped' : '') + '" onclick="flipDmQuizCard()">';
+  if (item.condensed && item.title) {
+    html += '<div class="flashcard-front"><div><strong>' + escapeHtml(item.title) + '</strong></div></div>';
+    var sections = (item.points || '').split('|').map(function(s) { return s.trim(); }).filter(Boolean);
+    html += '<div class="flashcard-back"><div style="text-align:left;font-size:14px;line-height:1.8">';
+    for (var si = 0; si < sections.length; si++) html += '<div>' + escapeHtml(sections[si]) + '</div>';
+    html += '</div></div>';
+  } else {
+    html += '<div class="flashcard-front"><div>' + escapeHtml(item.specialty) + '</div></div>';
+    html += '<div class="flashcard-back"><div>' + escapeHtml(item.item) + '</div></div>';
+  }
+  html += '</div></div>';
+
+  if (App.dmQuizFlipped) {
+    html += '<div class="flashcard-nav">';
+    html += '<button class="btn btn-error" onclick="rateDmQuiz(false)" style="flex:1;padding:14px;font-size:15px">&#x2717; Didn\'t Know</button>';
+    html += '<button class="btn btn-success" onclick="rateDmQuiz(true)" style="flex:1;padding:14px;font-size:15px">&#x2713; Knew It</button>';
+    html += '</div>';
+    html += '<div style="text-align:center;margin-top:8px;color:var(--text-light);font-size:12px">Keyboard: 1 = Didn\'t Know &bull; 2 = Knew It</div>';
+  } else {
+    html += '<div class="flashcard-nav">';
+    html += '<button class="btn btn-accent" onclick="flipDmQuizCard()" style="flex:1;padding:14px;font-size:15px">Tap to Flip</button>';
+    html += '</div>';
+    html += '<div style="text-align:center;margin-top:8px;color:var(--text-light);font-size:12px">Keyboard: Space to flip</div>';
+  }
+  el.innerHTML = html;
+}
+
+function flipDmQuizCard() {
+  App.dmQuizFlipped = !App.dmQuizFlipped;
+  renderDmQuiz();
+}
+
+function rateDmQuiz(knew) {
+  if (knew) App.dmQuizKnew++; else App.dmQuizMissed++;
+  App.dmQuizIndex++;
+  App.dmQuizFlipped = false;
+  renderDmQuiz();
+}
+
+function renderDmQuizDone() {
+  var el = document.getElementById('dontmiss-content');
+  var total = App.dmQuizItems.length;
+  var pct = total > 0 ? Math.round((App.dmQuizKnew / total) * 100) : 0;
+  var html = '<div class="card" style="text-align:center;padding:40px">';
+  html += '<h3>Don\'t Miss Quiz Complete!</h3>';
+  html += '<div class="daily-card-score-ring"><div class="daily-card-score-number">' + App.dmQuizKnew + '/' + total + '</div><div class="daily-card-score-label">' + pct + '% Knew</div></div>';
+  html += '<p style="margin:16px 0;color:var(--text-light)">' + App.dmQuizMissed + ' items to review</p>';
+  html += '<button class="btn btn-primary" onclick="toggleDontMissQuiz(); toggleDontMissQuiz();" style="margin:8px">Play Again</button>';
+  html += '<button class="btn" onclick="App.dmQuizMode=false; document.getElementById(\'dontmiss-quiz-btn\').innerHTML=\'&#x26A1; Quiz Mode\'; renderDontMiss();">Back to List</button>';
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+// =============================================
+// SEARCH
+// =============================================
+
+var searchTimeout;
+function handleSearch(query) {
+  clearTimeout(searchTimeout);
+  if (query.length < 2) { document.getElementById('search-results').innerHTML = '<p class="empty-state">Type at least 2 characters to search.</p>'; return; }
+  searchTimeout = setTimeout(function() {
+    document.getElementById('search-results').innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
+    serverCall('searchAll', query).then(function(results) { renderSearchResults(results, query); })
+      .catch(function(e) { document.getElementById('search-results').innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>'; });
+  }, 400);
+}
+
+function renderSearchResults(results, query) {
+  var el = document.getElementById('search-results');
+  var total = results.flashcards.length + results.notes.length + results.mcq.length + results.dontmiss.length;
+  if (total === 0) { el.innerHTML = '<p class="empty-state">No results for "' + escapeHtml(query) + '"</p>'; return; }
+
+  var html = '<p style="color:var(--text-light);margin-bottom:16px">' + total + ' results</p>';
+  if (results.flashcards.length > 0) {
+    html += '<div class="search-group"><h3>Flashcards (' + results.flashcards.length + ')</h3>';
+    results.flashcards.forEach(function(f) { html += '<div class="search-item"><strong>' + escapeHtml(f.front) + '</strong><br><span style="color:var(--text-light)">' + escapeHtml(truncate(f.back, 200)) + '</span></div>'; });
+    html += '</div>';
+  }
+  if (results.notes.length > 0) {
+    html += '<div class="search-group"><h3>Bullet Notes (' + results.notes.length + ')</h3>';
+    results.notes.forEach(function(n) { html += '<div class="search-item"><span style="color:var(--primary);font-size:12px">' + escapeHtml(n.specialty) + '</span><br>' + escapeHtml(n.note) + '</div>'; });
+    html += '</div>';
+  }
+  if (results.mcq.length > 0) {
+    html += '<div class="search-group"><h3>Questions (' + results.mcq.length + ')</h3>';
+    results.mcq.forEach(function(q) { html += '<div class="search-item"><span style="color:var(--primary);font-size:12px">' + escapeHtml(q.specialty) + '</span><br>' + escapeHtml(truncate(q.question, 200)) + '</div>'; });
+    html += '</div>';
+  }
+  if (results.dontmiss.length > 0) {
+    html += '<div class="search-group"><h3>Don\'t Miss (' + results.dontmiss.length + ')</h3>';
+    results.dontmiss.forEach(function(d) { html += '<div class="dontmiss-item">' + escapeHtml(d.item) + '</div>'; });
+    html += '</div>';
+  }
+  el.innerHTML = html;
+}
+
+// =============================================
+// DR. DATA
+// =============================================
+
+function sendDrDataMessage() {
+  var input = document.getElementById('drdata-input'); var message = input.value.trim(); if (!message) return;
+  input.value = ''; App.drDataHistory.push({ role: 'user', content: message }); renderDrDataChat();
+  var msgs = document.getElementById('drdata-messages');
+  msgs.innerHTML += '<div class="chat-message assistant typing" id="dd-typing">Dr. Data is thinking...</div>';
+  msgs.scrollTop = msgs.scrollHeight; input.disabled = true;
+
+  serverCall('askDrData', message, App.drDataHistory.slice(-20)).then(function(result) {
+    removeEl('dd-typing'); App.drDataHistory.push({ role: 'assistant', content: result.response }); renderDrDataChat(); input.disabled = false; input.focus();
+  }).catch(function(e) {
+    removeEl('dd-typing'); App.drDataHistory.push({ role: 'assistant', content: 'Error: ' + (e.message || String(e)) }); renderDrDataChat(); input.disabled = false;
+  });
+}
+
+function clearDrDataChat() { App.drDataHistory = []; renderDrDataChat(); }
+
+function renderDrDataChat() {
+  var el = document.getElementById('drdata-messages');
+  if (App.drDataHistory.length === 0) {
+    el.innerHTML = '<div class="chat-welcome"><div class="welcome-icon">&#x1F916;</div><h3>Dr. Data</h3><p>Your MCCQE Part I tutor. Ask me anything.</p><p class="sub">I know your quiz history and weak areas.</p></div>';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < App.drDataHistory.length; i++) {
+    var m = App.drDataHistory[i];
+    html += '<div class="chat-message ' + m.role + '">' + (m.role === 'assistant' ? formatMarkdown(m.content) : escapeHtml(m.content)) + '</div>';
+  }
+  el.innerHTML = html; el.scrollTop = el.scrollHeight;
+}
+
+// =============================================
+// DIAGRAMS
+// =============================================
+
+function loadDiagramChapters() {
+  var el = document.getElementById('diagrams-content');
+  el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
+  serverCall('getImageChapters').then(function(chapters) { App.diagramChapters = chapters; renderDiagramChapters(); })
+    .catch(function(e) { el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>'; });
+}
+
+function renderDiagramChapters() {
+  var el = document.getElementById('diagrams-content'); var chapters = App.diagramChapters;
+  if (!chapters || chapters.length === 0) { el.innerHTML = '<div class="card" style="text-align:center;padding:40px"><h3>No images found</h3></div>'; return; }
+  var html = '<div class="diagram-chapters-grid">';
+  for (var i = 0; i < chapters.length; i++) {
+    var c = chapters[i];
+    html += '<div class="diagram-chapter-card card" onclick="loadChapterDiagrams(\'' + escapeHtml(c.slug) + '\', \'' + escapeHtml(c.name) + '\')"><h4>' + escapeHtml(c.name) + '</h4><span class="diagram-count">' + c.count + ' pages</span></div>';
+  }
+  html += '</div>'; el.innerHTML = html;
+}
+
+function loadChapterDiagrams(slug, name, page) {
+  page = page || 1; App.diagramCurrentSlug = slug; App.diagramPage = page;
+  var el = document.getElementById('diagrams-content');
+  el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
+  serverCall('getChapterImages', slug, page, 20).then(function(result) { renderChapterDiagrams(name, result); })
+    .catch(function(e) { el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>'; });
+}
+
+function renderChapterDiagrams(name, result) {
+  var el = document.getElementById('diagrams-content'); var images = result.images; var total = result.total; var page = result.page; var totalPages = Math.ceil(total / result.pageSize);
+  var html = '<div class="diagram-header"><button class="btn btn-sm" onclick="renderDiagramChapters()">&larr; All Chapters</button><h3>' + escapeHtml(name) + '</h3><span class="diagram-count">' + total + ' pages</span></div>';
+  if (images.length === 0) { el.innerHTML = html + '<div class="card" style="text-align:center;padding:40px"><p>No images.</p></div>'; return; }
+  html += '<div class="diagram-grid">';
+  for (var i = 0; i < images.length; i++) {
+    var img = images[i];
+    html += '<div class="diagram-thumb" onclick="openDiagramViewer(\'' + escapeHtml(img.url) + '\', ' + img.pageNum + ')"><img src="' + escapeHtml(img.url) + '" alt="Page ' + img.pageNum + '" loading="lazy"><span class="diagram-page-label">Page ' + img.pageNum + '</span></div>';
+  }
+  html += '</div>';
+  if (totalPages > 1) {
+    html += '<div class="diagram-pagination">';
+    if (page > 1) html += '<button class="btn btn-sm" onclick="loadChapterDiagrams(\'' + escapeHtml(App.diagramCurrentSlug) + '\', \'' + escapeHtml(name) + '\', ' + (page - 1) + ')">Prev</button>';
+    html += '<span class="diagram-page-info">Page ' + page + ' of ' + totalPages + '</span>';
+    if (page < totalPages) html += '<button class="btn btn-sm" onclick="loadChapterDiagrams(\'' + escapeHtml(App.diagramCurrentSlug) + '\', \'' + escapeHtml(name) + '\', ' + (page + 1) + ')">Next</button>';
+    html += '</div>';
+  }
+  el.innerHTML = html;
+}
+
+function openDiagramViewer(url, pageNum) {
+  var overlay = document.createElement('div'); overlay.className = 'diagram-viewer-overlay';
+  overlay.onclick = function(e) { if (e.target === overlay) document.body.removeChild(overlay); };
+  overlay.innerHTML = '<div class="diagram-viewer"><div class="diagram-viewer-header"><span>Page ' + pageNum + '</span><button class="btn btn-sm" onclick="this.closest(\'.diagram-viewer-overlay\').remove()">Close</button></div><img src="' + url + '" alt="Page ' + pageNum + '"></div>';
+  document.body.appendChild(overlay);
+}
+
+// =============================================
+// PATIENTBOT
+// =============================================
+
+function extractPatientJSON(text) {
+  var patterns = [/`{1,3}\s*patient\s*\n?([\s\S]*?)\n?\s*`{1,3}/i, /`{1,3}\s*\n?(\{[^`]*"name"[^`]*"diagnosis"[^`]*\})\n?\s*`{1,3}/i, /(\{\s*"name"\s*:[\s\S]*?"diagnosis"\s*:[^}]*\})/];
+  for (var i = 0; i < patterns.length; i++) { var m = text.match(patterns[i]); if (m) { var s = m[1].trim(); if (s.charAt(0) === '{') return s; } }
+  return null;
+}
+
+function stripPatientJSON(text) {
+  text = text.replace(/`{1,3}\s*patient\s*\n?[\s\S]*?\n?\s*`{1,3}\s*/gi, '');
+  text = text.replace(/`{1,3}\s*\n?\{[^`]*"name"[^`]*"diagnosis"[^`]*\}\n?\s*`{1,3}\s*/gi, '');
+  text = text.replace(/\{\s*"name"\s*:[\s\S]*?"diagnosis"\s*:[^}]*\}\s*/g, '');
+  return text.trim();
+}
+
+function showPatientBotSetup() {
+  App.pbCaseId = null; App.pbHistory = []; App.pbCurrentCase = 0; App.pbCaseScores = [];
+  var el = document.getElementById('patientbot-content');
+  var specs = App.specialties ? App.specialties.all || [] : [];
+
+  var html = '<div class="pb-setup card">';
+  html += '<div style="font-size:48px;margin-bottom:16px">&#x1F3E5;</div>';
+  html += '<h2>PatientBot</h2>';
+  html += '<p style="color:var(--text-light);margin:12px 0 20px">Practice clinical skills with simulated patient encounters</p>';
+
+  html += '<div class="form-group" style="text-align:left"><label>Mode</label>';
+  html += '<select id="pb-specialty" style="width:100%">';
+  html += '<option value="Random">&#x1F3AF; MCCQE Exam Mode (Random Presentation)</option>';
+  html += '<optgroup label="By Specialty">';
+  var groupedSpecs = ['Cardiology','Respirology','GI / Hepatology','Neurology','Psychiatry','MSK / Rheumatology','Nephrology / Urology','Endocrinology','Hematology / Oncology','Dermatology','OB/GYN','Pediatrics','Emergency Medicine','Infectious Disease','Surgery','Ophthalmology / ENT','Family Medicine'];
+  for (var g = 0; g < groupedSpecs.length; g++) html += '<option value="' + escapeHtml(groupedSpecs[g]) + '">' + escapeHtml(groupedSpecs[g]) + '</option>';
+  html += '</optgroup>';
+  html += '<optgroup label="Expanded (All Sub-specialties)">';
+  for (var i = 0; i < specs.length; i++) html += '<option value="' + escapeHtml(specs[i]) + '">' + escapeHtml(specs[i]) + '</option>';
+  html += '</optgroup>';
+  html += '</select></div>';
+
+  html += '<div class="form-group" style="text-align:left"><label>Difficulty</label>';
+  html += '<div class="quiz-count-btns">';
+  html += '<button class="quiz-count-btn" onclick="setPBDiff(\'easy\',this)">Easy</button>';
+  html += '<button class="quiz-count-btn active" onclick="setPBDiff(\'medium\',this)">MCCQE &#x2705;</button>';
+  html += '<button class="quiz-count-btn" onclick="setPBDiff(\'hard\',this)">Hard</button>';
+  html += '<button class="quiz-count-btn" onclick="setPBDiff(\'hardest\',this)">Expert</button>';
+  html += '</div></div>';
+
+  html += '<div class="form-group" style="text-align:left"><label>Number of Cases</label>';
+  html += '<div class="quiz-count-btns">';
+  html += '<button class="quiz-count-btn active" onclick="setPBCount(1, this)">Single</button>';
+  html += '<button class="quiz-count-btn" onclick="setPBCount(5, this)">5 Cases</button>';
+  html += '<button class="quiz-count-btn" onclick="setPBCount(10, this)">10 Cases</button>';
+  html += '<button class="quiz-count-btn" onclick="setPBCount(25, this)">25 Cases</button>';
+  html += '</div>';
+  html += '<input type="number" id="pb-count" value="1" min="1" max="99" placeholder="Custom number...">';
+  html += '</div>';
+
+  html += '<div class="form-group" style="text-align:left">';
+  html += '<label class="toggle-label" style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer">';
+  html += '<input type="checkbox" id="pb-cheat"> <strong>Cheat Mode</strong> &mdash; shows the diagnosis in the banner';
+  html += '</label></div>';
+
+  // Customize patient panel
+  html += '<div style="margin:16px 0">';
+  html += '<button class="btn btn-outline btn-sm" onclick="document.getElementById(\'pb-customize\').style.display=document.getElementById(\'pb-customize\').style.display===\'none\'?\'\':\'none\'" style="width:100%;padding:10px;font-size:14px">&#x2699; Customize Patient</button>';
+  html += '<div id="pb-customize" style="display:none;margin-top:12px;padding:16px;border:1px solid var(--border);border-radius:10px;background:var(--card)">';
+
+  // Sex
+  html += '<div class="form-group" style="text-align:left;margin-bottom:12px"><label style="font-size:13px;font-weight:700">Gender / Identity</label>';
+  html += '<div id="pb-sex-group">';
+  html += '<div class="quiz-count-btns">';
+  html += '<button class="quiz-count-btn active" onclick="setPBSex(\'random\',this)">Random</button>';
+  html += '<button class="quiz-count-btn" onclick="setPBSex(\'male\',this)">Male</button>';
+  html += '<button class="quiz-count-btn" onclick="setPBSex(\'female\',this)">Female</button>';
+  html += '</div>';
+  html += '<div class="quiz-count-btns" style="margin-top:6px">';
+  html += '<button class="quiz-count-btn" onclick="setPBSex(\'nonbinary\',this)">Non-binary</button>';
+  html += '<button class="quiz-count-btn" onclick="setPBSex(\'trans_m\',this)">Trans Man</button>';
+  html += '<button class="quiz-count-btn" onclick="setPBSex(\'trans_f\',this)">Trans Woman</button>';
+  html += '</div></div></div>';
+
+  // Age slider
+  html += '<div class="form-group" style="text-align:left;margin-bottom:16px">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center"><label style="font-size:13px;font-weight:700">Age</label><span id="pb-age-label" style="font-size:12px;color:var(--primary);font-weight:700">Random</span></div>';
+  html += '<input type="range" min="0" max="5" value="0" class="pb-slider" id="pb-age-slider" oninput="updatePBSlider(\'age\',this.value)">';
+  html += '<div class="pb-slider-labels"><span>Random</span><span>Child</span><span>Teen</span><span>18-30</span><span>30-60</span><span>60+</span></div>';
+  html += '</div>';
+
+  // Historian slider
+  html += '<div class="form-group" style="text-align:left;margin-bottom:16px">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center"><label style="font-size:13px;font-weight:700">Historian Quality</label><span id="pb-historian-label" style="font-size:12px;color:var(--primary);font-weight:700">Random</span></div>';
+  html += '<input type="range" min="0" max="3" value="0" class="pb-slider" id="pb-historian-slider" oninput="updatePBSlider(\'historian\',this.value)">';
+  html += '<div class="pb-slider-labels"><span>Random</span><span>Good</span><span>Poor</span><span>Vague</span></div>';
+  html += '</div>';
+
+  // Cooperativeness slider
+  html += '<div class="form-group" style="text-align:left;margin-bottom:16px">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center"><label style="font-size:13px;font-weight:700">Cooperativeness</label><span id="pb-coop-label" style="font-size:12px;color:var(--primary);font-weight:700">Random</span></div>';
+  html += '<input type="range" min="0" max="3" value="0" class="pb-slider" id="pb-coop-slider" oninput="updatePBSlider(\'coop\',this.value)">';
+  html += '<div class="pb-slider-labels"><span>Random</span><span>Cooperative</span><span>Reluctant</span><span>Hostile</span></div>';
+  html += '</div>';
+
+  // Aggression slider
+  html += '<div class="form-group" style="text-align:left;margin-bottom:0">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center"><label style="font-size:13px;font-weight:700">Aggression</label><span id="pb-aggression-label" style="font-size:12px;color:var(--primary);font-weight:700">Random</span></div>';
+  html += '<input type="range" min="0" max="3" value="0" class="pb-slider" id="pb-aggression-slider" oninput="updatePBSlider(\'aggression\',this.value)">';
+  html += '<div class="pb-slider-labels"><span>Random</span><span>None</span><span>Mild</span><span>Aggressive</span></div>';
+  html += '</div>';
+
+  html += '</div></div>';
+
+  html += '<div class="pb-how-to">';
+  html += '<strong>How to Play:</strong><br>';
+  html += '&#x1F4AC; <strong>Ask questions</strong> — "any chest pain?" "when did it start?"<br>';
+  html += '&#x1F52C; <strong>Order tests</strong> — "order EKG" "send for chest x-ray" "draw CBC and troponin"<br>';
+  html += '&#x1F489; <strong>Treat</strong> — "administer 10mg morphine" "start IV saline"<br>';
+  html += '&#x1FA7A; <strong>Examine</strong> — "*palpate abdomen*" "*auscultate lungs*"<br>';
+  html += '&#x1F3AF; <strong>Diagnose</strong> — Hit the Diagnose button when you know what it is';
+  html += '</div>';
+
+  html += '<button class="btn btn-success" style="width:100%;padding:14px;font-size:16px" onclick="startPBSession()">Start</button>';
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function setPBDiff(diff, btn) {
+  App.pbDifficulty = diff;
+  var btns = btn.parentElement.querySelectorAll('.quiz-count-btn');
+  for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+  btn.classList.add('active');
+}
+
+function setPBCount(n, btn) {
+  document.getElementById('pb-count').value = n;
+  var btns = btn.parentElement.querySelectorAll('.quiz-count-btn');
+  for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+  if (btn) btn.classList.add('active');
+}
+
+function setPBCustom(field, value, btn) {
+  if (!App.pbCustom) App.pbCustom = {};
+  App.pbCustom[field] = value === 'random' ? null : value;
+  if (btn) {
+    var btns = btn.parentElement.querySelectorAll('.quiz-count-btn');
+    for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+    btn.classList.add('active');
+  }
+}
+
+function setPBSex(value, btn) {
+  if (!App.pbCustom) App.pbCustom = {};
+  App.pbCustom.sex = value === 'random' ? null : value;
+  // Clear ALL buttons in the sex group (both rows)
+  var group = document.getElementById('pb-sex-group');
+  if (group) {
+    var allBtns = group.querySelectorAll('.quiz-count-btn');
+    for (var i = 0; i < allBtns.length; i++) allBtns[i].classList.remove('active');
+  }
+  btn.classList.add('active');
+}
+
+function updatePBSlider(field, val) {
+  if (!App.pbCustom) App.pbCustom = {};
+  var maps = {
+    age: ['random', 'child', 'pediatric', 'young', 'middle', 'elderly'],
+    historian: ['random', 'good', 'poor', 'vague'],
+    coop: ['random', 'cooperative', 'reluctant', 'hostile'],
+    aggression: ['random', 'none', 'mild', 'aggressive']
+  };
+  var labels = {
+    age: ['Random', 'Child (2-12)', 'Teen (13-17)', '18-30', '30-60', '60+'],
+    historian: ['Random', 'Good', 'Poor', 'Vague'],
+    coop: ['Random', 'Cooperative', 'Reluctant', 'Hostile'],
+    aggression: ['Random', 'None', 'Mild', 'Aggressive']
+  };
+  var v = parseInt(val);
+  var mapped = maps[field] ? maps[field][v] : 'random';
+  App.pbCustom[field] = mapped === 'random' ? null : mapped;
+  var labelEl = document.getElementById('pb-' + field + '-label');
+  if (labelEl) labelEl.textContent = labels[field] ? labels[field][v] : mapped;
+}
+
+function startPBSession() {
+  App.pbTotalCases = parseInt(document.getElementById('pb-count').value) || 1;
+  App.pbCheatMode = document.getElementById('pb-cheat').checked;
+  App.pbCurrentCase = 0; App.pbCaseScores = [];
+  App.pbSetupSpecialty = document.getElementById('pb-specialty').value;
+  startNextPBCase();
+}
+
+function startNextPBCase() {
+  App.pbCurrentCase++;
+  var el = document.getElementById('patientbot-content');
+  el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div><p style="margin-top:16px;color:var(--text-light)">Generating case ' + App.pbCurrentCase + ' of ' + App.pbTotalCases + '...</p></div>';
+
+  serverCall('startPatientBotCase', App.pbSetupSpecialty, App.pbCheatMode, App.pbDifficulty, App.pbCustom || {}).then(function(result) {
+    App.pbCaseId = result.caseId; App.pbSpecialty = result.specialty; App.pbPresentation = result.presentation || '';
+    App.pbDiagnosis = null; App.pbPatientInfo = null; App.pbDiagnosing = false; App.pbDiagAttempts = 0; App.pbDiagResolved = false;
+    App.pbPartialUsed = false; App.pbPartialFeedback = null; App.pbPartialScore = null; App.pbScorecard = null;
+
+    var msg = stripPatientJSON(result.initialMessage);
+    if (result.patientInfo) { App.pbPatientInfo = result.patientInfo; App.pbDiagnosis = result.patientInfo.diagnosis; }
+    else { var jsonStr = extractPatientJSON(result.initialMessage); if (jsonStr) { try { App.pbPatientInfo = JSON.parse(jsonStr); App.pbDiagnosis = App.pbPatientInfo.diagnosis; } catch(e) {} } }
+
+    App.pbHistory = [{ role: 'assistant', content: msg }];
+    renderPBChat();
+  }).catch(function(e) {
+    el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p><button class="btn btn-primary" onclick="startNextPBCase()" style="margin-top:12px">Try Again</button></div>';
+  });
+}
+
+function sendPBMessage() {
+  var input = document.getElementById('pb-input'); var message = input.value.trim(); if (!message) return;
+
+  // Intercept "answernow" — trigger debrief instead of sending to patient
+  if (message.toLowerCase().replace(/\s/g, '') === 'answernow') {
+    input.value = '';
+    triggerPBDebrief();
+    return;
+  }
+
+  input.value = ''; App.pbHistory.push({ role: 'user', content: message });
+
+  var target = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
+  target();
+
+  var msgs = document.getElementById('pb-messages');
+  msgs.innerHTML += '<div class="chat-message assistant typing" id="pb-typing">Patient is responding...</div>';
+  msgs.scrollTop = msgs.scrollHeight; input.disabled = true;
+
+  serverCall('sendPatientBotMessage', App.pbCaseId, message, App.pbHistory.slice(-30)).then(function(result) {
+    removeEl('pb-typing');
+    if (result.expired) { App.pbCaseId = null; showPatientBotSetup(); return; }
+
+    // PATIENT DIED
+    if (result.fatal) {
+      if (result.consequence) App.pbHistory.push({ role: 'system', content: result.consequence });
+      App.pbVitals = result.vitals;
+      App.pbDiagResolved = true;
+      App.pbCaseScores.push({ specialty: App.pbSpecialty, caseNum: App.pbCurrentCase, correct: false, diagnosis: App.pbDiagnosis, fatal: true, causeOfDeath: result.causeOfDeath, points: 0 });
+      serverCall('saveProgress', 'pb_result', { correct: false, specialty: App.pbSpecialty, diagnosis: App.pbDiagnosis, fatal: true, causeOfDeath: result.causeOfDeath, points: 0 });
+      App.pbHistory.push({ role: 'death', content: result.causeOfDeath || 'The patient has died.' });
+      target(); return;
+    }
+
+    // Show consequence as system message if present
+    if (result.consequence) {
+      App.pbHistory.push({ role: 'system', content: result.consequence });
+    }
+    // Show test results as a results message
+    if (result.testResults) {
+      App.pbHistory.push({ role: 'results', content: result.testResults });
+    }
+    // Update vitals display
+    if (result.vitals) App.pbVitals = result.vitals;
+    App.pbHistory.push({ role: 'assistant', content: result.response });
+    target(); input.disabled = false; input.focus();
+  }).catch(function(e) {
+    removeEl('pb-typing'); App.pbHistory.push({ role: 'assistant', content: 'Error: ' + (e.message || String(e)) });
+    target(); input.disabled = false;
+  });
+}
+
+function triggerPBDebrief() {
+  var target = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
+  var msgs = document.getElementById('pb-messages');
+  msgs.innerHTML += '<div class="chat-message assistant typing" id="pb-typing">Generating debrief...</div>';
+  msgs.scrollTop = msgs.scrollHeight;
+  var input = document.getElementById('pb-input');
+  if (input) input.disabled = true;
+
+  serverCall('debriefPatientBot', App.pbCaseId, App.pbHistory.slice(-40)).then(function(result) {
+    removeEl('pb-typing');
+    if (input) input.disabled = false;
+    App.pbDiagResolved = true;
+    App.pbCaseScores.push({ specialty: App.pbSpecialty, caseNum: App.pbCurrentCase, correct: false, diagnosis: App.pbDiagnosis, skipped: true, points: 0 });
+    App.pbHistory.push({ role: 'debrief', content: result });
+    target();
+  }).catch(function(e) {
+    removeEl('pb-typing');
+    if (input) input.disabled = false;
+    App.pbHistory.push({ role: 'system', content: 'Debrief error: ' + (e.message || String(e)) });
+    target();
+  });
+}
+
+function quickNewPBCase() {
+  App.pbCurrentCase = 0; App.pbCaseScores = []; App.pbTotalCases = 1;
+  App.pbVitals = null;
+  startNextPBCase();
+}
+
+function togglePBTips() {
+  var panel = document.getElementById('pb-actions-panel');
+  if (panel) panel.style.display = panel.style.display === 'none' ? '' : 'none';
+}
+
+function togglePBCategory(catIndex, btn) {
+  var panel = document.getElementById('pb-actions-panel');
+  var catPanel = document.getElementById('pb-cat-' + catIndex);
+  if (!panel || !catPanel) return;
+
+  // Check if this category is already open
+  var isOpen = catPanel.style.display !== 'none';
+
+  // Hide all categories
+  var allPanels = panel.querySelectorAll('.pb-cat-panel');
+  for (var i = 0; i < allPanels.length; i++) allPanels[i].style.display = 'none';
+
+  // Deactivate all tabs
+  var allTabs = document.querySelectorAll('.pb-action-tab');
+  for (var i = 0; i < allTabs.length; i++) allTabs[i].classList.remove('active');
+
+  if (isOpen) {
+    // Close panel
+    panel.style.display = 'none';
+  } else {
+    // Open this category
+    panel.style.display = '';
+    catPanel.style.display = '';
+    btn.classList.add('active');
+  }
+}
+
+function insertPBAction(text) {
+  var input = document.getElementById('pb-input');
+  if (input) { input.value = text; input.focus(); }
+  // Close panel
+  var panel = document.getElementById('pb-actions-panel');
+  if (panel) panel.style.display = 'none';
+  var allTabs = document.querySelectorAll('.pb-action-tab');
+  for (var i = 0; i < allTabs.length; i++) allTabs[i].classList.remove('active');
+}
+
+function showDiagnoseModal() { App.pbDiagnosing = true; var fn = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat; fn(); }
+function closeDiagnoseModal() { App.pbDiagnosing = false; var fn = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat; fn(); }
+
+function submitPBDiagnosis() {
+  var input = document.getElementById('pb-diag-input'); var answer = input ? input.value.trim() : ''; if (!answer) return;
+  var btn = document.getElementById('pb-diag-submit-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Checking...'; }
+  App.pbDiagAttempts++;
+
+  serverCall('submitDiagnosis', App.pbCaseId, answer, App.pbDiagnosis, App.pbHistory.slice(-20)).then(function(result) {
+    App.pbDiagnosing = false;
+    var renderFn = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
+
+    if (result.expired) { App.pbCaseId = null; showPatientBotSetup(); return; }
+
+    if (result.partial && !App.pbPartialUsed) {
+      // Partial credit — push feedback into chat as system message, let them try once more
+      App.pbPartialUsed = true;
+      App.pbHistory.push({ role: 'partial', content: { score: result.score, feedback: result.feedback } });
+      renderFn();
+      return;
+    }
+
+    App.pbDiagResolved = true;
+    if (result.correct) {
+      var pts = POINTS.PB_CORRECT + (App.pbDiagAttempts === 1 ? POINTS.PB_FIRST_TRY : 0);
+      App.pbHistory.push({ role: 'diagnosis_result', content: { correct: true, score: result.score, feedback: result.feedback, points: pts, answer: App.pbDiagnosis } });
+      App.pbCaseScores.push({ specialty: App.pbSpecialty, caseNum: App.pbCurrentCase, correct: true, diagnosis: App.pbDiagnosis, attempts: App.pbDiagAttempts, feedback: result.feedback, points: pts, score: result.score });
+      serverCall('saveProgress', 'pb_result', { correct: true, specialty: App.pbSpecialty, diagnosis: App.pbDiagnosis, attempts: App.pbDiagAttempts, points: pts, feedback: result.feedback, score: result.score, transcript: getPBTranscript() });
+    } else {
+      App.pbHistory.push({ role: 'diagnosis_result', content: { correct: false, score: result.score, feedback: result.feedback, points: 0, answer: App.pbDiagnosis } });
+      App.pbCaseScores.push({ specialty: App.pbSpecialty, caseNum: App.pbCurrentCase, correct: false, diagnosis: App.pbDiagnosis, attempts: App.pbDiagAttempts, feedback: result.feedback, points: 0, score: result.score });
+      serverCall('saveProgress', 'pb_result', { correct: false, specialty: App.pbSpecialty, diagnosis: App.pbDiagnosis, attempts: App.pbDiagAttempts, points: 0, feedback: result.feedback, score: result.score, transcript: getPBTranscript() });
+    }
+    renderFn();
+  }).catch(function(e) {
+    App.pbDiagnosing = false; App.pbHistory.push({ role: 'assistant', content: 'Error: ' + (e.message || String(e)) });
+    var fn = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat; fn();
+  });
+}
+
+function finishCurrentPBCase() {
+  if (!App.pbDiagResolved) {
+    App.pbCaseScores.push({ specialty: App.pbSpecialty, caseNum: App.pbCurrentCase, correct: false, diagnosis: App.pbDiagnosis, attempts: 0, skipped: true, points: 0 });
+  }
+  if (App.dailyPhase === 'pb') { finishDailyPBCase(); return; }
+  if (App.pbCurrentCase >= App.pbTotalCases) { showPBSummary(); } else { App.pbCaseId = null; App.pbHistory = []; startNextPBCase(); }
+}
+
+function showPBSummary() {
+  var el = document.getElementById('patientbot-content');
+  var scores = App.pbCaseScores;
+  var correct = scores.filter(function(s) { return s.correct; }).length;
+  var total = scores.length;
+  var pct = total > 0 ? Math.round((correct / total) * 100) : 0;
+  var totalPts = 0; scores.forEach(function(s) { totalPts += (s.points || 0); });
+
+  var html = '<div class="card" style="text-align:center;padding:40px">';
+  html += '<h2>Session Complete!</h2>';
+  html += '<div class="daily-card-score-ring" style="margin:20px auto"><div class="daily-card-score-number">' + correct + '/' + total + '</div><div class="daily-card-score-label">' + pct + '% Correct</div></div>';
+  html += '<p style="color:var(--accent);font-weight:700">+' + totalPts + ' XP</p>';
+  html += '</div>';
+
+  html += '<div class="card"><h3 class="section-title">Case Results</h3>';
+  for (var i = 0; i < scores.length; i++) {
+    var c = scores[i];
+    var icon = c.correct ? '<span style="color:var(--success)">&#x2705;</span>' : (c.skipped ? '<span style="color:var(--text-light)">&#x23ED;</span>' : '<span style="color:var(--error)">&#x274C;</span>');
+    html += '<div class="weak-area-row"><span>' + icon + ' Case ' + c.caseNum + ' &mdash; ' + escapeHtml(c.specialty) + '</span>';
+    html += '<span style="font-size:13px;color:var(--text-light)">' + (c.skipped ? 'Skipped' : escapeHtml(c.diagnosis || '?') + ' (' + c.attempts + ' try)') + '</span></div>';
+  }
+  html += '</div>';
+
+  html += '<div style="display:flex;gap:12px;margin-top:20px">';
+  html += '<button class="btn btn-primary" onclick="showPatientBotSetup()">New Session</button>';
+  html += '<button class="btn btn-accent" onclick="navigateTo(\'dashboard\')">Dashboard</button>';
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function getPBTranscript() {
+  // Save compact transcript for case library (max 20 messages, truncated)
+  return App.pbHistory.slice(0, 20).map(function(m) {
+    return { role: m.role, content: (m.content || '').substring(0, 400) };
+  });
+}
+
+function loadOSCEScorecard() {
+  App.pbScorecardLoading = true;
+  serverCall('generateCaseDebrief', App.pbCaseId, App.pbHistory.slice(-40)).then(function(result) {
+    App.pbScorecard = result;
+    App.pbScorecardLoading = false;
+    var renderFn = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
+    renderFn();
+  }).catch(function(e) {
+    App.pbScorecardLoading = false;
+    console.error('Scorecard error:', e);
+  });
+}
+
+function endPBCase() { App.pbCaseId = null; App.pbHistory = []; App.pbSpecialty = null; App.pbPartialUsed = false; App.pbPartialFeedback = null; App.pbPartialScore = null; App.pbScorecard = null; App.pbScorecardLoading = false; showPatientBotSetup(); }
+
+function renderPBChat() {
+  var el = document.getElementById('patientbot-content');
+  el.innerHTML = renderPBChatInner();
+  var msgs = document.getElementById('pb-messages');
+  if (msgs) msgs.scrollTop = msgs.scrollHeight;
+  if (App.pbDiagnosing) { var dinput = document.getElementById('pb-diag-input'); if (dinput) dinput.focus(); }
+}
+
+function renderPBChatInner() {
+  var caseLabel = App.pbTotalCases > 1 ? ' (Case ' + App.pbCurrentCase + '/' + App.pbTotalCases + ')' : '';
+  var p = App.pbPatientInfo;
+
+  var html = '<div class="pb-top-bar"><div class="pb-top-left"><h3>PatientBot &mdash; ' + escapeHtml(App.pbSpecialty) + caseLabel + '</h3></div>';
+  html += '<div class="pb-top-right">';
+  if (App.pbDiagResolved) {
+    if (App.dailyPhase === 'pb') {
+      html += '<button class="btn btn-sm btn-success" onclick="finishCurrentPBCase()">Next</button>';
+    } else if (App.pbTotalCases > 1) {
+      html += '<button class="btn btn-sm btn-success" onclick="finishCurrentPBCase()">Next Case</button>';
+    }
+  }
+  html += '<button class="btn btn-sm btn-outline" onclick="' + (App.dailyPhase === 'pb' ? 'finishCurrentPBCase()' : 'endPBCase()') + '">End</button>';
+  html += '</div></div>';
+
+  // Patient info bar (sticky) — uses live vitals if available
+  if (p) {
+    var v = App.pbVitals || p; // live vitals from consequence engine, or initial
+    html += '<div class="pb-patient-bar">';
+    html += '<span class="pb-info-chip"><strong>' + escapeHtml(p.name || '?') + '</strong></span>';
+    html += '<span class="pb-info-chip">' + (p.age || '?') + (p.sex === 'F' ? 'F' : 'M') + '</span>';
+    var hrColor = (v.hr > 120 || v.hr < 50) ? 'color:var(--error);font-weight:700' : '';
+    var spo2Color = (v.spo2 < 92) ? 'color:var(--error);font-weight:700' : '';
+    var rrColor = (v.rr > 24 || v.rr < 8) ? 'color:var(--error);font-weight:700' : '';
+    html += '<span class="pb-info-chip" style="' + hrColor + '">HR ' + (v.hr || '?') + '</span>';
+    html += '<span class="pb-info-chip">BP ' + (v.bp || '?') + '</span>';
+    html += '<span class="pb-info-chip" style="' + rrColor + '">RR ' + (v.rr || '?') + '</span>';
+    html += '<span class="pb-info-chip">T ' + (v.temp || '?') + '&deg;C</span>';
+    html += '<span class="pb-info-chip" style="' + spo2Color + '">SpO2 ' + (v.spo2 || '?') + '%</span>';
+    html += '</div>';
+  }
+
+  if (App.pbCheatMode && !App.pbDiagResolved) {
+    html += '<div class="pb-cheat-banner"><strong>Cheat Mode</strong> &mdash; Diagnosis: ' + escapeHtml(App.pbDiagnosis || '?') + '</div>';
+  }
+
+  // Partial feedback now shown inline in chat history
+
+  // Diagnosis results now shown inline in chat history
+
+  html += '<div class="chat-container"><div class="chat-messages" id="pb-messages">';
+  for (var i = 0; i < App.pbHistory.length; i++) {
+    var m = App.pbHistory[i];
+    if (m.role === 'debrief') {
+      // Debrief from answernow
+      var db = m.content;
+      html += '<div style="background:linear-gradient(135deg,#1a237e,#283593);color:white;padding:24px;margin:16px 0;border-radius:12px">';
+      html += '<div style="font-size:20px;font-weight:800;margin-bottom:12px">&#x1F4CB; Case Debrief</div>';
+      html += '<div style="margin-bottom:12px"><strong>Diagnosis:</strong> ' + escapeHtml(db.diagnosis || App.pbDiagnosis || '?') + '</div>';
+      html += '<div style="margin-bottom:12px"><strong>Score:</strong> ' + (db.score || '?') + '/10</div>';
+      html += '<div style="font-size:15px;line-height:1.7;white-space:pre-wrap">' + escapeHtml(db.feedback || '') + '</div>';
+      if (db.callouts) {
+        html += '<div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.2)">';
+        html += '<div style="font-size:14px;opacity:0.9">' + escapeHtml(db.callouts) + '</div>';
+        html += '</div>';
+      }
+      html += '</div>';
+    } else if (m.role === 'results') {
+      // Test/imaging/exam results from clinical engine
+      var tr = m.content;
+      var abBg = tr.abnormal ? 'rgba(244,67,54,0.08)' : 'rgba(76,175,80,0.08)';
+      var abBorder = tr.abnormal ? '#f44336' : '#4caf50';
+      var abText = tr.abnormal ? 'ABNORMAL' : 'NORMAL';
+      html += '<div style="background:' + abBg + ';border-left:4px solid ' + abBorder + ';border-radius:8px;padding:14px 18px;margin:8px 0;max-width:90%">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+      html += '<strong style="font-size:14px;color:var(--text)">&#x1F4CB; ' + escapeHtml(tr.testName || 'Results') + '</strong>';
+      html += '<span style="font-size:11px;font-weight:700;color:' + abBorder + ';border:1px solid ' + abBorder + ';padding:2px 8px;border-radius:4px">' + abText + '</span>';
+      html += '</div>';
+      html += '<div style="font-size:14px;line-height:1.7;white-space:pre-wrap;color:var(--text)">' + escapeHtml(tr.results || '') + '</div>';
+      html += '</div>';
+    } else if (m.role === 'death') {
+      // Patient died
+      html += '<div style="background:linear-gradient(135deg,#b71c1c,#880e0e);color:white;padding:24px;margin:16px 0;border-radius:12px;text-align:center">';
+      html += '<div style="font-size:36px;margin-bottom:8px">&#x1F480;</div>';
+      html += '<div style="font-size:20px;font-weight:800;margin-bottom:8px">Patient Deceased</div>';
+      html += '<div style="font-size:15px;opacity:0.9">' + escapeHtml(m.content) + '</div>';
+      html += '<div style="font-size:13px;opacity:0.7;margin-top:12px">The correct diagnosis was: ' + escapeHtml(App.pbDiagnosis || '?') + '</div>';
+      html += '</div>';
+    } else if (m.role === 'diagnosis_result') {
+      // Final diagnosis result — inline in chat
+      var dr = m.content;
+      var drBg = dr.correct ? 'rgba(76,175,80,0.12)' : 'rgba(244,67,54,0.1)';
+      var drBorder = dr.correct ? '#4caf50' : '#f44336';
+      var drIcon = dr.correct ? '&#x2705;' : '&#x274C;';
+      var drLabel = dr.correct ? 'Correct!' : 'Incorrect';
+      html += '<div style="background:' + drBg + ';border:2px solid ' + drBorder + ';color:var(--text);padding:16px 20px;margin:12px 0;border-radius:12px;font-size:14px;line-height:1.6">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+      html += '<strong style="color:' + drBorder + ';font-size:18px">' + drIcon + ' ' + drLabel + '</strong>';
+      html += '<span style="background:' + drBorder + ';color:white;padding:3px 10px;border-radius:8px;font-size:13px;font-weight:700">' + (dr.score || '?') + '/100</span>';
+      html += '</div>';
+      if (dr.feedback) html += '<div>' + escapeHtml(dr.feedback) + '</div>';
+      if (dr.correct && dr.points) html += '<div style="margin-top:6px;font-weight:700;color:#4caf50">+' + dr.points + ' XP</div>';
+      if (!dr.correct) html += '<div style="margin-top:8px"><strong>Answer:</strong> ' + escapeHtml(dr.answer || '?') + '</div>';
+      html += '</div>';
+    } else if (m.role === 'partial') {
+      // Partial credit diagnosis feedback — inline in chat
+      var pc = m.content;
+      html += '<div style="background:rgba(255,193,7,0.12);border:2px solid #f9a825;color:var(--text);padding:16px 20px;margin:12px 0;border-radius:12px;font-size:14px;line-height:1.6">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+      html += '<strong style="color:#e65100;font-size:16px">&#x1F7E1; Close!</strong>';
+      html += '<span style="background:#e65100;color:white;padding:3px 10px;border-radius:8px;font-size:13px;font-weight:700">' + (pc.score || '?') + '/100</span>';
+      html += '</div>';
+      html += escapeHtml(pc.feedback);
+      html += '<div style="margin-top:8px;font-size:13px;color:var(--text-light)">You can try once more with the Diagnose button.</div>';
+      html += '</div>';
+    } else if (m.role === 'system') {
+      // Consequence message from clinical engine
+      html += '<div class="chat-message system" style="background:rgba(255,152,0,0.1);border-left:3px solid var(--warning);color:var(--text);font-size:13px;font-style:italic;padding:8px 14px;margin:4px 20px;border-radius:6px">';
+      html += '&#x26A0;&#xFE0F; ' + escapeHtml(m.content);
+      html += '</div>';
+    } else {
+      html += '<div class="chat-message ' + m.role + '">';
+      html += m.role === 'user' ? formatPBInput(m.content) : formatMarkdown(stripPatientJSON(m.content));
+      html += '</div>';
+    }
+  }
+  html += '</div>';
+
+  if (!App.pbDiagResolved) {
+    var categories = [
+      { icon: '&#x1FA7A;', name: 'Exam', items: [
+        '---General---','*check vitals*','*general inspection*','*check pupils*','*check reflexes*','*mental status exam*',
+        '---Head/Neck---','*inspect throat*','*otoscope exam*','*fundoscopy*','*palpate lymph nodes*','*palpate thyroid*',
+        '---Chest---','*auscultate lungs*','*auscultate heart*','*percuss chest*','*inspect chest wall*',
+        '---Abdomen---','*palpate abdomen*','*percuss abdomen*','*auscultate bowel sounds*','*check for rebound*','*Murphy sign*',
+        '---MSK---','*check range of motion*','*straight leg raise*','*palpate joints*','*assess gait*',
+        '---Neuro---','*neurological exam*','*cranial nerve exam*','*check sensation*','*Romberg test*','*finger-to-nose*',
+        '---Other---','*inspect skin*','*rectal exam*','*pelvic exam*','*breast exam*','*testicular exam*'] },
+      { icon: '&#x1F52C;', name: 'Labs', items: [
+        '---Routine---','order CBC','order BMP','order CMP','order LFTs','order coags INR PTT','order urinalysis',
+        '---Cardiac---','draw troponin','order BNP','order D-dimer',
+        '---Metabolic---','order TSH','order HbA1c','order lipase','order amylase','order lactate',
+        '---Inflammatory---','order CRP and ESR','order procalcitonin',
+        '---Micro---','draw blood cultures x2','order urine culture','order sputum culture','rapid strep test',
+        '---Other---','order ABG','tox screen','pregnancy test','type and screen','order ferritin and iron studies'] },
+      { icon: '&#x1F4F7;', name: 'Imaging', items: [
+        '---X-ray---','order chest X-ray','order abdominal X-ray','order X-ray of extremity',
+        '---CT---','order CT head','order CT abdomen/pelvis','order CT chest','order CT angiogram','order CT C-spine',
+        '---MRI---','order MRI brain','order MRI spine','order MRI joint',
+        '---Ultrasound---','order abdominal ultrasound','order pelvic ultrasound','order Doppler ultrasound','order FAST exam',
+        '---Cardiac---','order echocardiogram','order EKG','attach cardiac monitor'] },
+      { icon: '&#x1F489;', name: 'Meds', items: [
+        '---Fluids---','normal saline 1L IV bolus','lactated ringers 1L IV','D5W 1L IV',
+        '---Pain---','acetaminophen 1g PO','ibuprofen 400mg PO','ketorolac 30mg IV','morphine 4mg IV','fentanyl 50mcg IV',
+        '---Cardiac---','aspirin 325mg PO','nitroglycerin 0.4mg SL','metoprolol 5mg IV','amiodarone 150mg IV','heparin drip','enoxaparin 1mg/kg SC',
+        '---Anti-emetic---','ondansetron 4mg IV','dimenhydrinate 50mg IV','metoclopramide 10mg IV',
+        '---Respiratory---','salbutamol nebulizer','ipratropium nebulizer','prednisone 50mg PO','methylprednisolone 125mg IV',
+        '---Emergency---','epinephrine 0.3mg IM','epinephrine 1mg IV push','atropine 0.5mg IV','naloxone 0.4mg IV','D50W 50mL IV',
+        '---Antibiotics---','ceftriaxone 2g IV','vancomycin 1g IV','piperacillin-tazobactam 4.5g IV','azithromycin 500mg IV','amoxicillin 500mg PO','metronidazole 500mg IV','ciprofloxacin 400mg IV',
+        '---Sedation---','midazolam 2mg IV','lorazepam 1mg IV','propofol infusion','ketamine 1mg/kg IV',
+        '---GI---','pantoprazole 80mg IV bolus','octreotide 50mcg IV',
+        '---Other---','furosemide 40mg IV','dexamethasone 10mg IV','diphenhydramine 50mg IV','insulin 10u regular IV'] },
+      { icon: '&#x1FA78;', name: 'Procedures', items: [
+        '*start IV access*','*intubate patient*','*insert foley catheter*','*insert NG tube*','*place chest tube*',
+        '*perform lumbar puncture*','*suture laceration*','*perform I&D*','*insert central line*',
+        '*perform paracentesis*','*perform thoracentesis*','*apply splint*','*reduce fracture*','*pack wound*'] },
+      { icon: '&#x1F4CB;', name: 'Manage', items: [
+        '---Disposition---','discharge patient home','admit to medicine ward','admit to surgery','admit to ICU','transfer to OR',
+        '---Referral---','refer to cardiology','refer to neurology','refer to surgery','refer to psychiatry','refer to OB/GYN','refer to pediatrics','refer to social work',
+        '---Communication---','counsel patient on diagnosis','explain treatment plan','obtain informed consent','create safety plan','call family member',
+        '---Follow-up---','book follow-up in 1 week','book follow-up in 1 month','arrange home care','prescribe medication for discharge'] },
+      { icon: '&#x1F6A8;', name: 'Resus', items: [
+        '*start CPR*','*defibrillate*','*bag-mask ventilation*','*apply AED*','call code blue','*rapid sequence intubation*','*cricothyrotomy*'] },
+      { icon: '&#x1F6CF;', name: 'Position', items: [
+        '*elevate head of bed*','*recovery position*','*Trendelenburg position*','*left lateral decubitus*','*sit patient upright*','*prone positioning*'] },
+      { icon: '&#x1F50D;', name: 'Scopes', items: [
+        'order endoscopy','order colonoscopy','order bronchoscopy','order cystoscopy','order EGD'] }
+    ];
+
+    // Quick action tabs — always visible
+    html += '<div class="pb-action-bar">';
+    for (var ci = 0; ci < categories.length; ci++) {
+      var cat = categories[ci];
+      html += '<button class="pb-action-tab" onclick="togglePBCategory(' + ci + ', this)" data-cat="' + ci + '">' + cat.icon + ' ' + cat.name + '</button>';
+    }
+    html += '</div>';
+
+    // Expandable chip panels per category
+    html += '<div id="pb-actions-panel" style="display:none;border-top:1px solid var(--border);background:var(--bg);max-height:40vh;overflow-y:auto">';
+    for (var ci = 0; ci < categories.length; ci++) {
+      html += '<div class="pb-cat-panel" id="pb-cat-' + ci + '" style="display:none;padding:10px 16px">';
+      html += '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">';
+      for (var ai = 0; ai < categories[ci].items.length; ai++) {
+        var item = categories[ci].items[ai];
+        if (item.match(/^---.*---$/)) {
+          // Section header
+          var label = item.replace(/---/g, '').trim();
+          if (ai > 0) html += '</div><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px">';
+          html += '<span style="font-size:11px;font-weight:800;color:var(--text-light);text-transform:uppercase;letter-spacing:0.5px;width:100%;margin:4px 0 2px">' + escapeHtml(label) + '</span>';
+        } else {
+          html += '<button class="pb-action-chip" onclick="insertPBAction(\'' + item.replace(/'/g, "\\'") + '\')">' + escapeHtml(item) + '</button>';
+        }
+      }
+      html += '</div></div>';
+    }
+    html += '</div>';
+
+    html += '<div class="chat-input-area">';
+    html += '<textarea id="pb-input" placeholder="Talk to the patient..." rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendPBMessage()}"></textarea>';
+    html += '<button class="btn btn-primary" onclick="sendPBMessage()">Send</button>';
+    html += '<button class="btn btn-warning pb-diagnose-btn" onclick="showDiagnoseModal()">Diagnose</button>';
+    html += '</div>';
+  } else {
+    html += '<div style="padding:16px 20px;border-top:1px solid var(--border);background:var(--bg);display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap">';
+    html += '<span style="color:var(--text-light);font-size:15px">Case resolved.</span>';
+    if (App.dailyPhase === 'pb') {
+      html += '<button class="btn btn-success" onclick="finishCurrentPBCase()">Next Case</button>';
+    } else {
+      html += '<button class="btn btn-primary" onclick="quickNewPBCase()">New Case</button>';
+      html += '<button class="btn btn-outline" onclick="showPatientBotSetup()">Change Settings</button>';
+    }
+    html += '</div>';
+
+    // Auto-load scorecard when case resolves
+    if (!App.pbScorecard && !App.pbScorecardLoading) {
+      App.pbScorecardLoading = true;
+      setTimeout(function() { loadOSCEScorecard(); }, 500);
+    }
+
+    // OSCE Scorecard display
+    if (App.pbScorecardLoading && !App.pbScorecard) {
+      html += '<div style="text-align:center;padding:24px;color:var(--text-light)"><div class="spinner" style="margin:0 auto 12px"></div>Generating OSCE Scorecard...</div>';
+    }
+
+    if (App.pbScorecard) {
+      var sc = App.pbScorecard;
+      var cats = [
+        { key: 'history', label: 'History Taking' },
+        { key: 'exam', label: 'Physical Exam' },
+        { key: 'investigations', label: 'Investigations' },
+        { key: 'diagnosis', label: 'Diagnosis' },
+        { key: 'management', label: 'Management' },
+        { key: 'communication', label: 'Communication' },
+        { key: 'safety', label: 'Patient Safety' }
+      ];
+      var gradeColors = { A: '#2e7d32', B: '#558b2f', C: '#f9a825', D: '#e65100', F: '#c62828' };
+      var gradeColor = gradeColors[sc.grade] || '#666';
+
+      html += '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:16px;margin:16px;padding:28px;box-shadow:0 2px 12px rgba(0,0,0,0.08)">';
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">';
+      html += '<h3 style="margin:0;font-size:20px;font-weight:800">OSCE Scorecard</h3>';
+      html += '<div style="width:64px;height:64px;border-radius:50%;background:' + gradeColor + ';color:white;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;box-shadow:0 2px 8px rgba(0,0,0,0.15)">' + escapeHtml(sc.grade || '?') + '</div>';
+      html += '</div>';
+
+      html += '<div style="margin-bottom:8px;font-size:14px;color:var(--text-light)">Overall: <strong style="color:var(--text);font-size:16px">' + (sc.overall || 0) + '/10</strong></div>';
+
+      for (var sci = 0; sci < cats.length; sci++) {
+        var c = cats[sci];
+        var val = (sc.scores && sc.scores[c.key]) || 0;
+        var pct = val * 10;
+        var barColor = val > 7 ? '#2e7d32' : (val >= 4 ? '#f9a825' : '#c62828');
+        html += '<div style="margin-bottom:12px">';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
+        html += '<span style="font-size:14px;font-weight:600">' + c.label + '</span>';
+        html += '<span style="font-size:14px;font-weight:700;color:' + barColor + '">' + val + '/10</span>';
+        html += '</div>';
+        html += '<div style="background:var(--bg);border-radius:6px;height:10px;overflow:hidden">';
+        html += '<div style="background:' + barColor + ';width:' + pct + '%;height:100%;border-radius:6px;transition:width 0.5s ease"></div>';
+        html += '</div></div>';
+      }
+
+      if (sc.strengths && sc.strengths.length > 0) {
+        html += '<div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">';
+        html += '<h4 style="margin:0 0 8px;font-size:15px;color:#2e7d32">Strengths</h4>';
+        html += '<ul style="margin:0;padding-left:20px;font-size:14px;line-height:1.7">';
+        for (var si = 0; si < sc.strengths.length; si++) html += '<li>' + escapeHtml(sc.strengths[si]) + '</li>';
+        html += '</ul></div>';
+      }
+
+      if (sc.improvements && sc.improvements.length > 0) {
+        html += '<div style="margin-top:16px">';
+        html += '<h4 style="margin:0 0 8px;font-size:15px;color:#e65100">Areas for Improvement</h4>';
+        html += '<ul style="margin:0;padding-left:20px;font-size:14px;line-height:1.7">';
+        for (var ii = 0; ii < sc.improvements.length; ii++) html += '<li>' + escapeHtml(sc.improvements[ii]) + '</li>';
+        html += '</ul></div>';
+      }
+
+      if (sc.missed && sc.missed.length > 0) {
+        html += '<div style="margin-top:16px">';
+        html += '<h4 style="margin:0 0 8px;font-size:15px;color:#c62828">Missed Items</h4>';
+        html += '<ul style="margin:0;padding-left:20px;font-size:14px;line-height:1.7">';
+        for (var mi = 0; mi < sc.missed.length; mi++) html += '<li>' + escapeHtml(sc.missed[mi]) + '</li>';
+        html += '</ul></div>';
+      }
+
+      html += '</div>';
+    }
+  }
+  html += '</div>';
+
+  if (App.pbDiagnosing) {
+    html += '<div class="pb-diag-overlay" onclick="closeDiagnoseModal()">';
+    html += '<div class="pb-diag-modal" onclick="event.stopPropagation()">';
+    html += '<h3>Submit Your Diagnosis</h3>';
+    html += '<p style="color:var(--text-light);font-size:13px;margin:8px 0 16px">What do you think this patient has?</p>';
+    html += '<input type="text" id="pb-diag-input" class="search-bar" placeholder="e.g., Acute appendicitis" autofocus onkeydown="if(event.key===\'Enter\')submitPBDiagnosis()">';
+    html += '<div style="display:flex;gap:8px;margin-top:16px">';
+    html += '<button class="btn btn-primary" onclick="submitPBDiagnosis()" id="pb-diag-submit-btn">Submit</button>';
+    html += '<button class="btn" onclick="closeDiagnoseModal()">Cancel</button>';
+    html += '</div></div></div>';
+  }
+
+  return html;
+}
+
+function formatPBInput(text) {
+  var html = escapeHtml(text);
+  // Format actions in asterisks as italic
+  html = html.replace(/\*(.*?)\*/g, '<em style="opacity:0.85">*$1*</em>');
+  return html;
+}
+
+// =============================================
+// UTILITIES
+// =============================================
+
+// =============================================
+// MEDICAL GLOSSARY / TOOLTIPS
+// =============================================
+
+function setLanguage(lang) {
+  App.glossaryLang = lang;
+  localStorage.setItem('mcc_lang', lang);
+  // Reload glossary if we have one and switching languages
+  if (lang && !App.glossary) {
+    loadGlossary();
+  }
+}
+
+function loadGlossary() {
+  serverCall('getGlossary').then(function(data) {
+    if (!data || data.length === 0) return;
+    App.glossary = {};
+    for (var i = 0; i < data.length; i++) {
+      var term = data[i].Term || data[i].term;
+      if (term) App.glossary[term.toLowerCase()] = data[i];
+    }
+    // Build regex from terms (longest first to match multi-word terms first)
+    var terms = Object.keys(App.glossary).sort(function(a, b) { return b.length - a.length; });
+    var escaped = terms.map(function(t) { return t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); });
+    App.glossaryRegex = new RegExp('\\b(' + escaped.join('|') + ')\\b', 'gi');
+  }).catch(function() {});
+}
+
+function highlightMedTerms(html) {
+  if (!App.glossary || !App.glossaryRegex || !App.glossaryLang) return html;
+  return html.replace(App.glossaryRegex, function(match) {
+    var entry = App.glossary[match.toLowerCase()];
+    if (!entry) return match;
+    return '<span class="med-term" data-term="' + match.toLowerCase() + '" onmouseenter="showMedTooltip(event)" onmouseleave="hideMedTooltip()" onclick="showMedTooltip(event)">' + match + '</span>';
+  });
+}
+
+var _tooltipTimeout = null;
+function showMedTooltip(e) {
+  clearTimeout(_tooltipTimeout);
+  hideMedTooltip();
+  var termKey = e.target.getAttribute('data-term');
+  if (!termKey || !App.glossary[termKey]) return;
+  var entry = App.glossary[termKey];
+  var lang = App.glossaryLang;
+  var rtlLangs = ['fa', 'ar', 'ur'];
+  var isRTL = rtlLangs.indexOf(lang) !== -1;
+
+  var tooltip = document.createElement('div');
+  tooltip.className = 'med-tooltip';
+  tooltip.id = 'med-tooltip-active';
+
+  var catLabel = entry.Category || entry.category || '';
+  var def = entry.Definition || entry.definition || '';
+  var translation = entry[lang] || entry.translation || entry.fa || '';
+
+  var inner = '<div class="med-tooltip-term">' + escapeHtml(entry.Term || entry.term || termKey);
+  if (catLabel) inner += '<span class="med-tooltip-cat">' + escapeHtml(catLabel) + '</span>';
+  inner += '</div>';
+  if (def) inner += '<div class="med-tooltip-def">' + escapeHtml(def) + '</div>';
+  if (translation) inner += '<div class="med-tooltip-translation' + (isRTL ? '' : ' ltr') + '">' + escapeHtml(translation) + '</div>';
+  tooltip.innerHTML = inner;
+
+  document.body.appendChild(tooltip);
+
+  // Position near the term
+  var rect = e.target.getBoundingClientRect();
+  var ttRect = tooltip.getBoundingClientRect();
+  var top = rect.bottom + 8;
+  var left = rect.left;
+
+  // Keep on screen
+  if (top + ttRect.height > window.innerHeight) top = rect.top - ttRect.height - 8;
+  if (left + ttRect.width > window.innerWidth) left = window.innerWidth - ttRect.width - 12;
+  if (left < 12) left = 12;
+
+  tooltip.style.top = top + 'px';
+  tooltip.style.left = left + 'px';
+}
+
+function hideMedTooltip() {
+  _tooltipTimeout = setTimeout(function() {
+    var tt = document.getElementById('med-tooltip-active');
+    if (tt) tt.remove();
+  }, 200);
+}
+
+// =============================================
+// LIBRARY (ebook viewer)
+// =============================================
+
+var LIBRARY_BOOKS = {
+  'toronto-notes': {
+    title: 'Toronto Notes 2025',
+    driveId: null, // Set after upload — or use getLibraryBooks server call
+    icon: '&#x1F4D6;'
+  }
+};
+
+function openBook(bookKey) {
+  // Try to get the book's Drive file ID from server
+  serverCall('getLibraryBook', bookKey).then(function(result) {
+    if (!result || !result.id) {
+      alert('This book hasn\'t been uploaded yet. Upload the PDF to your Google Drive and add it via Dev Panel.');
+      return;
+    }
+    document.getElementById('library-content').style.display = 'none';
+    document.getElementById('library-reader').style.display = '';
+    document.getElementById('library-book-title').textContent = result.title || bookKey;
+    document.getElementById('library-download-btn').href = 'https://drive.google.com/file/d/' + result.id + '/view';
+    document.getElementById('library-iframe').src = 'https://drive.google.com/file/d/' + result.id + '/preview';
+  }).catch(function(e) {
+    alert('Error loading book: ' + (e.message || e));
+  });
+}
+
+function closeBook() {
+  document.getElementById('library-content').style.display = '';
+  document.getElementById('library-reader').style.display = 'none';
+  document.getElementById('library-iframe').src = '';
+}
+
+function escapeHtml(text) {
+  if (!text) return '';
+  return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Escape + highlight medical terms (use instead of escapeHtml for study content)
+function medHtml(text) {
+  return highlightMedTerms(escapeHtml(text));
+}
+
+function formatMarkdown(text) {
+  if (!text) return '';
+  var html = escapeHtml(text);
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+  html = html.replace(/`(.*?)`/g, '<code style="background:#e8e8e8;padding:1px 4px;border-radius:3px;font-size:13px">$1</code>');
+  html = html.replace(/^### (.*$)/gm, '<strong style="font-size:15px;display:block;margin:12px 0 4px">$1</strong>');
+  html = html.replace(/^## (.*$)/gm, '<strong style="font-size:16px;display:block;margin:14px 0 6px">$1</strong>');
+  html = html.replace(/^[•\-] (.*)$/gm, '<span style="display:block;padding-left:16px">&#8226; $1</span>');
+  html = html.replace(/^(\d+)\. (.*)$/gm, '<span style="display:block;padding-left:16px">$1. $2</span>');
+  html = html.replace(/\n/g, '<br>');
+  return html;
+}
+
+function truncate(str, max) { return !str ? '' : str.length > max ? str.substring(0, max) + '...' : str; }
+function removeEl(id) { var el = document.getElementById(id); if (el) el.remove(); }
+
+// =============================================
+// KEYBOARD SHORTCUTS
+// =============================================
+
+document.addEventListener('keydown', function(e) {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
+  if (App.currentPage === 'flashcards' && App.flashcardIndex < (App.flashcards || []).length) {
+    if (e.key === ' ') { e.preventDefault(); flipFlashcard(); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); prevFlashcard(); }
+    if (App.flashcardFlipped) {
+      if (e.key === '1') { e.preventDefault(); rateFlashcard(false); }
+      if (e.key === '2') { e.preventDefault(); rateFlashcard(true); }
+    }
+  }
+
+  if (App.currentPage === 'dontmiss' && App.dmQuizMode && App.dmQuizIndex < (App.dmQuizItems || []).length) {
+    if (e.key === ' ') { e.preventDefault(); if (!App.dmQuizFlipped) flipDmQuizCard(); }
+    if (App.dmQuizFlipped) {
+      if (e.key === '1') { e.preventDefault(); rateDmQuiz(false); }
+      if (e.key === '2') { e.preventDefault(); rateDmQuiz(true); }
+    }
+  }
+
+  if (App.currentPage === 'daily' && App.dailyPhase === 'cards') {
+    if (e.key === ' ') { e.preventDefault(); flipDailyCard(); }
+    if (App.dailyCardFlipped) {
+      if (e.key === '1') { e.preventDefault(); rateDailyCard('missed'); }
+      if (e.key === '2') { e.preventDefault(); rateDailyCard('shaky'); }
+      if (e.key === '3') { e.preventDefault(); rateDailyCard('knew'); }
+    }
+  }
+
+  if (App.currentPage === 'daily' && App.dailyPhase === 'quiz') {
+    if (e.key >= '1' && e.key <= '5') {
+      var opts = ['A', 'B', 'C', 'D', 'E'];
+      var idx = parseInt(e.key) - 1;
+      if (idx < opts.length) selectDailyQuizAnswer(opts[idx]);
+    }
+    if (e.key === 'ArrowRight') { e.preventDefault(); if (App.dailyQuizIndex < App.dailyData.mcqs.length - 1) { App.dailyQuizIndex++; renderDailyQuiz(); } }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); if (App.dailyQuizIndex > 0) { App.dailyQuizIndex--; renderDailyQuiz(); } }
+  }
+
+  if (App.currentPage === 'quiz' && App.quizActive) {
+    if (e.key === 'ArrowLeft') { e.preventDefault(); prevQuizQuestion(); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); nextQuizQuestion(); }
+    if (e.key >= '1' && e.key <= '5') {
+      var opts = ['A', 'B', 'C', 'D', 'E'];
+      var idx = parseInt(e.key) - 1;
+      if (idx < opts.length) selectQuizAnswer(opts[idx]);
+    }
+  }
+});
+
+// =============================================
+// INIT ON LOAD
+// =============================================
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
+</script>

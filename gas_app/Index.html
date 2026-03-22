@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <?!= include('Styles') ?>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- Mobile Header -->
+  <div id="mobile-header">
+    <button id="hamburger" onclick="toggleSidebar()">&#9776;</button>
+    <span class="mobile-title">MCC Master</span>
+  </div>
+
+  <!-- Sidebar -->
+  <nav id="sidebar">
+    <div class="sidebar-header">
+      <h1>MCC Master</h1>
+      <p id="user-email">Loading...</p>
+      <div id="sidebar-level" class="sidebar-level"></div>
+    </div>
+    <ul class="nav-links">
+      <li data-page="dashboard" class="active" onclick="navigateTo('dashboard')">&#x1F4CA; Dashboard</li>
+      <li data-page="daily" onclick="navigateTo('daily')">&#x2B50; Daily Challenge</li>
+
+      <li class="nav-group-label">STUDY</li>
+      <li data-page="flashcards" onclick="navigateTo('flashcards')">&#x1F0CF; Flashcards</li>
+      <li data-page="dontmiss" onclick="navigateTo('dontmiss')">&#x1F4CC; Key Topics</li>
+      <li data-page="notes" onclick="navigateTo('notes')">&#x1F4DD; Notes</li>
+      <li data-page="diagrams" onclick="navigateTo('diagrams')">&#x1F5BC; Diagrams</li>
+
+      <li class="nav-group-label">PRACTICE</li>
+      <li data-page="quiz" onclick="navigateTo('quiz')">&#x1F4CB; Practice Quiz</li>
+      <li data-page="patientbot" onclick="navigateTo('patientbot')">&#x1F3E5; PatientBot</li>
+
+      <li class="nav-group-label">TOOLS</li>
+      <li data-page="search" onclick="navigateTo('search')">&#x1F50D; Search</li>
+      <li data-page="drdata" onclick="navigateTo('drdata')">&#x1F916; Dr. Data</li>
+      <li data-page="library" onclick="navigateTo('library')">&#x1F4DA; Library</li>
+      <li data-page="resources" onclick="navigateTo('resources')">&#x1F4C1; Resources</li>
+
+      <li class="nav-group-label">YOU</li>
+      <li data-page="leaderboard" onclick="navigateTo('leaderboard')">&#x1F3C6; Leaderboard</li>
+      <li data-page="achievements" onclick="navigateTo('achievements')">&#x1F396; Achievements</li>
+
+      <li data-page="devpanel" onclick="navigateTo('devpanel')" id="nav-dev" style="display:none;border-top:1px solid rgba(255,255,255,0.1);margin-top:8px;color:#ff9800">&#x1F6E0; Dev Panel</li>
+    </ul>
+    <div class="sidebar-footer">
+      <select class="sidebar-lang-select" id="lang-select" onchange="setLanguage(this.value)" title="Translation language for medical terms">
+        <option value="">&#x1F310; Translations Off</option>
+        <option value="fa">&#x1F1EE;&#x1F1F7; فارسی (Persian)</option>
+        <option value="ar">&#x1F1F8;&#x1F1E6; العربية (Arabic)</option>
+        <option value="fr">&#x1F1EB;&#x1F1F7; Français (French)</option>
+        <option value="zh">&#x1F1E8;&#x1F1F3; 中文 (Chinese)</option>
+        <option value="hi">&#x1F1EE;&#x1F1F3; हिन्दी (Hindi)</option>
+        <option value="es">&#x1F1EA;&#x1F1F8; Español (Spanish)</option>
+        <option value="pt">&#x1F1E7;&#x1F1F7; Português (Portuguese)</option>
+        <option value="ru">&#x1F1F7;&#x1F1FA; Русский (Russian)</option>
+        <option value="ko">&#x1F1F0;&#x1F1F7; 한국어 (Korean)</option>
+        <option value="ja">&#x1F1EF;&#x1F1F5; 日本語 (Japanese)</option>
+        <option value="de">&#x1F1E9;&#x1F1EA; Deutsch (German)</option>
+        <option value="tr">&#x1F1F9;&#x1F1F7; Türkçe (Turkish)</option>
+        <option value="ur">&#x1F1F5;&#x1F1F0; اردو (Urdu)</option>
+        <option value="tl">&#x1F1F5;&#x1F1ED; Filipino (Tagalog)</option>
+      </select>
+      <button class="dark-mode-toggle" onclick="toggleDarkMode()" id="dark-mode-btn" title="Toggle dark mode" style="margin-top:8px">&#x1F319; Dark Mode</button>
+      <button class="dark-mode-toggle" onclick="switchProfile()" style="margin-top:6px">&#x1F465; Switch Profile</button>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main id="content">
+
+    <!-- DASHBOARD -->
+    <div id="page-dashboard" class="page active">
+      <div class="page-header"><h2>Dashboard</h2></div>
+      <div id="dashboard-content">
+        <div class="loading-overlay"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- DAILY CHALLENGE -->
+    <div id="page-daily" class="page">
+      <div class="page-header"><h2>&#x2B50; Daily Challenge</h2></div>
+      <div id="daily-content">
+        <div class="loading-overlay"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- FLASHCARDS -->
+    <div id="page-flashcards" class="page">
+      <div class="page-header">
+        <h2>Flashcards</h2>
+        <div class="filter-bar">
+          <select class="specialty-select" id="flashcard-specialty" onchange="loadFlashcards(this.value)">
+            <option value="All">All Specialties</option>
+          </select>
+          <label class="toggle-label">
+            <input type="checkbox" id="flashcard-hy-only" onchange="filterHYFlashcards()"> ⭐ Important Only
+          </label>
+        </div>
+      </div>
+      <div id="flashcard-content">
+        <div class="loading-overlay"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- BULLET NOTES -->
+    <div id="page-notes" class="page">
+      <div class="page-header">
+        <h2>Notes</h2>
+        <div class="filter-bar">
+          <select class="specialty-select" id="notes-specialty" onchange="loadBulletNotes(this.value)">
+            <option value="All">All Specialties</option>
+          </select>
+          <input type="text" id="notes-search" class="inline-search" placeholder="Filter notes..." oninput="filterBulletNotes(this.value)">
+          <label class="toggle-label" style="font-size:13px">
+            <input type="checkbox" id="notes-long-form" onchange="toggleNotesForm()"> Long Form
+          </label>
+        </div>
+      </div>
+      <div id="notes-content">
+        <div class="loading-overlay"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- QUIZ -->
+    <div id="page-quiz" class="page">
+      <div class="page-header">
+        <h2>Practice Quiz</h2>
+        <div class="filter-bar">
+          <button class="btn btn-sm btn-primary" id="quiz-tab-new" onclick="showQuizTab('new')">New Quiz</button>
+          <button class="btn btn-sm" id="quiz-tab-history" onclick="showQuizTab('history')">History</button>
+        </div>
+      </div>
+      <div id="quiz-content"></div>
+      <div id="quiz-history-content" style="display:none"></div>
+    </div>
+
+    <!-- KEY TOPICS -->
+    <div id="page-dontmiss" class="page">
+      <div class="page-header">
+        <h2>Key Topics</h2>
+        <div class="filter-bar">
+          <select class="specialty-select" id="dontmiss-specialty" onchange="loadDontMiss(this.value)">
+            <option value="All">All Specialties</option>
+          </select>
+          <input type="text" id="keytopics-search" class="inline-search" placeholder="Search topics..." oninput="filterKeyTopics(this.value)">
+          <button class="btn btn-sm" id="dontmiss-quiz-btn" onclick="toggleDontMissQuiz()">&#x26A1; Quiz Me</button>
+        </div>
+      </div>
+      <div id="dontmiss-content">
+        <div class="loading-overlay"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- SEARCH -->
+    <div id="page-search" class="page">
+      <div class="page-header"><h2>Search</h2></div>
+      <input type="text" id="search-input" class="search-bar" placeholder="Search across all study content..." oninput="handleSearch(this.value)">
+      <div id="search-results">
+        <p class="empty-state">Type at least 2 characters to search across flashcards, notes, questions, and don't miss items.</p>
+      </div>
+    </div>
+
+    <!-- DR. DATA -->
+    <div id="page-drdata" class="page">
+      <div class="page-header">
+        <h2>Dr. Data</h2>
+        <button class="btn btn-sm" onclick="clearDrDataChat()">New Chat</button>
+      </div>
+      <div class="chat-container">
+        <div class="chat-messages" id="drdata-messages">
+          <div class="chat-welcome">
+            <div class="welcome-icon">&#x1F916;</div>
+            <h3>Dr. Data</h3>
+            <p>Your MCCQE Part I tutor. Ask me anything about the exam, clinical topics, or study strategies.</p>
+            <p class="sub">I know your quiz history and weak areas, so I can give personalized advice.</p>
+          </div>
+        </div>
+        <div class="chat-input-area">
+          <textarea id="drdata-input" placeholder="Ask Dr. Data anything..." rows="2" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendDrDataMessage()}"></textarea>
+          <button class="btn btn-primary" onclick="sendDrDataMessage()">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PATIENTBOT -->
+    <div id="page-patientbot" class="page">
+      <div class="page-header">
+        <h2>PatientBot</h2>
+        <div class="filter-bar">
+          <button class="btn btn-sm" id="pb-library-btn" onclick="togglePBLibrary()">&#x1F4DA; Case Library</button>
+        </div>
+      </div>
+      <div id="patientbot-content"></div>
+      <div id="pb-library-content" style="display:none"></div>
+    </div>
+
+    <!-- LEADERBOARD -->
+    <div id="page-leaderboard" class="page">
+      <div class="page-header"><h2>&#x1F3C6; Leaderboard</h2></div>
+      <div id="leaderboard-content">
+        <div class="loading-overlay"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- ACHIEVEMENTS -->
+    <div id="page-achievements" class="page">
+      <div class="page-header"><h2>&#x1F396; Achievements</h2></div>
+      <div id="achievements-content">
+        <div class="loading-overlay"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- DIAGRAMS -->
+    <div id="page-diagrams" class="page">
+      <div class="page-header"><h2>Diagrams</h2></div>
+      <div id="diagrams-content"></div>
+    </div>
+
+    <!-- LIBRARY -->
+    <div id="page-library" class="page">
+      <div class="page-header"><h2>&#x1F4DA; Library</h2></div>
+      <div id="library-content">
+        <div class="resources-grid">
+          <div class="card resource-card library-book" onclick="openBook('toronto-notes')" style="cursor:pointer">
+            <div style="font-size:48px;margin-bottom:12px">&#x1F4D6;</div>
+            <h3>Toronto Notes 2025</h3>
+            <p>The essential MCCQE study reference covering all clinical topics.</p>
+          </div>
+          <div class="card resource-card library-book" onclick="openBook('dsm5')" style="cursor:pointer;opacity:0.5">
+            <div style="font-size:48px;margin-bottom:12px">&#x1F9E0;</div>
+            <h3>DSM-5-TR</h3>
+            <p>Psychiatric classification reference. <em>Coming soon</em></p>
+          </div>
+          <div class="card resource-card library-book" onclick="openBook('grays')" style="cursor:pointer;opacity:0.5">
+            <div style="font-size:48px;margin-bottom:12px">&#x1FAC0;</div>
+            <h3>Gray's Anatomy</h3>
+            <p>Anatomical reference. <em>Coming soon</em></p>
+          </div>
+        </div>
+      </div>
+      <div id="library-reader" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <button class="btn btn-outline" onclick="closeBook()">&#x2190; Back to Library</button>
+          <span id="library-book-title" style="font-weight:700;font-size:18px"></span>
+          <a id="library-download-btn" href="#" target="_blank" class="btn btn-primary btn-sm">Download PDF</a>
+        </div>
+        <iframe id="library-iframe" style="width:100%;height:calc(100vh - 200px);border:1px solid var(--border);border-radius:10px" allowfullscreen></iframe>
+      </div>
+    </div>
+
+    <!-- RESOURCES -->
+    <div id="page-resources" class="page">
+      <div class="page-header"><h2>Resources</h2></div>
+
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px 24px;margin-bottom:24px">
+        <h3 style="margin:0 0 8px;font-size:16px">&#x1F4CB; Exam Format</h3>
+        <p style="margin:0;font-size:14px;color:var(--text-light);line-height:1.6">230 MCQs &bull; 2 sections of 115 &bull; 2h40m each &bull; Score 300-600, pass at 439 &bull; No CDM as of April 2025</p>
+      </div>
+
+      <h3 class="section-title" style="margin-bottom:16px">&#x1F3DB; Official MCC Resources</h3>
+      <div class="resources-grid">
+        <div class="card resource-card">
+          <h3>&#x1F4DD; Official Practice Questions</h3>
+          <p>55 official MCCQE Part I practice questions with answers and rationales.</p>
+          <a href="https://mcc.ca/wp-content/uploads/MCCQE-Part-I-practice-questions-and-answers-2025.pdf" target="_blank" class="btn btn-primary">Download PDF</a>
+        </div>
+        <div class="card resource-card">
+          <h3>&#x1F4CA; Part I Blueprint (SIR)</h3>
+          <p>Content weight percentages per domain. Know where to focus your study time.</p>
+          <a href="https://mcc.ca/wp-content/uploads/SIR-MCCQE-Part-I-2025.pdf" target="_blank" class="btn btn-primary">Download PDF</a>
+        </div>
+        <div class="card resource-card">
+          <h3>&#x1F3AF; MCC Objectives</h3>
+          <p>The complete list of clinical presentations and topics that can appear on the exam.</p>
+          <a href="https://mcc.ca/objectives/" target="_blank" class="btn btn-primary">View Online</a>
+        </div>
+      </div>
+
+      <h3 class="section-title" style="margin:28px 0 16px">&#x1F4DA; Study Resources</h3>
+      <div class="resources-grid">
+        <div class="card resource-card">
+          <h3>&#x1F4D6; Toronto Notes</h3>
+          <p>The #1 Canadian medical reference for MCCQE prep. Covers every topic on the exam.</p>
+          <a href="https://www.torontonotes.ca/" target="_blank" class="btn btn-outline">Visit Site</a>
+        </div>
+        <div class="card resource-card">
+          <h3>&#x1FA7A; UpToDate</h3>
+          <p>Evidence-based clinical decision support. Gold standard for clinical questions.</p>
+          <a href="https://www.uptodate.com/" target="_blank" class="btn btn-outline">Visit Site</a>
+        </div>
+        <div class="card resource-card">
+          <h3>&#x1F9EC; Pathoma</h3>
+          <p>Pathology fundamentals. Dr. Sattar explains disease mechanisms clearly.</p>
+          <a href="https://www.pathoma.com/" target="_blank" class="btn btn-outline">Visit Site</a>
+        </div>
+        <div class="card resource-card">
+          <h3>&#x1F9E0; Sketchy Medical</h3>
+          <p>Visual mnemonics for microbiology, pharmacology, and pathology.</p>
+          <a href="https://www.sketchy.com/" target="_blank" class="btn btn-outline">Visit Site</a>
+        </div>
+        <div class="card resource-card">
+          <h3>&#x1F48A; CPS Drug Reference</h3>
+          <p>Canadian Pharmacists Association drug database. Dosing, interactions, guidelines.</p>
+          <a href="https://www.myrxtx.ca/" target="_blank" class="btn btn-outline">Visit Site</a>
+        </div>
+        <div class="card resource-card">
+          <h3>&#x1F3E5; Canadian Guidelines</h3>
+          <p>Hypertension Canada, Diabetes Canada, CCS guidelines. MCCQE loves Canadian-specific content.</p>
+          <a href="https://guidelines.hypertension.ca/" target="_blank" class="btn btn-outline">Visit Site</a>
+        </div>
+      </div>
+
+      <h3 class="section-title" style="margin:28px 0 16px">&#x1F4F1; Apps &amp; Tools</h3>
+      <div class="resources-grid">
+        <div class="card resource-card">
+          <h3>&#x1F4B1; MDCalc</h3>
+          <p>Clinical calculators and decision tools. Wells score, CHADS2, GCS, and hundreds more.</p>
+          <a href="https://www.mdcalc.com/" target="_blank" class="btn btn-outline">Visit Site</a>
+        </div>
+        <div class="card resource-card">
+          <h3>&#x1F52C; Radiopaedia</h3>
+          <p>Free radiology reference. Learn to read X-rays, CTs, and MRIs with real cases.</p>
+          <a href="https://radiopaedia.org/" target="_blank" class="btn btn-outline">Visit Site</a>
+        </div>
+        <div class="card resource-card">
+          <h3>&#x1F4D3; Amboss</h3>
+          <p>Medical knowledge library with integrated USMLE/MCCQE question bank.</p>
+          <a href="https://www.amboss.com/" target="_blank" class="btn btn-outline">Visit Site</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- DEV PANEL (admin only) -->
+    <div id="page-devpanel" class="page">
+      <div class="page-header"><h2>&#x1F6E0; Dev Panel</h2></div>
+      <div id="devpanel-content"></div>
+    </div>
+
+  </main>
+
+  <!-- Bottom Nav (Mobile) -->
+  <div id="bottom-nav">
+    <button onclick="navigateTo('dashboard')" data-page="dashboard" class="active"><span class="nav-emoji">&#x1F3E0;</span><span>Home</span></button>
+    <button onclick="navigateTo('flashcards')" data-page="flashcards"><span class="nav-emoji">&#x1F4DA;</span><span>Study</span></button>
+    <button onclick="navigateTo('quiz')" data-page="quiz"><span class="nav-emoji">&#x270F;&#xFE0F;</span><span>Practice</span></button>
+    <button onclick="navigateTo('patientbot')" data-page="patientbot"><span class="nav-emoji">&#x1F916;</span><span>PatientBot</span></button>
+    <button onclick="navigateTo('search')" data-page="search"><span class="nav-emoji">&#x1F50D;</span><span>More</span></button>
+  </div>
+</div>
+
+<?!= include('App') ?>
+
+<script>
+// Source protection
+(function(){
+  // Block dev tools shortcuts (F12, Ctrl+Shift+I/J/C, Ctrl+U, Ctrl+S)
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'F12') { e.preventDefault(); return false; }
+    if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j')) { e.preventDefault(); return false; }
+    if (e.ctrlKey && (e.key === 'U' || e.key === 'u')) { e.preventDefault(); return false; }
+    if (e.ctrlKey && (e.key === 'S' || e.key === 's')) { e.preventDefault(); return false; }
+  });
+  // Console warning
+  console.log('%c STOP', 'color:red;font-size:60px;font-weight:bold');
+  console.log('%c This is a protected application. Unauthorized copying or redistribution is prohibited.', 'font-size:16px');
+})();
+</script>
+</body>
+</html>
