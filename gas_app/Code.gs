@@ -1520,6 +1520,13 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
 
   chosenDemo += customSexStr + customAgeStr;
 
+  // Ethnicity + general appearance — clinically relevant for epidemiology and doorway assessment
+  var appearancePrompt = '\nPATIENT ETHNICITY & APPEARANCE:\n' +
+    'You MUST generate a specific ethnicity and a brief "general appearance" (the doorway assessment — what the doctor sees the moment they walk in).\n' +
+    'Include these in the JSON as "ethnicity" (e.g. "South Asian", "Black/Afro-Caribbean", "East Asian", "Indigenous", "White/European", "Middle Eastern", "Latin American", "Mixed") and "appearance" (1 brief sentence describing how the patient LOOKS right now — e.g. "Pale, diaphoretic male clutching his chest", "Well-appearing child sitting on mother\'s lap", "Thin elderly woman in mild respiratory distress", "Agitated young man pacing the room").\n' +
+    'The ethnicity MUST be consistent with the patient name and background. It SHOULD influence disease choice when epidemiologically relevant (e.g. sickle cell in Black patients, Tay-Sachs in Ashkenazi Jewish, Behçet\'s in Middle Eastern, Kawasaki in East Asian children, etc.) — but do NOT force a rare ethnicity-linked diagnosis every time. Most cases should still be common conditions.\n' +
+    'The appearance MUST be consistent with the diagnosis and severity. A patient with a PE should NOT look "well-appearing." A patient with a minor laceration should NOT look "in extremis."\n';
+
   // Difficulty modifier
   var difficultyPrompt = '';
   if (difficulty === 'easy') {
@@ -1540,7 +1547,8 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
   var systemPrompt = 'You are PatientBot, a clinical scenario simulator for MCCQE Part I preparation.\n\n' +
     presentationPrompt +
     chosenDemo + '\n' +
-    'IMPORTANT: The patient name, age, and sex in the JSON MUST match this background.\n' +
+    appearancePrompt + '\n' +
+    'IMPORTANT: The patient name, age, sex, ethnicity, and appearance in the JSON MUST match this background.\n' +
     'USE THIS NAME: ' + getRandomPatientName_() + '. You MUST use this exact name. Do NOT change it.\n\n' +
     difficultyPrompt +
     chosenStyle + '\n\n' +
@@ -1577,7 +1585,7 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
     'FIRST MESSAGE FORMAT (mandatory):\n' +
     'Your very first message MUST start with a JSON block on its own line, then the patient presentation:\n' +
     '```patient\n' +
-    '{"name":"<first name>","age":<number>,"sex":"<M/F/NB>","assigned_sex":"<M/F>","hr":<number>,"bp":"<sys/dia>","rr":<number>,"temp":<number>,"spo2":<number>,"diagnosis":"<the correct diagnosis>"}\n' +
+    '{"name":"<first name>","age":<number>,"sex":"<M/F/NB>","assigned_sex":"<M/F>","ethnicity":"<ethnicity>","appearance":"<1 sentence doorway assessment>","hr":<number>,"bp":"<sys/dia>","rr":<number>,"temp":<number>,"spo2":<number>,"diagnosis":"<the correct diagnosis>"}\n' +
     'Note: Use sex:"NB" ONLY when the patient is non-binary. For NB patients, assigned_sex indicates their birth sex for clinical relevance. For M/F patients, assigned_sex should match sex.\n' +
     '```\n' +
     'CRITICAL CONSISTENCY RULES:\n' +

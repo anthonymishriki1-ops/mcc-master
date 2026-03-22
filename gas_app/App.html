@@ -2703,14 +2703,20 @@ function renderPBChatInner() {
     var bpAlert = (parseInt(bpParts[0]) > 180 || parseInt(bpParts[0]) < 90 || parseInt(bpParts[1]) > 120 || parseInt(bpParts[1]) < 60);
     var tempAlert = (v.temp > 38.5 || v.temp < 35.5);
 
-    // Dot matrix wristband — patient ID only
+    // Dot matrix wristband — patient ID + appearance
     html += '<div class="pb-patient-bar pb-dotmatrix">';
     html += '<div class="pb-dm-holes pb-dm-holes-left"></div>';
     html += '<div class="pb-dm-content">';
     html += '<div class="pb-dm-row">';
     html += '<span class="pb-dm-field"><span class="pb-dm-label">PT:</span> ' + escapeHtml(p.name || '?').toUpperCase() + '</span>';
     html += '<span class="pb-dm-field"><span class="pb-dm-label">AGE/SEX:</span> ' + (p.age || '?') + '/' + sexLabel + '</span>';
+    if (p.ethnicity) html += '<span class="pb-dm-field"><span class="pb-dm-label">ETH:</span> ' + escapeHtml(p.ethnicity).toUpperCase() + '</span>';
     html += '</div>';
+    if (p.appearance) {
+      html += '<div class="pb-dm-row">';
+      html += '<span class="pb-dm-field pb-dm-appearance"><span class="pb-dm-label">GEN APPEARANCE:</span> ' + escapeHtml(p.appearance).toUpperCase() + '</span>';
+      html += '</div>';
+    }
     html += '</div>';
     html += '<div class="pb-dm-holes pb-dm-holes-right"></div>';
     html += '</div>';
@@ -2958,7 +2964,7 @@ function renderPBChatInner() {
       var gradeColors = { A: '#2e7d32', B: '#558b2f', C: '#f9a825', D: '#e65100', F: '#c62828' };
       var gradeColor = gradeColors[sc.grade] || '#666';
 
-      html += '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:16px;margin:16px;padding:28px;box-shadow:0 2px 12px rgba(0,0,0,0.08)">';
+      html += '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:16px;margin:16px;padding:28px;box-shadow:0 2px 12px rgba(0,0,0,0.08);max-height:70vh;overflow-y:auto;-webkit-overflow-scrolling:touch">';
       html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">';
       html += '<h3 style="margin:0;font-size:20px;font-weight:800">OSCE Scorecard</h3>';
       html += '<div style="width:64px;height:64px;border-radius:50%;background:' + gradeColor + ';color:white;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;box-shadow:0 2px 8px rgba(0,0,0,0.15)">' + escapeHtml(sc.grade || '?') + '</div>';
