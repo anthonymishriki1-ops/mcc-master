@@ -2697,7 +2697,7 @@ function renderPBChatInner() {
     var v = App.pbVitals || p; // live vitals from consequence engine, or initial
     html += '<div class="pb-patient-bar">';
     html += '<span class="pb-info-chip"><strong>' + escapeHtml(p.name || '?') + '</strong></span>';
-    html += '<span class="pb-info-chip">' + (p.age || '?') + (p.sex === 'F' ? 'F' : 'M') + '</span>';
+    html += '<span class="pb-info-chip">' + (p.age || '?') + (p.sex === 'NB' ? 'NB' : (p.sex === 'F' ? 'F' : 'M')) + '</span>';
     var hrColor = (v.hr > 120 || v.hr < 50) ? 'color:var(--error);font-weight:700' : '';
     var spo2Color = (v.spo2 < 92) ? 'color:var(--error);font-weight:700' : '';
     var rrColor = (v.rr > 24 || v.rr < 8) ? 'color:var(--error);font-weight:700' : '';
