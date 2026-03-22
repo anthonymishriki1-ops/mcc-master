@@ -76,6 +76,55 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
+// --- REST API for external frontends (GitHub Pages) ---
+function doPost(e) {
+  try {
+    var payload = JSON.parse(e.postData.contents);
+    var fn = payload.fn;
+    var args = payload.args || [];
+
+    // Whitelist of callable functions
+    var allowed = {
+      'getCurrentUser': getCurrentUser,
+      'getSpecialties': getSpecialties,
+      'getFlashcards': getFlashcards,
+      'getBulletNotes': getBulletNotes,
+      'getMCQQuiz': getMCQQuiz,
+      'getTopicsForSpecialty': getTopicsForSpecialty,
+      'getDontMiss': getDontMiss,
+      'getGlossary': getGlossary,
+      'getImageChapters': getImageChapters,
+      'getChapterImages': getChapterImages,
+      'askDrData': askDrData,
+      'startPatientBotCase': startPatientBotCase,
+      'sendPatientBotMessage': sendPatientBotMessage,
+      'submitDiagnosis': submitDiagnosis,
+      'debriefPatientBot': debriefPatientBot,
+      'saveQuizResult': saveQuizResult,
+      'saveProgress': saveProgress,
+      'analyzeQuizResults': analyzeQuizResults,
+      'saveCardRating': saveCardRating,
+      'getUserStats': getUserStats,
+      'getUserQuizHistory': getUserQuizHistory,
+      'getLeaderboard': getLeaderboard,
+      'getDailyChallenge': getDailyChallenge,
+      'getGlossaryStatus': getGlossaryStatus
+    };
+
+    if (!allowed[fn]) {
+      return ContentService.createTextOutput(JSON.stringify({ error: 'Function not allowed: ' + fn }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var result = allowed[fn].apply(null, args);
+    return ContentService.createTextOutput(JSON.stringify({ result: result }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ error: err.message || String(err) }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
 // Admin email for dev mode
 var ADMIN_EMAIL = 'anthony.mishriki1@gmail.com';
 
@@ -1771,6 +1820,63 @@ function sendPatientBotMessage(caseId, message, history) {
 
   var caseData = JSON.parse(caseJson);
 
+  // ========== CLINICAL PREREQ TRACKING ==========
+  // Track what access/equipment the student has established
+  if (!caseData.access) caseData.access = {};
+  var msgLower = message.toLowerCase();
+
+  // Detect IV access establishment
+  if (/start.*(iv|intravenous|peripheral|line)|insert.*(iv|line|cannula)|peripheral iv|iv access|ultrasound.guided iv/i.test(message)) {
+    caseData.access.iv = true;
+    CacheService.getUserCache().put('pb_' + caseId, JSON.stringify(caseData), 7200);
+  }
+  if (/insert.*(central|subclavian|ij|femoral|triple.lumen)|central line|central venous/i.test(message)) {
+    caseData.access.centralLine = true;
+    caseData.access.iv = true; // central line = IV access
+    CacheService.getUserCache().put('pb_' + caseId, JSON.stringify(caseData), 7200);
+  }
+  if (/insert.*io|intraosseous/i.test(message)) {
+    caseData.access.io = true;
+    caseData.access.iv = true; // IO = can push IV meds
+    CacheService.getUserCache().put('pb_' + caseId, JSON.stringify(caseData), 7200);
+  }
+  if (/intubat|rapid sequence|rsi|insert.*ett/i.test(message)) {
+    caseData.access.intubated = true;
+    CacheService.getUserCache().put('pb_' + caseId, JSON.stringify(caseData), 7200);
+  }
+  if (/foley|urinary catheter/i.test(message)) {
+    caseData.access.foley = true;
+    CacheService.getUserCache().put('pb_' + caseId, JSON.stringify(caseData), 7200);
+  }
+  if (/cardiac monitor|telemetry|attach monitor|put on monitor/i.test(message)) {
+    caseData.access.monitor = true;
+    CacheService.getUserCache().put('pb_' + caseId, JSON.stringify(caseData), 7200);
+  }
+
+  // Check for IV prereq violations — IV/IO meds without IV access
+  var isIVMed = /\biv\b|iv push|iv bolus|iv drip|iv infusion|iv over|intravenous/i.test(message) && !/(start|insert|place|establish|get|put in|set up).*(iv|line|access)/i.test(message);
+  if (isIVMed && !caseData.access.iv) {
+    return {
+      response: '',
+      consequence: 'No IV access established. You need to start an IV, central line, or IO before administering IV medications.',
+      severity: 'prereq',
+      blocked: true,
+      vitals: caseData.vitals || null
+    };
+  }
+
+  // Check for drip without IV
+  var isDrip = /drip|infusion|infuse|hang |run .*bag/i.test(message) && !/(start|insert|place|establish).*(iv|line)/i.test(message);
+  if (isDrip && !caseData.access.iv) {
+    return {
+      response: '',
+      consequence: 'No IV access established. Start an IV line before hanging drips or infusions.',
+      severity: 'prereq',
+      blocked: true,
+      vitals: caseData.vitals || null
+    };
+  }
+
   // Detect if message contains a clinical action or test order
   // --- ACTIONS: procedures, treatments, interventions ---
   var actionKeywords = [
@@ -1884,6 +1990,7 @@ function sendPatientBotMessage(caseId, message, history) {
 
   // --- CALL 1: Clinical Engine (evaluate action consequences OR return test results) ---
   var consequence = null;
+  var severity = null;
   var vitalChanges = null;
   var testResults = null;
   if (isAction || isTest) {
@@ -1939,6 +2046,7 @@ function sendPatientBotMessage(caseId, message, history) {
         }
 
         consequence = parsed.consequence;
+        severity = parsed.severity || null;
         vitalChanges = parsed.vitalChanges;
 
         // Check if action was fatal
@@ -2012,6 +2120,7 @@ function sendPatientBotMessage(caseId, message, history) {
   return {
     response: response.trim(),
     consequence: consequence,
+    severity: severity,
     testResults: testResults,
     vitals: caseData.vitals || null
   };
