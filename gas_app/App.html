@@ -2517,13 +2517,17 @@ function togglePBCategory(catIndex, btn) {
 }
 
 function insertPBAction(text) {
-  var input = document.getElementById('pb-input');
-  if (input) { input.value = text; input.focus(); }
+  // Ensure text has asterisks for actions
+  if (text.indexOf('*') === -1) text = '*' + text + '*';
   // Close panel
   var panel = document.getElementById('pb-actions-panel');
   if (panel) panel.style.display = 'none';
   var allTabs = document.querySelectorAll('.pb-action-tab');
   for (var i = 0; i < allTabs.length; i++) allTabs[i].classList.remove('active');
+  // Auto-send
+  var input = document.getElementById('pb-input');
+  if (input) { input.value = text; }
+  sendPBMessage();
 }
 
 function showDiagnoseModal() { App.pbDiagnosing = true; var fn = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat; fn(); }
@@ -2745,6 +2749,12 @@ function renderPBChatInner() {
       // Consequence message from clinical engine
       html += '<div class="chat-message system" style="background:rgba(255,152,0,0.1);border-left:3px solid var(--warning);color:var(--text);font-size:13px;font-style:italic;padding:8px 14px;margin:4px 20px;border-radius:6px">';
       html += '&#x26A0;&#xFE0F; ' + escapeHtml(m.content);
+      html += '</div>';
+    } else if (m.role === 'user' && m.content && m.content.match(/^\*.*\*$/)) {
+      // Action message — render as a distinct action banner
+      var actionText = m.content.replace(/^\*|\*$/g, '').trim();
+      html += '<div class="chat-action-banner">';
+      html += '&#x1F6E0;&#xFE0F; <strong>' + escapeHtml(actionText) + '</strong>';
       html += '</div>';
     } else {
       html += '<div class="chat-message ' + m.role + '">';
