@@ -2856,9 +2856,11 @@ function init() {
     return;
   }
 
-  // Load profile
-  if (ALLOWED_NAMES.indexOf(savedProfile) !== -1) {
-    var displayName = savedProfile.charAt(0).toUpperCase() + savedProfile.slice(1);
+  // Load profile (whitelisted name or guest)
+  var isKnownName = ALLOWED_NAMES.indexOf(savedProfile) !== -1;
+  var isGuestProfile = savedProfile.indexOf('guest_') === 0;
+  if (isKnownName || isGuestProfile) {
+    var displayName = localStorage.getItem('mcc_last_display') || (savedProfile.charAt(0).toUpperCase() + savedProfile.slice(1));
     App.guestId = 'profile_' + savedProfile;
     App.user = { name: displayName, email: displayName, isGuest: true };
     document.getElementById('user-email').textContent = displayName;

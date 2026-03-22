@@ -265,16 +265,22 @@ function showProfileSelect() {
 
   // Check if there's a last-known name for returning user flow
   var lastName = localStorage.getItem('mcc_last_name');
+  var lastDisplay = localStorage.getItem('mcc_last_display');
 
   var html = '<div style="max-width:400px;margin:0 auto;padding:60px 20px;text-align:center">';
   html += '<h1 style="font-size:28px;font-weight:900;color:var(--primary);margin-bottom:8px">MCC Master</h1>';
 
   if (lastName) {
     // Returning user — welcome back flow
-    var displayName = lastName.charAt(0).toUpperCase() + lastName.slice(1);
+    var displayName = lastDisplay || (lastName.charAt(0).toUpperCase() + lastName.slice(1));
+    var isGuest = lastName.indexOf('guest_') === 0;
     html += '<p style="color:var(--text-light);margin-bottom:32px;font-size:17px">Welcome back!</p>';
     html += '<div style="font-size:24px;font-weight:800;color:var(--text);margin-bottom:32px">Hello ' + escapeHtml(displayName) + '</div>';
-    html += '<button class="btn btn-primary" onclick="loginAsProfile(\'' + escapeHtml(lastName) + '\')" style="width:100%;padding:16px;font-size:17px;font-weight:700;margin-bottom:14px">Enter MCC Master</button>';
+    if (isGuest) {
+      html += '<button class="btn btn-primary" onclick="loginAsReturningGuest(\'' + escapeHtml(lastName) + '\',\'' + escapeHtml(displayName) + '\')" style="width:100%;padding:16px;font-size:17px;font-weight:700;margin-bottom:14px">Enter MCC Master</button>';
+    } else {
+      html += '<button class="btn btn-primary" onclick="loginAsProfile(\'' + escapeHtml(lastName) + '\')" style="width:100%;padding:16px;font-size:17px;font-weight:700;margin-bottom:14px">Enter MCC Master</button>';
+    }
     html += '<button class="btn btn-outline" onclick="showNameEntry()" style="width:100%;padding:12px;font-size:14px;color:var(--text-light)">I\'m not ' + escapeHtml(displayName) + '</button>';
   } else {
     // First time — name entry
@@ -306,6 +312,36 @@ function showNameEntry() {
   showProfileSelect();
 }
 
+function getNextGuestNumber() {
+  var num = parseInt(localStorage.getItem('mcc_guest_counter') || '0') + 1;
+  localStorage.setItem('mcc_guest_counter', String(num));
+  return num;
+}
+
+function loginAsGuest() {
+  var guestNum = getNextGuestNumber();
+  var guestId = 'guest_' + guestNum;
+  var displayName = 'Guest ' + guestNum;
+  localStorage.setItem('mcc_profile', guestId);
+  localStorage.setItem('mcc_last_name', guestId);
+  localStorage.setItem('mcc_last_display', displayName);
+  App.guestId = 'profile_' + guestId;
+  App.user = { name: displayName, email: displayName, isGuest: true };
+
+  var sidebar = document.getElementById('sidebar');
+  var bottomNav = document.getElementById('bottom-nav');
+  var content = document.getElementById('content');
+  if (sidebar) sidebar.style.display = '';
+  if (bottomNav) bottomNav.style.display = '';
+  content.style.marginLeft = '';
+
+  var profilePage = document.getElementById('profile-select-page');
+  if (profilePage) profilePage.remove();
+
+  document.getElementById('user-email').textContent = displayName;
+  finishInit();
+}
+
 function confirmNameEntry() {
   var input = document.getElementById('profile-name-input');
   var errorEl = document.getElementById('profile-name-error');
@@ -314,16 +350,36 @@ function confirmNameEntry() {
   if (!name) { input.style.borderColor = 'var(--error)'; errorEl.textContent = 'Please enter your name'; return; }
   if (ALLOWED_NAMES.indexOf(name) === -1) {
     input.style.borderColor = 'var(--error)';
-    errorEl.textContent = 'Name not recognized. Contact Tony for access.';
+    errorEl.innerHTML = 'User not found. <a href="#" onclick="event.preventDefault();loginAsGuest()" style="color:var(--primary);text-decoration:underline;font-weight:600">Sign in as guest?</a>';
     return;
   }
   loginAsProfile(name);
+}
+
+function loginAsReturningGuest(guestId, displayName) {
+  localStorage.setItem('mcc_profile', guestId);
+  App.guestId = 'profile_' + guestId;
+  App.user = { name: displayName, email: displayName, isGuest: true };
+
+  var sidebar = document.getElementById('sidebar');
+  var bottomNav = document.getElementById('bottom-nav');
+  var content = document.getElementById('content');
+  if (sidebar) sidebar.style.display = '';
+  if (bottomNav) bottomNav.style.display = '';
+  content.style.marginLeft = '';
+
+  var profilePage = document.getElementById('profile-select-page');
+  if (profilePage) profilePage.remove();
+
+  document.getElementById('user-email').textContent = displayName;
+  finishInit();
 }
 
 function loginAsProfile(profileId) {
   var displayName = profileId.charAt(0).toUpperCase() + profileId.slice(1);
   localStorage.setItem('mcc_profile', profileId);
   localStorage.setItem('mcc_last_name', profileId);
+  localStorage.setItem('mcc_last_display', displayName);
   App.guestId = 'profile_' + profileId;
   App.user = { name: displayName, email: displayName, isGuest: true };
 
@@ -436,9 +492,11 @@ function init() {
     return;
   }
 
-  // Load profile
-  if (ALLOWED_NAMES.indexOf(savedProfile) !== -1) {
-    var displayName = savedProfile.charAt(0).toUpperCase() + savedProfile.slice(1);
+  // Load profile (whitelisted name or guest)
+  var isKnownName = ALLOWED_NAMES.indexOf(savedProfile) !== -1;
+  var isGuestProfile = savedProfile.indexOf('guest_') === 0;
+  if (isKnownName || isGuestProfile) {
+    var displayName = localStorage.getItem('mcc_last_display') || (savedProfile.charAt(0).toUpperCase() + savedProfile.slice(1));
     App.guestId = 'profile_' + savedProfile;
     App.user = { name: displayName, email: displayName, isGuest: true };
     document.getElementById('user-email').textContent = displayName;
