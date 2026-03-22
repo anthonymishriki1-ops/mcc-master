@@ -76,6 +76,55 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
+// --- REST API for external frontends (GitHub Pages) ---
+function doPost(e) {
+  try {
+    var payload = JSON.parse(e.postData.contents);
+    var fn = payload.fn;
+    var args = payload.args || [];
+
+    // Whitelist of callable functions
+    var allowed = {
+      'getCurrentUser': getCurrentUser,
+      'getSpecialties': getSpecialties,
+      'getFlashcards': getFlashcards,
+      'getBulletNotes': getBulletNotes,
+      'getMCQQuiz': getMCQQuiz,
+      'getTopicsForSpecialty': getTopicsForSpecialty,
+      'getDontMiss': getDontMiss,
+      'getGlossary': getGlossary,
+      'getImageChapters': getImageChapters,
+      'getChapterImages': getChapterImages,
+      'askDrData': askDrData,
+      'startPatientBotCase': startPatientBotCase,
+      'sendPatientBotMessage': sendPatientBotMessage,
+      'submitDiagnosis': submitDiagnosis,
+      'debriefPatientBot': debriefPatientBot,
+      'saveQuizResult': saveQuizResult,
+      'saveProgress': saveProgress,
+      'analyzeQuizResults': analyzeQuizResults,
+      'saveCardRating': saveCardRating,
+      'getUserStats': getUserStats,
+      'getUserQuizHistory': getUserQuizHistory,
+      'getLeaderboard': getLeaderboard,
+      'getDailyChallenge': getDailyChallenge,
+      'getGlossaryStatus': getGlossaryStatus
+    };
+
+    if (!allowed[fn]) {
+      return ContentService.createTextOutput(JSON.stringify({ error: 'Function not allowed: ' + fn }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var result = allowed[fn].apply(null, args);
+    return ContentService.createTextOutput(JSON.stringify({ result: result }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ error: err.message || String(err) }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
 // Admin email for dev mode
 var ADMIN_EMAIL = 'anthony.mishriki1@gmail.com';
 
@@ -192,34 +241,38 @@ function ensureUserDataSheet_() {
   return sheet;
 }
 
-function getRandomPatientName_() {
-  var names = [
-    // South Asian
-    'Aarav','Ananya','Rohan','Meera','Vikram','Sunita','Arjun','Kavya','Nikhil','Pooja','Ravi','Lakshmi','Sanjay','Deepa','Harsh','Nisha',
-    // East Asian
-    'Wei','Mei Lin','Jun','Yuki','Hiro','Sakura','Min-jun','Ji-yeon','Tao','Xiao','Kenji','Aiko','Soo-jin','Bao','Linh','Thanh',
-    // Middle Eastern / Persian
-    'Yasmin','Farhad','Nasreen','Omid','Leila','Dariush','Shirin','Reza','Parisa','Kamran','Soraya','Bahram','Nazanin','Saeed','Maryam','Hassan',
-    // Arabic
-    'Omar','Fatima','Khalid','Noor','Tariq','Amira','Youssef','Hana','Ibrahim','Layla','Mustafa','Zahra','Samir','Dina','Bassam','Rania',
-    // African
-    'Kwame','Ama','Kofi','Adwoa','Chidi','Ngozi','Tendai','Aisha','Emeka','Folake','Jabari','Zuri','Sekou','Amara','Olu','Chiamaka',
-    // Latin American
-    'Santiago','Valentina','Mateo','Camila','Diego','Isabella','Alejandro','Lucia','Carlos','Gabriela','Fernando','Sofia','Ricardo','Daniela','Miguel','Elena',
-    // European
-    'Liam','Emma','Noah','Olivia','Ethan','Ava','Lucas','Mia','Oliver','Charlotte','James','Amelia','Benjamin','Harper','Jack','Ella',
-    // Eastern European
-    'Dmitri','Natasha','Andrei','Katya','Pavel','Irina','Sergei','Olga','Viktor','Tatiana','Nikolai','Anya','Bogdan','Mila','Aleksei','Daria',
-    // Indigenous
-    'Koda','Winona','Takoda','Aiyana','Chayton','Nizhoni','Ahanu','Aponi','Istas','Kaya','Mika','Nuna','Sequoia','Tallulah','Wren','Dakota',
-    // Caribbean
-    'Marlon','Keisha','Dwayne','Shanice','Leroy','Tamika','Winston','Sade','Errol','Nadine','Delroy','Patrice','Byron','Shelly','Neville','Claudette',
-    // French Canadian
-    'Jean-Luc','Genevieve','Mathieu','Elodie','Francois','Amelie','Sebastien','Celeste','Antoine','Juliette','Maxime','Margaux','Olivier','Colette','Tristan','Simone',
-    // Turkish / Central Asian
-    'Emre','Elif','Berk','Defne','Kerem','Zeynep','Cem','Ece','Murat','Aylin','Burak','Selin','Deniz','Pelin','Kaan','Naz'
-  ];
-  return names[Math.floor(Math.random() * names.length)];
+// Name bank organized by ethnicity AND gender for proper correlation
+var PATIENT_NAMES_ = {
+  'South Asian':     { M: ['Aarav','Rohan','Vikram','Arjun','Nikhil','Ravi','Sanjay','Harsh','Aditya','Pranav'], F: ['Ananya','Meera','Sunita','Kavya','Pooja','Lakshmi','Deepa','Nisha','Priya','Anika'], N: ['Kiran','Preet','Jaya','Samar','Noor'] },
+  'East Asian':      { M: ['Wei','Jun','Hiro','Min-jun','Tao','Kenji','Bao','Takeshi','Hyun','Akira'], F: ['Mei Lin','Yuki','Sakura','Ji-yeon','Xiao','Aiko','Soo-jin','Linh','Hana','Minji'], N: ['Thanh','Ren','Sora','Kai','Yue'] },
+  'Middle Eastern':  { M: ['Farhad','Omid','Dariush','Reza','Kamran','Bahram','Saeed','Hassan','Amir','Navid'], F: ['Yasmin','Nasreen','Leila','Shirin','Parisa','Soraya','Nazanin','Maryam','Golnaz','Setareh'], N: ['Dara','Shayan','Kian'] },
+  'Arabic':          { M: ['Omar','Khalid','Tariq','Youssef','Ibrahim','Mustafa','Samir','Bassam','Ahmed','Jamal'], F: ['Fatima','Noor','Amira','Hana','Layla','Zahra','Dina','Rania','Salma','Lina'], N: ['Nour','Salam'] },
+  'Black/African':   { M: ['Kwame','Kofi','Chidi','Emeka','Jabari','Sekou','Olu','Tendai','Dayo','Amadi'], F: ['Ama','Adwoa','Ngozi','Aisha','Folake','Zuri','Amara','Chiamaka','Nneka','Adaeze'], N: ['Akili','Imani'] },
+  'Latin American':  { M: ['Santiago','Mateo','Diego','Alejandro','Carlos','Fernando','Ricardo','Miguel','Luis','Andres'], F: ['Valentina','Camila','Isabella','Lucia','Gabriela','Sofia','Daniela','Elena','Mariana','Paula'], N: ['Angel','Cruz','Guadalupe'] },
+  'White/European':  { M: ['Liam','Noah','Ethan','Lucas','Oliver','James','Benjamin','Jack','Ryan','Connor'], F: ['Emma','Olivia','Ava','Mia','Charlotte','Amelia','Harper','Ella','Grace','Chloe'], N: ['Alex','Jordan','Taylor','Riley'] },
+  'Eastern European':{ M: ['Dmitri','Andrei','Pavel','Sergei','Viktor','Nikolai','Bogdan','Aleksei','Oleg','Ivan'], F: ['Natasha','Katya','Irina','Olga','Tatiana','Anya','Mila','Daria','Svetlana','Yulia'], N: ['Sasha','Zhenya'] },
+  'Indigenous':      { M: ['Koda','Takoda','Chayton','Ahanu','Mika','Dakota','River','Hunter','Chase','Jesse'], F: ['Winona','Aiyana','Nizhoni','Aponi','Kaya','Nuna','Tallulah','Sequoia','Wren','Sage'], N: ['Dakota','River','Sky','Sage'] },
+  'Caribbean':       { M: ['Marlon','Dwayne','Leroy','Winston','Errol','Delroy','Byron','Neville','Andre','Desmond'], F: ['Keisha','Shanice','Tamika','Sade','Nadine','Patrice','Shelly','Claudette','Monique','Simone'], N: ['Courtney','Kelly'] },
+  'French Canadian': { M: ['Jean-Luc','Mathieu','Francois','Sebastien','Antoine','Maxime','Olivier','Tristan','Gabriel','Philippe'], F: ['Genevieve','Elodie','Amelie','Celeste','Juliette','Margaux','Colette','Simone','Camille','Isabelle'], N: ['Dominique','Claude','Camille'] },
+  'Turkish':         { M: ['Emre','Berk','Kerem','Cem','Murat','Burak','Kaan','Yusuf','Baris','Alp'], F: ['Elif','Defne','Zeynep','Ece','Aylin','Selin','Pelin','Naz','Ceren','Ebru'], N: ['Deniz','Evren'] }
+};
+
+function getRandomPatientName_(sexOverride) {
+  // Pick a random ethnicity
+  var ethnicities = Object.keys(PATIENT_NAMES_);
+  var ethnicity = ethnicities[Math.floor(Math.random() * ethnicities.length)];
+
+  // Determine gender bucket
+  var genderKey = 'M';
+  if (sexOverride === 'female' || sexOverride === 'trans_f') genderKey = 'F';
+  else if (sexOverride === 'male' || sexOverride === 'trans_m') genderKey = 'M';
+  else if (sexOverride === 'nonbinary') genderKey = 'N';
+  else genderKey = Math.random() < 0.5 ? 'M' : 'F'; // random
+
+  var nameList = PATIENT_NAMES_[ethnicity][genderKey] || PATIENT_NAMES_[ethnicity]['M'];
+  var name = nameList[Math.floor(Math.random() * nameList.length)];
+
+  return { name: name, ethnicity: ethnicity, gender: genderKey };
 }
 
 function shuffleArray_(arr) {
@@ -1503,22 +1556,75 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
   ];
   var chosenDemo = demographics[Math.floor(Math.random() * demographics.length)];
 
-  // Apply sex/age custom overrides
+  // ============================
+  // PATIENT IDENTITY GENERATION (name + sex + ethnicity + age — all correlated, locked before AI sees it)
+  // ============================
+
+  // Generate correlated name/ethnicity/gender
+  var patientIdentity = getRandomPatientName_(customOpts.sex || null);
+  var patientName = patientIdentity.name;
+  var patientEthnicity = patientIdentity.ethnicity;
+  var patientGenderKey = patientIdentity.gender; // M, F, or N
+
+  // Build the sex/gender enforcement string
+  var sexJsonVal = patientGenderKey === 'N' ? 'NB' : patientGenderKey;
   var customSexStr = '';
-  if (customOpts.sex === 'male') customSexStr = '\nIMPORTANT: The patient MUST be MALE (cis male). Choose a male name and use he/him pronouns.';
-  else if (customOpts.sex === 'female') customSexStr = '\nIMPORTANT: The patient MUST be FEMALE (cis female). Choose a female name and use she/her pronouns.';
-  else if (customOpts.sex === 'nonbinary') customSexStr = '\nIMPORTANT: The patient is NON-BINARY. They use they/them pronouns. If asked about sex, they may clarify their assigned sex at birth for medical relevance but identify as non-binary. The student should use correct pronouns — if they misgender the patient, the patient should gently correct them. Name should be gender-neutral.';
-  else if (customOpts.sex === 'trans_m') customSexStr = '\nIMPORTANT: The patient is a TRANSGENDER MAN (assigned female at birth, identifies as male). Uses he/him pronouns. May or may not be on testosterone. Has relevant anatomy (uterus, ovaries) that could be medically significant depending on the case. If asked about sex, he may say "I\'m trans" or mention his assigned sex if medically relevant. The student should use correct pronouns and be respectful.';
-  else if (customOpts.sex === 'trans_f') customSexStr = '\nIMPORTANT: The patient is a TRANSGENDER WOMAN (assigned male at birth, identifies as female). Uses she/her pronouns. May or may not be on HRT (estrogen). Has relevant anatomy (prostate) that could be medically significant. If asked about sex, she may say "I\'m trans" or mention her assigned sex if medically relevant. The student should use correct pronouns and be respectful.';
+  var pronounStr = '';
+  if (customOpts.sex === 'male' || (!customOpts.sex && patientGenderKey === 'M')) {
+    customSexStr = 'LOCKED SEX: MALE (cis male). Use he/him pronouns. The JSON sex field MUST be "M".';
+    pronounStr = 'he/him';
+    sexJsonVal = 'M';
+  } else if (customOpts.sex === 'female' || (!customOpts.sex && patientGenderKey === 'F')) {
+    customSexStr = 'LOCKED SEX: FEMALE (cis female). Use she/her pronouns. The JSON sex field MUST be "F".';
+    pronounStr = 'she/her';
+    sexJsonVal = 'F';
+  } else if (customOpts.sex === 'nonbinary') {
+    customSexStr = 'LOCKED SEX: NON-BINARY. Use they/them pronouns. Set sex to "NB" in the JSON. You MUST also set assigned_sex to "M" or "F" (pick one) for clinical relevance (e.g. prostate if AMAB, uterus/ovaries if AFAB). If asked about sex, they say "I\'m non-binary — I was assigned [male/female] at birth if that matters medically." If the student misgenders them, gently correct.';
+    pronounStr = 'they/them';
+    sexJsonVal = 'NB';
+  } else if (customOpts.sex === 'trans_m') {
+    customSexStr = 'LOCKED SEX: TRANSGENDER MAN (assigned female at birth, identifies as male). Use he/him pronouns. JSON sex MUST be "M", assigned_sex MUST be "F". Has relevant anatomy (uterus, ovaries). May or may not be on testosterone. If asked about sex, he may say "I\'m trans" or mention assigned sex if medically relevant.';
+    pronounStr = 'he/him';
+    sexJsonVal = 'M';
+  } else if (customOpts.sex === 'trans_f') {
+    customSexStr = 'LOCKED SEX: TRANSGENDER WOMAN (assigned male at birth, identifies as female). Use she/her pronouns. JSON sex MUST be "F", assigned_sex MUST be "M". Has relevant anatomy (prostate). May or may not be on HRT. If asked about sex, she may say "I\'m trans" or mention assigned sex if medically relevant.';
+    pronounStr = 'she/her';
+    sexJsonVal = 'F';
+  }
 
+  // Build the age enforcement string
   var customAgeStr = '';
-  if (customOpts.age === 'child') customAgeStr = '\nIMPORTANT: The patient MUST be a CHILD (2-12 years old). A parent brings them in and is the primary historian.';
-  else if (customOpts.age === 'young') customAgeStr = '\nIMPORTANT: The patient MUST be a YOUNG ADULT (18-30 years old).';
-  else if (customOpts.age === 'middle') customAgeStr = '\nIMPORTANT: The patient MUST be MIDDLE-AGED (30-60 years old).';
-  else if (customOpts.age === 'elderly') customAgeStr = '\nIMPORTANT: The patient MUST be ELDERLY (60+ years old).';
-  else if (customOpts.age === 'pediatric') customAgeStr = '\nIMPORTANT: The patient MUST be a PEDIATRIC patient (newborn to 17). A parent is present and may be the primary historian.';
+  if (customOpts.age === 'child') customAgeStr = 'LOCKED AGE: CHILD (2-12 years old). A parent brings them in and is the primary historian. The JSON age MUST be between 2 and 12.';
+  else if (customOpts.age === 'young') customAgeStr = 'LOCKED AGE: YOUNG ADULT (18-30 years old). The JSON age MUST be between 18 and 30.';
+  else if (customOpts.age === 'middle') customAgeStr = 'LOCKED AGE: MIDDLE-AGED (30-60 years old). The JSON age MUST be between 30 and 60.';
+  else if (customOpts.age === 'elderly') customAgeStr = 'LOCKED AGE: ELDERLY (60+ years old). The JSON age MUST be 60 or above.';
+  else if (customOpts.age === 'pediatric') customAgeStr = 'LOCKED AGE: PEDIATRIC (newborn to 17). A parent is present and may be the primary historian. The JSON age MUST be 0-17.';
 
-  chosenDemo += customSexStr + customAgeStr;
+  // Filter demographics by gender — no "pregnant woman" for male patients, etc.
+  var genderFilteredDemos = demographics.filter(function(d) {
+    if (patientGenderKey === 'M') return d.indexOf('Pregnant woman') === -1 && d.indexOf('Single mother') === -1;
+    if (patientGenderKey === 'F') return d.indexOf('tough guy') === -1;
+    return true;
+  });
+  if (genderFilteredDemos.length > 0) chosenDemo = genderFilteredDemos[Math.floor(Math.random() * genderFilteredDemos.length)];
+
+  // Build the locked identity block — this is NON-NEGOTIABLE for the AI
+  var identityBlock = '\n\n========== LOCKED PATIENT IDENTITY (DO NOT CHANGE ANY OF THESE) ==========\n' +
+    'LOCKED NAME: ' + patientName + '. The JSON "name" field MUST be exactly "' + patientName + '". Do NOT pick a different name.\n' +
+    'LOCKED ETHNICITY: ' + patientEthnicity + '. The JSON "ethnicity" field MUST be exactly "' + patientEthnicity + '". Do NOT change the ethnicity.\n' +
+    customSexStr + '\n' +
+    (customAgeStr ? customAgeStr + '\n' : '') +
+    'These fields are PRE-DETERMINED by the system. You have ZERO creative liberty over name, sex, or ethnicity. They are already set. Your job is to create the clinical scenario, vitals, diagnosis, and appearance — nothing else about the patient\'s identity.\n' +
+    '==========================================================================\n';
+
+  chosenDemo += identityBlock;
+
+  // Appearance prompt — ethnicity is already locked, just need the doorway assessment
+  var appearancePrompt = '\nPATIENT APPEARANCE (DOORWAY ASSESSMENT):\n' +
+    'Generate a brief "general appearance" — what the doctor sees the moment they walk in.\n' +
+    'Include this in the JSON as "appearance" (1 brief sentence, e.g. "Pale, diaphoretic male clutching his chest", "Well-appearing child sitting on mother\'s lap", "Thin elderly woman in mild respiratory distress", "Agitated young man pacing the room").\n' +
+    'The ethnicity (' + patientEthnicity + ') SHOULD influence disease choice when epidemiologically relevant (e.g. sickle cell in Black patients, Tay-Sachs in Ashkenazi Jewish, Behçet\'s in Middle Eastern, Kawasaki in East Asian children) — but do NOT force rare ethnicity-linked diagnoses every time. Most cases should still be common conditions.\n' +
+    'The appearance MUST be consistent with the diagnosis and severity. A patient with a PE should NOT look "well-appearing." A patient with a minor laceration should NOT look "in extremis."\n';
 
   // Difficulty modifier
   var difficultyPrompt = '';
@@ -1540,8 +1646,8 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
   var systemPrompt = 'You are PatientBot, a clinical scenario simulator for MCCQE Part I preparation.\n\n' +
     presentationPrompt +
     chosenDemo + '\n' +
-    'IMPORTANT: The patient name, age, and sex in the JSON MUST match this background.\n' +
-    'USE THIS NAME: ' + getRandomPatientName_() + '. You MUST use this exact name. Do NOT change it.\n\n' +
+    appearancePrompt + '\n' +
+    'The patient identity (name, sex, ethnicity) is ALREADY LOCKED above. Do NOT override it.\n\n' +
     difficultyPrompt +
     chosenStyle + '\n\n' +
     (chosenDemeanor ? chosenDemeanor + '\n\n' : '') +
@@ -1577,12 +1683,19 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
     'FIRST MESSAGE FORMAT (mandatory):\n' +
     'Your very first message MUST start with a JSON block on its own line, then the patient presentation:\n' +
     '```patient\n' +
-    '{"name":"<first name>","age":<number>,"sex":"<M/F>","hr":<number>,"bp":"<sys/dia>","rr":<number>,"temp":<number>,"spo2":<number>,"diagnosis":"<the correct diagnosis>"}\n' +
+    '{"name":"' + patientName + '","age":<number>,"sex":"' + sexJsonVal + '","assigned_sex":"<M/F>","ethnicity":"' + patientEthnicity + '","appearance":"<1 sentence doorway assessment>","hr":<number>,"bp":"<sys/dia>","rr":<number>,"temp":<number>,"spo2":<number>,"diagnosis":"<the correct diagnosis>"}\n' +
     '```\n' +
+    'MANDATORY JSON FIELDS — THESE ARE PRE-FILLED AND MUST NOT BE CHANGED:\n' +
+    '- "name" MUST be exactly "' + patientName + '" — do NOT substitute, shorten, or modify this name\n' +
+    '- "sex" MUST be exactly "' + sexJsonVal + '"\n' +
+    '- "ethnicity" MUST be exactly "' + patientEthnicity + '"\n' +
+    '- "assigned_sex" should match sex for cis patients, or be set to birth sex for trans/NB patients\n' +
+    'YOU FILL IN: age (must match any age constraint above), appearance, vitals (hr/bp/rr/temp/spo2), and diagnosis.\n\n' +
     'CRITICAL CONSISTENCY RULES:\n' +
     '1. The diagnosis in the JSON MUST match the clinical scenario you present. Every detail you give (symptoms, history, medications, timeline) must be consistent with that exact diagnosis. If the diagnosis is "opioid overdose" then the patient took opioids, not acetaminophen. If it\'s "appendicitis" then the pain is in the right lower quadrant, not the chest. NEVER contradict the diagnosis you wrote in the JSON.\n' +
-    '2. YOU ARE the patient whose name, age, and sex are in the JSON. If your JSON says name:"Amir" age:14 sex:"M", then YOU are Amir, a 14-year-old boy. NEVER claim to be someone else. NEVER invent other characters. If the doctor asks "what\'s your name?" you say YOUR name from the JSON. If they call you a wrong name, correct them with YOUR real name. Your identity is LOCKED to the JSON.\n' +
-    '3. If a parent/guardian brought you in (because you are a child), the PARENT is not the patient — YOU are. The parent can speak, but you are always Amir (or whatever name you chose). Never confuse yourself with the parent.\n\n' +
+    '2. YOU ARE ' + patientName + '. Your name, sex, and ethnicity are LOCKED. If the doctor asks your name, you say "' + patientName + '." If they call you a wrong name, correct them. NEVER claim to be someone else. NEVER invent other characters.\n' +
+    '3. If a parent/guardian brought you in (because you are a child), the PARENT is not the patient — YOU are. The parent can speak, but you are always ' + patientName + '. Never confuse yourself with the parent.\n' +
+    '4. Your sex/gender is LOCKED. Do NOT switch pronouns, do NOT change your sex mid-conversation. ' + (pronounStr ? 'Use ' + pronounStr + ' pronouns consistently.' : '') + '\n\n' +
     'Then on the next line, begin the patient encounter in character with ONLY the chief complaint.\n' +
     'The chief complaint should be ONE main symptom in 1-2 short sentences. Example: "Hey doc, I\'ve been feeling really crummy this past week. Just can\'t shake this fever."\n' +
     'Do NOT mention more than one symptom in the opening. Let the student ask follow-up questions to discover the rest.\n' +
@@ -1690,11 +1803,11 @@ function submitDiagnosis(caseId, userDiagnosis, correctDiagnosis, history) {
     }
   } catch (e) {}
 
-  // Fallback: simple string matching
+  // Fallback: simple string matching (do NOT reveal the diagnosis)
   var norm = function(s) { return s.toLowerCase().replace(/[^a-z0-9]/g, ''); };
   var isCorrect = norm(correctDiagnosis).indexOf(norm(userDiagnosis)) !== -1 ||
                   norm(userDiagnosis).indexOf(norm(correctDiagnosis)) !== -1;
-  var fb = isCorrect ? 'Correct!' : 'The correct diagnosis was ' + correctDiagnosis + '.';
+  var fb = isCorrect ? 'Correct!' : 'That\'s not the diagnosis for this presentation.';
   if (!isCorrect && isCheatMode) fb += ' The answer was literally on your screen!';
   return { correct: isCorrect, partial: false, score: isCorrect ? 100 : 0, feedback: fb, cheatMode: isCheatMode };
 }
@@ -1706,6 +1819,63 @@ function sendPatientBotMessage(caseId, message, history) {
   }
 
   var caseData = JSON.parse(caseJson);
+
+  // ========== CLINICAL PREREQ TRACKING ==========
+  // Track what access/equipment the student has established
+  if (!caseData.access) caseData.access = {};
+  var msgLower = message.toLowerCase();
+
+  // Detect IV access establishment
+  if (/start.*(iv|intravenous|peripheral|line)|insert.*(iv|line|cannula)|peripheral iv|iv access|ultrasound.guided iv/i.test(message)) {
+    caseData.access.iv = true;
+    CacheService.getUserCache().put('pb_' + caseId, JSON.stringify(caseData), 7200);
+  }
+  if (/insert.*(central|subclavian|ij|femoral|triple.lumen)|central line|central venous/i.test(message)) {
+    caseData.access.centralLine = true;
+    caseData.access.iv = true; // central line = IV access
+    CacheService.getUserCache().put('pb_' + caseId, JSON.stringify(caseData), 7200);
+  }
+  if (/insert.*io|intraosseous/i.test(message)) {
+    caseData.access.io = true;
+    caseData.access.iv = true; // IO = can push IV meds
+    CacheService.getUserCache().put('pb_' + caseId, JSON.stringify(caseData), 7200);
+  }
+  if (/intubat|rapid sequence|rsi|insert.*ett/i.test(message)) {
+    caseData.access.intubated = true;
+    CacheService.getUserCache().put('pb_' + caseId, JSON.stringify(caseData), 7200);
+  }
+  if (/foley|urinary catheter/i.test(message)) {
+    caseData.access.foley = true;
+    CacheService.getUserCache().put('pb_' + caseId, JSON.stringify(caseData), 7200);
+  }
+  if (/cardiac monitor|telemetry|attach monitor|put on monitor/i.test(message)) {
+    caseData.access.monitor = true;
+    CacheService.getUserCache().put('pb_' + caseId, JSON.stringify(caseData), 7200);
+  }
+
+  // Check for IV prereq violations — IV/IO meds without IV access
+  var isIVMed = /\biv\b|iv push|iv bolus|iv drip|iv infusion|iv over|intravenous/i.test(message) && !/(start|insert|place|establish|get|put in|set up).*(iv|line|access)/i.test(message);
+  if (isIVMed && !caseData.access.iv) {
+    return {
+      response: '',
+      consequence: 'No IV access established. You need to start an IV, central line, or IO before administering IV medications.',
+      severity: 'prereq',
+      blocked: true,
+      vitals: caseData.vitals || null
+    };
+  }
+
+  // Check for drip without IV
+  var isDrip = /drip|infusion|infuse|hang |run .*bag/i.test(message) && !/(start|insert|place|establish).*(iv|line)/i.test(message);
+  if (isDrip && !caseData.access.iv) {
+    return {
+      response: '',
+      consequence: 'No IV access established. Start an IV line before hanging drips or infusions.',
+      severity: 'prereq',
+      blocked: true,
+      vitals: caseData.vitals || null
+    };
+  }
 
   // Detect if message contains a clinical action or test order
   // --- ACTIONS: procedures, treatments, interventions ---
@@ -1820,6 +1990,7 @@ function sendPatientBotMessage(caseId, message, history) {
 
   // --- CALL 1: Clinical Engine (evaluate action consequences OR return test results) ---
   var consequence = null;
+  var severity = null;
   var vitalChanges = null;
   var testResults = null;
   if (isAction || isTest) {
@@ -1845,7 +2016,12 @@ function sendPatientBotMessage(caseId, message, history) {
         'GOOD examples: "Standard assessment procedure performed", "Medication administered, monitoring for effect", "Vital signs being monitored"\n' +
         'BAD examples (NEVER DO THIS): "Helps determine opioid effect", "Guides naloxone dosing", "Appropriate for endocarditis"\n' +
         'The consequence must NEVER hint at, reference, or name any diagnosis, drug class relevance, or clinical reasoning. Just describe what physically happens.\n\n' +
-        'FATAL guidelines: ONLY fatal for guaranteed-death actions (headshot, lethal injection, massive exsanguination). Wrong meds = "caution" or "dangerous", not fatal. Non-vital gunshots = dangerous but survivable. Fear alone cannot kill.\n\n' +
+        'FATAL guidelines:\n' +
+        '- Fatal for: guaranteed-death actions (headshot, lethal injection, massive exsanguination), AND iatrogenic drug kills (e.g. massive potassium IV push causing cardiac arrest, succinylcholine without ventilation causing asphyxiation, massive insulin without glucose correction causing fatal hypoglycemia, rapid undiluted potassium bolus, 10x dose errors on critical drugs like epinephrine/insulin/opioids).\n' +
+        '- "dangerous" (not fatal) for: wrong drug at normal doses, contraindicated meds (e.g. beta-blocker in asthma), moderate dose errors, non-vital gunshots.\n' +
+        '- "caution" for: suboptimal choices, minor dose issues, slightly wrong drug class.\n' +
+        '- Fear/panic alone cannot kill. The patient must have a physiological mechanism of death.\n' +
+        '- If vitals would realistically reach zero (HR 0, SpO2 0) from the action, mark it fatal.\n\n' +
         'Respond with ONLY a JSON object:\n' +
         '{"appropriate": true/false, "consequence": "<1 sentence clinical consequence WITHOUT naming the diagnosis>", ' +
         '"vitalChanges": {"hr": <delta>, "bp_sys": <delta>, "rr": <delta>, "spo2": <delta>}, ' +
@@ -1870,6 +2046,7 @@ function sendPatientBotMessage(caseId, message, history) {
         }
 
         consequence = parsed.consequence;
+        severity = parsed.severity || null;
         vitalChanges = parsed.vitalChanges;
 
         // Check if action was fatal
@@ -1883,13 +2060,24 @@ function sendPatientBotMessage(caseId, message, history) {
           };
         }
 
-        // Update cached vitals
-        if (vitalChanges && currentVitals.hr) {
-          currentVitals.hr = Math.max(30, Math.min(200, (currentVitals.hr || 80) + (vitalChanges.hr || 0)));
-          currentVitals.spo2 = Math.max(50, Math.min(100, (currentVitals.spo2 || 98) + (vitalChanges.spo2 || 0)));
-          currentVitals.rr = Math.max(4, Math.min(50, (currentVitals.rr || 16) + (vitalChanges.rr || 0)));
+        // Update cached vitals — allow coding (HR/RR/SpO2 can reach 0 for dangerous/fatal actions)
+        if (vitalChanges && currentVitals.hr !== undefined) {
+          currentVitals.hr = Math.max(0, Math.min(220, (currentVitals.hr || 80) + (vitalChanges.hr || 0)));
+          currentVitals.spo2 = Math.max(0, Math.min(100, (currentVitals.spo2 || 98) + (vitalChanges.spo2 || 0)));
+          currentVitals.rr = Math.max(0, Math.min(50, (currentVitals.rr || 16) + (vitalChanges.rr || 0)));
           caseData.vitals = currentVitals;
           CacheService.getUserCache().put('pb_' + caseId, JSON.stringify(caseData), 7200);
+
+          // Auto-fatal if vitals crash to incompatible-with-life
+          if (currentVitals.hr === 0 || currentVitals.spo2 === 0) {
+            return {
+              response: '',
+              consequence: parsed.consequence || 'Patient has coded.',
+              fatal: true,
+              causeOfDeath: parsed.causeOfDeath || 'Cardiopulmonary arrest secondary to iatrogenic cause.',
+              vitals: { hr: 0, bp: '0/0', rr: 0, temp: currentVitals.temp, spo2: 0 }
+            };
+          }
         }
       }
     } catch(e) {
@@ -1932,6 +2120,7 @@ function sendPatientBotMessage(caseId, message, history) {
   return {
     response: response.trim(),
     consequence: consequence,
+    severity: severity,
     testResults: testResults,
     vitals: caseData.vitals || null
   };
@@ -2043,7 +2232,13 @@ function generateCaseDebrief(caseId, history) {
     '   - Didn\'t harm the patient with wrong meds/procedures\n' +
     '   - ABC approach if emergency\n\n' +
     'TRANSCRIPT:\n' + transcript + '\n\n' +
-    'Be HARSH but fair — this is a licensing exam, not participation marks. Real students regularly score 4-6.\n\n' +
+    'Be HARSH but fair — this is a licensing exam, not participation marks. Real students regularly score 4-6 per domain.\n\n' +
+    'GRADE BOUNDARIES (you MUST follow these based on the average of all 7 domain scores):\n' +
+    '- A: average 8.0-10.0 (Outstanding — thorough in every domain)\n' +
+    '- B: average 6.5-7.9 (Good — solid performance with minor gaps)\n' +
+    '- C: average 5.0-6.4 (Adequate — passes but significant areas to improve)\n' +
+    '- D: average 3.5-4.9 (Below expectations — would likely fail the OSCE station)\n' +
+    '- F: average 0-3.4 (Fail — critical deficiencies, patient safety concerns)\n\n' +
     'Return ONLY JSON:\n' +
     '{"scores": {"history": N, "exam": N, "investigations": N, "diagnosis": N, "management": N, "communication": N, "safety": N}, ' +
     '"overall": N, "grade": "A/B/C/D/F", ' +
@@ -2056,7 +2251,19 @@ function generateCaseDebrief(caseId, history) {
     var response = callAnthropicModel_('claude-sonnet-4-20250514', prompt, [{ role: 'user', content: 'Score this encounter.' }]);
     var jsonMatch = response.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
+      var result = JSON.parse(jsonMatch[0]);
+      // Enforce grade from actual scores to prevent AI inconsistency
+      if (result.scores) {
+        var s = result.scores;
+        var avg = ((s.history || 0) + (s.exam || 0) + (s.investigations || 0) + (s.diagnosis || 0) + (s.management || 0) + (s.communication || 0) + (s.safety || 0)) / 7;
+        result.overall = Math.round(avg * 10) / 10;
+        if (avg >= 8.0) result.grade = 'A';
+        else if (avg >= 6.5) result.grade = 'B';
+        else if (avg >= 5.0) result.grade = 'C';
+        else if (avg >= 3.5) result.grade = 'D';
+        else result.grade = 'F';
+      }
+      return result;
     }
   } catch(e) {}
 
