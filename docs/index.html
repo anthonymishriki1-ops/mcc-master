@@ -2769,6 +2769,7 @@ function serverCall(funcName) {
 
 function switchProfile() {
   localStorage.removeItem('mcc_profile');
+  localStorage.removeItem('mcc_last_name');
   showProfileSelect();
 }
 
@@ -2856,11 +2857,11 @@ function init() {
   }
 
   // Load profile
-  var profile = PROFILES.find(function(p) { return p.id === savedProfile; });
-  if (profile) {
+  if (ALLOWED_NAMES.indexOf(savedProfile) !== -1) {
+    var displayName = savedProfile.charAt(0).toUpperCase() + savedProfile.slice(1);
     App.guestId = 'profile_' + savedProfile;
-    App.user = { name: profile.name, email: profile.name, isGuest: true };
-    document.getElementById('user-email').textContent = profile.name;
+    App.user = { name: displayName, email: displayName, isGuest: true };
+    document.getElementById('user-email').textContent = displayName;
   } else {
     App.guestId = getGuestId();
     App.user = { name: 'Guest', email: 'Guest', isGuest: true };

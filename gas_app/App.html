@@ -245,13 +245,7 @@ function serverCall(funcName) {
 // INIT
 // =============================================
 
-var PROFILES = [
-  { id: 'tony', name: 'Tony' },
-  { id: 'roxanna', name: 'Roxanna' },
-  { id: 'soroosh', name: 'Soroosh' },
-  { id: 'amin', name: 'Amin' },
-  { id: 'noha', name: 'Noha' }
-];
+var ALLOWED_NAMES = ['tony','roxanna','soroosh','amin','noha','said','sarah'];
 
 function getGuestId() {
   var profile = localStorage.getItem('mcc_profile');
@@ -269,18 +263,26 @@ function showProfileSelect() {
   if (bottomNav) bottomNav.style.display = 'none';
   content.style.marginLeft = '0';
 
+  // Check if there's a last-known name for returning user flow
+  var lastName = localStorage.getItem('mcc_last_name');
+
   var html = '<div style="max-width:400px;margin:0 auto;padding:60px 20px;text-align:center">';
   html += '<h1 style="font-size:28px;font-weight:900;color:var(--primary);margin-bottom:8px">MCC Master</h1>';
-  html += '<p style="color:var(--text-light);margin-bottom:32px;font-size:15px">Select your profile</p>';
 
-  html += '<select id="profile-dropdown" class="specialty-select" style="width:100%;padding:14px 16px;font-size:16px;font-weight:600;border-radius:12px;margin-bottom:20px;cursor:pointer">';
-  html += '<option value="">Choose your name...</option>';
-  for (var i = 0; i < PROFILES.length; i++) {
-    html += '<option value="' + PROFILES[i].id + '">' + PROFILES[i].name + '</option>';
+  if (lastName) {
+    // Returning user — welcome back flow
+    var displayName = lastName.charAt(0).toUpperCase() + lastName.slice(1);
+    html += '<p style="color:var(--text-light);margin-bottom:32px;font-size:17px">Welcome back!</p>';
+    html += '<div style="font-size:24px;font-weight:800;color:var(--text);margin-bottom:32px">Hello ' + escapeHtml(displayName) + '</div>';
+    html += '<button class="btn btn-primary" onclick="loginAsProfile(\'' + escapeHtml(lastName) + '\')" style="width:100%;padding:16px;font-size:17px;font-weight:700;margin-bottom:14px">Enter MCC Master</button>';
+    html += '<button class="btn btn-outline" onclick="showNameEntry()" style="width:100%;padding:12px;font-size:14px;color:var(--text-light)">I\'m not ' + escapeHtml(displayName) + '</button>';
+  } else {
+    // First time — name entry
+    html += '<p style="color:var(--text-light);margin-bottom:32px;font-size:15px">Enter your name to get started</p>';
+    html += '<input type="text" id="profile-name-input" placeholder="Your first name" autocomplete="off" style="width:100%;padding:14px 16px;font-size:16px;font-weight:600;border-radius:12px;border:2px solid var(--border);background:var(--card-bg);color:var(--text);margin-bottom:8px;text-align:center;box-sizing:border-box" onkeydown="if(event.key===\'Enter\')confirmNameEntry()">';
+    html += '<div id="profile-name-error" style="color:var(--error);font-size:13px;margin-bottom:16px;min-height:20px"></div>';
+    html += '<button class="btn btn-primary" onclick="confirmNameEntry()" style="width:100%;padding:14px;font-size:16px;font-weight:700">Start Studying</button>';
   }
-  html += '</select>';
-
-  html += '<button class="btn btn-primary" onclick="confirmProfileSelect()" style="width:100%;padding:14px;font-size:16px;font-weight:700">Start Studying</button>';
   html += '</div>';
 
   document.querySelectorAll('.page').forEach(function(pg) { pg.classList.remove('active'); });
@@ -292,20 +294,38 @@ function showProfileSelect() {
   }
   profilePage.innerHTML = html;
   profilePage.style.display = 'block';
+
+  // Auto-focus name input if present
+  var nameInput = document.getElementById('profile-name-input');
+  if (nameInput) setTimeout(function() { nameInput.focus(); }, 100);
 }
 
-function confirmProfileSelect() {
-  var sel = document.getElementById('profile-dropdown');
-  var profileId = sel ? sel.value : '';
-  if (!profileId) { sel.style.borderColor = 'var(--error)'; return; }
-  loginAsProfile(profileId);
+function showNameEntry() {
+  localStorage.removeItem('mcc_last_name');
+  localStorage.removeItem('mcc_profile');
+  showProfileSelect();
+}
+
+function confirmNameEntry() {
+  var input = document.getElementById('profile-name-input');
+  var errorEl = document.getElementById('profile-name-error');
+  if (!input) return;
+  var name = input.value.trim().toLowerCase();
+  if (!name) { input.style.borderColor = 'var(--error)'; errorEl.textContent = 'Please enter your name'; return; }
+  if (ALLOWED_NAMES.indexOf(name) === -1) {
+    input.style.borderColor = 'var(--error)';
+    errorEl.textContent = 'Name not recognized. Contact Tony for access.';
+    return;
+  }
+  loginAsProfile(name);
 }
 
 function loginAsProfile(profileId) {
-  var profile = PROFILES.find(function(p) { return p.id === profileId; });
+  var displayName = profileId.charAt(0).toUpperCase() + profileId.slice(1);
   localStorage.setItem('mcc_profile', profileId);
+  localStorage.setItem('mcc_last_name', profileId);
   App.guestId = 'profile_' + profileId;
-  App.user = { name: profile.name, email: profile.name, isGuest: true };
+  App.user = { name: displayName, email: displayName, isGuest: true };
 
   var sidebar = document.getElementById('sidebar');
   var bottomNav = document.getElementById('bottom-nav');
@@ -317,7 +337,7 @@ function loginAsProfile(profileId) {
   var profilePage = document.getElementById('profile-select-page');
   if (profilePage) profilePage.remove();
 
-  document.getElementById('user-email').textContent = profile.name;
+  document.getElementById('user-email').textContent = displayName;
   finishInit();
 
   // Show tutorial on first login
@@ -329,6 +349,7 @@ function loginAsProfile(profileId) {
 
 function switchProfile() {
   localStorage.removeItem('mcc_profile');
+  localStorage.removeItem('mcc_last_name');
   showProfileSelect();
 }
 
@@ -416,11 +437,11 @@ function init() {
   }
 
   // Load profile
-  var profile = PROFILES.find(function(p) { return p.id === savedProfile; });
-  if (profile) {
+  if (ALLOWED_NAMES.indexOf(savedProfile) !== -1) {
+    var displayName = savedProfile.charAt(0).toUpperCase() + savedProfile.slice(1);
     App.guestId = 'profile_' + savedProfile;
-    App.user = { name: profile.name, email: profile.name, isGuest: true };
-    document.getElementById('user-email').textContent = profile.name;
+    App.user = { name: displayName, email: displayName, isGuest: true };
+    document.getElementById('user-email').textContent = displayName;
   } else {
     App.guestId = getGuestId();
     App.user = { name: 'Guest', email: 'Guest', isGuest: true };
