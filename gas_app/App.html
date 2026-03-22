@@ -2695,17 +2695,26 @@ function renderPBChatInner() {
   // Patient info bar (sticky) — uses live vitals if available
   if (p) {
     var v = App.pbVitals || p; // live vitals from consequence engine, or initial
-    html += '<div class="pb-patient-bar">';
-    html += '<span class="pb-info-chip"><strong>' + escapeHtml(p.name || '?') + '</strong></span>';
-    html += '<span class="pb-info-chip">' + (p.age || '?') + (p.sex === 'NB' ? 'NB' : (p.sex === 'F' ? 'F' : 'M')) + '</span>';
-    var hrColor = (v.hr > 120 || v.hr < 50) ? 'color:var(--error);font-weight:700' : '';
-    var spo2Color = (v.spo2 < 92) ? 'color:var(--error);font-weight:700' : '';
-    var rrColor = (v.rr > 24 || v.rr < 8) ? 'color:var(--error);font-weight:700' : '';
-    html += '<span class="pb-info-chip" style="' + hrColor + '">HR ' + (v.hr || '?') + '</span>';
-    html += '<span class="pb-info-chip">BP ' + (v.bp || '?') + '</span>';
-    html += '<span class="pb-info-chip" style="' + rrColor + '">RR ' + (v.rr || '?') + '</span>';
-    html += '<span class="pb-info-chip">T ' + (v.temp || '?') + '&deg;C</span>';
-    html += '<span class="pb-info-chip" style="' + spo2Color + '">SpO2 ' + (v.spo2 || '?') + '%</span>';
+    var sexLabel = p.sex === 'NB' ? 'NB' : (p.sex === 'F' ? 'F' : 'M');
+    var hrAlert = (v.hr > 120 || v.hr < 50);
+    var spo2Alert = (v.spo2 < 92);
+    var rrAlert = (v.rr > 24 || v.rr < 8);
+    html += '<div class="pb-patient-bar pb-dotmatrix">';
+    html += '<div class="pb-dm-holes pb-dm-holes-left"></div>';
+    html += '<div class="pb-dm-content">';
+    html += '<div class="pb-dm-row">';
+    html += '<span class="pb-dm-field"><span class="pb-dm-label">PT:</span> ' + escapeHtml(p.name || '?').toUpperCase() + '</span>';
+    html += '<span class="pb-dm-field"><span class="pb-dm-label">AGE/SEX:</span> ' + (p.age || '?') + '/' + sexLabel + '</span>';
+    html += '</div>';
+    html += '<div class="pb-dm-row">';
+    html += '<span class="pb-dm-field' + (hrAlert ? ' pb-dm-alert' : '') + '"><span class="pb-dm-label">HR:</span> ' + (v.hr || '?') + '</span>';
+    html += '<span class="pb-dm-field"><span class="pb-dm-label">BP:</span> ' + (v.bp || '?') + '</span>';
+    html += '<span class="pb-dm-field' + (rrAlert ? ' pb-dm-alert' : '') + '"><span class="pb-dm-label">RR:</span> ' + (v.rr || '?') + '</span>';
+    html += '<span class="pb-dm-field"><span class="pb-dm-label">T:</span> ' + (v.temp || '?') + 'C</span>';
+    html += '<span class="pb-dm-field' + (spo2Alert ? ' pb-dm-alert' : '') + '"><span class="pb-dm-label">SpO2:</span> ' + (v.spo2 || '?') + '%</span>';
+    html += '</div>';
+    html += '</div>';
+    html += '<div class="pb-dm-holes pb-dm-holes-right"></div>';
     html += '</div>';
   }
 
