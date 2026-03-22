@@ -2751,7 +2751,7 @@ function toggleDarkMode() {
 function serverCall(funcName) {
   var args = Array.prototype.slice.call(arguments, 1);
   // Use Netlify Function when served over HTTP(S), fallback to GAS for file:// access
-  var GAS_API = 'https://script.google.com/macros/s/AKfycbwiWFvnhP4nEHzHnNXIJoap33t-Es_RAJLWYn3RJwRcKGzQJG5kI3eB-Wk139V0sfhHT6/exec';
+  var GAS_API = 'https://script.google.com/macros/s/AKfycbyr4fykFUygDTJlJigbdtvms6NNTC0Ywxg48banF_buFbK9VEptCYvYRuF4Evw6nOH7/exec';
   var isHosted = window.location.protocol === 'https:' || window.location.protocol === 'http:';
   var API_URL = isHosted ? '/.netlify/functions/api' : GAS_API;
   return fetch(API_URL, {
