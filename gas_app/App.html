@@ -2517,7 +2517,7 @@ function triggerPBDebrief() {
 
 function quickNewPBCase() {
   App.pbCurrentCase = 0; App.pbCaseScores = []; App.pbTotalCases = 1;
-  App.pbVitals = null;
+  App.pbVitals = null; App.pbMRN = null;
   startNextPBCase();
 }
 
@@ -2699,6 +2699,11 @@ function renderPBChatInner() {
     var hrAlert = (v.hr > 120 || v.hr < 50);
     var spo2Alert = (v.spo2 < 92);
     var rrAlert = (v.rr > 24 || v.rr < 8);
+    var bpParts = (v.bp || '?/?').split('/');
+    var bpAlert = (parseInt(bpParts[0]) > 180 || parseInt(bpParts[0]) < 90 || parseInt(bpParts[1]) > 120 || parseInt(bpParts[1]) < 60);
+    var tempAlert = (v.temp > 38.5 || v.temp < 35.5);
+
+    // Dot matrix wristband — patient ID only
     html += '<div class="pb-patient-bar pb-dotmatrix">';
     html += '<div class="pb-dm-holes pb-dm-holes-left"></div>';
     html += '<div class="pb-dm-content">';
@@ -2706,16 +2711,39 @@ function renderPBChatInner() {
     html += '<span class="pb-dm-field"><span class="pb-dm-label">PT:</span> ' + escapeHtml(p.name || '?').toUpperCase() + '</span>';
     html += '<span class="pb-dm-field"><span class="pb-dm-label">AGE/SEX:</span> ' + (p.age || '?') + '/' + sexLabel + '</span>';
     html += '</div>';
-    html += '<div class="pb-dm-row">';
-    html += '<span class="pb-dm-field' + (hrAlert ? ' pb-dm-alert' : '') + '"><span class="pb-dm-label">HR:</span> ' + (v.hr || '?') + '</span>';
-    html += '<span class="pb-dm-field"><span class="pb-dm-label">BP:</span> ' + (v.bp || '?') + '</span>';
-    html += '<span class="pb-dm-field' + (rrAlert ? ' pb-dm-alert' : '') + '"><span class="pb-dm-label">RR:</span> ' + (v.rr || '?') + '</span>';
-    html += '<span class="pb-dm-field"><span class="pb-dm-label">T:</span> ' + (v.temp || '?') + 'C</span>';
-    html += '<span class="pb-dm-field' + (spo2Alert ? ' pb-dm-alert' : '') + '"><span class="pb-dm-label">SpO2:</span> ' + (v.spo2 || '?') + '%</span>';
-    html += '</div>';
     html += '</div>';
     html += '<div class="pb-dm-holes pb-dm-holes-right"></div>';
     html += '</div>';
+
+    // Bedside monitor — live vitals
+    html += '<div class="pb-monitor">';
+    if (!App.pbMRN) App.pbMRN = Math.floor(Math.random()*900000+100000);
+    html += '<div class="pb-mon-header"><span class="pb-mon-title">BEDSIDE MONITOR</span><span class="pb-mon-id">MRN ' + App.pbMRN + '</span></div>';
+    // ECG trace row
+    html += '<div class="pb-mon-ecg"><svg class="pb-ecg-svg" viewBox="0 0 200 40" preserveAspectRatio="none"><path class="pb-ecg-line" d="M0,20 L30,20 L35,20 L38,20 L40,8 L42,32 L44,5 L46,35 L48,20 L55,20 L58,16 L62,24 L65,20 L100,20 L105,20 L108,20 L110,8 L112,32 L114,5 L116,35 L118,20 L125,20 L128,16 L132,24 L135,20 L170,20 L175,20 L178,20 L180,8 L182,32 L184,5 L186,35 L188,20 L195,20 L198,16 L200,20"/></svg></div>';
+    // Vitals grid
+    html += '<div class="pb-mon-grid">';
+    // HR
+    html += '<div class="pb-mon-cell pb-mon-hr' + (hrAlert ? ' pb-mon-alert' : '') + '">';
+    html += '<div class="pb-mon-cell-label">HR <span class="pb-mon-unit">bpm</span></div>';
+    html += '<div class="pb-mon-cell-value">' + (v.hr || '?') + '</div></div>';
+    // BP
+    html += '<div class="pb-mon-cell pb-mon-bp' + (bpAlert ? ' pb-mon-alert' : '') + '">';
+    html += '<div class="pb-mon-cell-label">NIBP <span class="pb-mon-unit">mmHg</span></div>';
+    html += '<div class="pb-mon-cell-value">' + (v.bp || '?') + '</div></div>';
+    // SpO2
+    html += '<div class="pb-mon-cell pb-mon-spo2' + (spo2Alert ? ' pb-mon-alert' : '') + '">';
+    html += '<div class="pb-mon-cell-label">SpO2 <span class="pb-mon-unit">%</span></div>';
+    html += '<div class="pb-mon-cell-value">' + (v.spo2 || '?') + '</div></div>';
+    // RR
+    html += '<div class="pb-mon-cell pb-mon-rr' + (rrAlert ? ' pb-mon-alert' : '') + '">';
+    html += '<div class="pb-mon-cell-label">RR <span class="pb-mon-unit">/min</span></div>';
+    html += '<div class="pb-mon-cell-value">' + (v.rr || '?') + '</div></div>';
+    // Temp
+    html += '<div class="pb-mon-cell pb-mon-temp' + (tempAlert ? ' pb-mon-alert' : '') + '">';
+    html += '<div class="pb-mon-cell-label">TEMP <span class="pb-mon-unit">&deg;C</span></div>';
+    html += '<div class="pb-mon-cell-value">' + (v.temp || '?') + '</div></div>';
+    html += '</div></div>';
   }
 
   if (App.pbCheatMode && !App.pbDiagResolved) {
