@@ -321,7 +321,7 @@ function loginAsProfile(profileId) {
   finishInit();
 
   // Show tutorial on first login
-  var tutorialSeen = localStorage.getItem('mcc_tutorial_' + profileId);
+  var tutorialSeen = localStorage.getItem('mcc_tutorial_v2_' + profileId);
   if (!tutorialSeen) {
     setTimeout(function() { startTutorial(); }, 800);
   }
@@ -336,13 +336,15 @@ function switchProfile() {
 
 function startTutorial() {
   var steps = [
-    { title: 'Quick Overview', text: 'This is MCC Master, a study tool for MCCQE Part I. Here\'s how it works.', target: null },
-    { title: 'Flashcards', text: 'Over 10,000 flashcards organized by specialty. You flip each card and mark whether you got it right or wrong. The app tracks which topics you\'re weak in and adjusts accordingly.', target: 'flashcards' },
-    { title: 'Practice Quiz', text: 'Multiple choice questions in the same format as the actual exam. After each quiz, you\'ll see which areas need more work.', target: 'quiz' },
-    { title: 'PatientBot', text: 'Simulated patient encounters powered by AI. You interview the patient, order tests, and submit a diagnosis. You get scored on history taking, clinical reasoning, and communication.', target: 'patientbot' },
-    { title: 'Daily Challenge', text: 'A daily set of flashcards, quiz questions, and a patient case. Completing it each day keeps your streak going and covers material across all specialties.', target: 'daily' },
-    { title: 'Skill Map', text: 'The dashboard tracks your mastery percentage for each specialty based on your quiz scores and flashcard accuracy. Focus on the areas showing red or yellow.', target: 'dashboard' },
-    { title: 'Ready', text: 'Start with the Daily Challenge to get a feel for everything, or go straight to Flashcards. Set a daily goal and stick to it.', target: null }
+    { title: 'Welcome to MCC Master', text: 'Your all-in-one study tool for the MCCQE Part I. Everything here \u2014 the flashcards, quiz questions, clinical scenarios, lab values, and scoring criteria \u2014 is built from <strong>real medical references</strong> including Toronto Notes, Canadian clinical practice guidelines, and established MCCQE exam objectives. The content is accurate and evidence-based, not randomly generated.', target: null },
+    { title: 'Flashcards', text: 'Over 10,000 flashcards organized by specialty. Each card is written from verified medical content and cross-referenced with standard Canadian medical education sources. You flip each card, self-evaluate, and the app tracks which topics you\'re weak in to prioritize your review.', target: 'flashcards' },
+    { title: 'Practice Quiz', text: 'MCQ questions modeled on the real MCCQE format. Questions, answer choices, and explanations are grounded in established clinical guidelines and diagnostic criteria \u2014 not guesswork. After each quiz, you see exactly which areas need more work.', target: 'quiz' },
+    { title: 'PatientBot', text: 'AI-powered simulated patient encounters. Each case is built from real clinical presentations, with accurate vitals, lab results, imaging findings, and physical exam signs that match the underlying diagnosis. You take a history, examine the patient, order real tests (with realistic results), give actual medications with correct doses, and perform procedures \u2014 all with a clinical consequence engine that tracks what happens to the patient based on your actions.', target: 'patientbot' },
+    { title: 'PatientBot Scoring', text: 'After each case, you get an <strong>OSCE-style scorecard</strong> graded on 7 domains: History, Physical Exam, Investigations, Diagnosis, Management, Communication, and Patient Safety. The grading follows real MCCQE rubric standards with defined boundaries (A through F). Your actions have real consequences \u2014 give the wrong drug at the wrong dose and the patient\'s vitals will change accordingly.', target: 'patientbot' },
+    { title: 'Daily Challenge', text: 'A structured daily session: 20 flashcards, 10 quiz questions, and 2 patient cases. Covers material across all specialties to build well-rounded knowledge. Completing it each day keeps your streak going and earns XP toward your level.', target: 'daily' },
+    { title: 'Skill Map & Mastery', text: 'The dashboard tracks your mastery percentage for each specialty based on quiz scores and flashcard performance. Green means strong, yellow means decent, red means it needs work. Your weak areas get prioritized in Daily Challenges so you improve where it matters most.', target: 'dashboard' },
+    { title: 'About the Content', text: 'A note on accuracy: all clinical content, drug dosages, lab reference ranges, and scoring criteria are sourced from established medical references. When PatientBot gives you lab results or vital sign changes, those numbers reflect what would actually happen in a real clinical scenario with that diagnosis and those interventions. This isn\'t a chatbot making things up \u2014 it\'s a structured clinical simulator with guardrails.', target: null },
+    { title: 'Let\'s Get Started', text: 'Start with the <strong>Daily Challenge</strong> to try a bit of everything, or dive straight into <strong>Flashcards</strong> or <strong>PatientBot</strong>. Consistency beats intensity \u2014 even 20 minutes a day adds up fast.', target: null }
   ];
 
   App.tutorialSteps = steps;
@@ -395,7 +397,7 @@ function nextTutorialStep() {
 
 function endTutorial() {
   var profileId = localStorage.getItem('mcc_profile');
-  if (profileId) localStorage.setItem('mcc_tutorial_' + profileId, '1');
+  if (profileId) localStorage.setItem('mcc_tutorial_v2_' + profileId, '1');
   var overlay = document.getElementById('tutorial-overlay');
   if (overlay) overlay.remove();
 }
@@ -2342,11 +2344,13 @@ function showPatientBotSetup() {
 
   html += '<div class="pb-how-to">';
   html += '<strong>How to Play:</strong><br>';
-  html += '&#x1F4AC; <strong>Ask questions</strong> — "any chest pain?" "when did it start?"<br>';
-  html += '&#x1F52C; <strong>Order tests</strong> — "order EKG" "send for chest x-ray" "draw CBC and troponin"<br>';
-  html += '&#x1F489; <strong>Treat</strong> — "administer 10mg morphine" "start IV saline"<br>';
-  html += '&#x1FA7A; <strong>Examine</strong> — "*palpate abdomen*" "*auscultate lungs*"<br>';
-  html += '&#x1F3AF; <strong>Diagnose</strong> — Hit the Diagnose button when you know what it is';
+  html += '&#x1F4AC; <strong>Interview</strong> — Talk to the patient like a real encounter: "any chest pain?" "when did it start?"<br>';
+  html += '&#x1FA7A; <strong>Examine</strong> — Use the action palette or type: "*palpate abdomen*" "*auscultate lungs*"<br>';
+  html += '&#x1F52C; <strong>Investigate</strong> — Order labs, imaging, and bedside tests. Results come back with real values.<br>';
+  html += '&#x1F489; <strong>Treat</strong> — 200+ meds with real doses. Actions have consequences \u2014 vitals change based on what you give.<br>';
+  html += '&#x1F6E0; <strong>Procedures</strong> — I&D, intubation, chest tubes, LP \u2014 the app asks where/what before you do it.<br>';
+  html += '&#x1F3AF; <strong>Diagnose</strong> — Hit the Diagnose button when you know what it is. You get an OSCE scorecard after.<br>';
+  html += '<div style="margin-top:8px;font-size:12px;color:var(--text-light)">All lab values, vital sign responses, and clinical findings are generated to be consistent with the underlying diagnosis \u2014 not random. Drug doses, reference ranges, and clinical consequences follow real pharmacology.</div>';
   html += '</div>';
 
   html += '<button class="btn btn-success" style="width:100%;padding:14px;font-size:16px" onclick="startPBSession()">Start</button>';
