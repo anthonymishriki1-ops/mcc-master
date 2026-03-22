@@ -1,7 +1,7 @@
 // MCC Master - Netlify Function
 // Proxies requests to GAS API, with direct Anthropic support when API key is set
 
-const GAS_API = process.env.GAS_API_URL || 'https://script.google.com/macros/s/AKfycbwiWFvnhP4nEHzHnNXIJoap33t-Es_RAJLWYn3RJwRcKGzQJG5kI3eB-Wk139V0sfhHT6/exec';
+const GAS_API = process.env.GAS_API_URL || 'https://script.google.com/macros/s/AKfycbwiWFvnhP4nEHzHnNXIJoap33tEs_RAJLWYn3RJwRcKGzQJG5kI3eBWk139V0sfhHT6/exec';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 
 // Functions that can be handled directly with Anthropic API
