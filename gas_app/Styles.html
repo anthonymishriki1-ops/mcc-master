@@ -777,20 +777,23 @@ body {
   overflow-wrap: break-word;
   word-break: break-word;
   font-size: 14px;
-  word-wrap: break-word;
+  animation: msgSlide 0.2s ease;
 }
+@keyframes msgSlide { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
 .chat-message.user {
-  background: var(--primary);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
   color: white;
   margin-left: auto;
   border-bottom-right-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
 }
 
 .chat-message.assistant {
   background: #f5f5f5;
   margin-right: auto;
   border-bottom-left-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
 
 .chat-message.typing {
@@ -803,11 +806,12 @@ body {
   text-align: center;
   padding: 8px 16px;
   margin: 6px 40px;
-  background: rgba(99, 102, 241, 0.08);
+  background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.08));
   border: 1px dashed var(--accent);
   border-radius: 10px;
   font-size: 13px;
   color: var(--accent);
+  animation: msgSlide 0.2s ease;
 }
 
 .chat-input-area {
@@ -854,6 +858,13 @@ body {
   border-color: var(--primary);
   transform: scale(1.03);
 }
+/* Action specification prompt */
+.pb-spec-prompt { background: var(--card-bg); border: 2px solid var(--accent); border-radius: 12px; padding: 12px 16px; margin: 0 16px 8px; animation: slideDown 0.15s ease; }
+.pb-spec-label { font-size: 14px; font-weight: 700; color: var(--accent); margin-bottom: 8px; }
+.pb-spec-row { display: flex; gap: 8px; align-items: center; }
+.pb-spec-input { flex: 1; padding: 8px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; background: var(--bg); color: var(--text); outline: none; }
+.pb-spec-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
+@keyframes slideDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
 
 /* PB Customize Sliders */
 .pb-slider {
@@ -935,6 +946,7 @@ body {
 .pb-action-tab:nth-child(8) { border-color: #607d8b; color: #607d8b; } /* Position - grey */
 .pb-action-tab:nth-child(9) { border-color: #00bcd4; color: #00bcd4; } /* Scopes - teal */
 .pb-action-tab:nth-child(10) { border-color: #795548; color: #795548; } /* Manage - brown */
+.pb-action-tab:nth-child(11) { border-color: #455a64; color: #455a64; } /* Equip - dark grey */
 .pb-action-tab.active { color: white !important; }
 .pb-action-tab:nth-child(1).active { background: #4caf50; border-color: #4caf50; }
 .pb-action-tab:nth-child(2).active { background: #2196f3; border-color: #2196f3; }
@@ -946,6 +958,11 @@ body {
 .pb-action-tab:nth-child(8).active { background: #607d8b; border-color: #607d8b; }
 .pb-action-tab:nth-child(9).active { background: #00bcd4; border-color: #00bcd4; }
 .pb-action-tab:nth-child(10).active { background: #795548; border-color: #795548; }
+.pb-action-tab:nth-child(11).active { background: #455a64; border-color: #455a64; }
+/* Action panel search */
+.pb-action-search { width: 100%; padding: 8px 14px; border: none; border-bottom: 1px solid var(--border); font-size: 14px; font-family: inherit; background: var(--bg); color: var(--text); outline: none; }
+.pb-action-search:focus { background: var(--card-bg); }
+.pb-action-search::placeholder { color: var(--text-light); }
 
 /* --- Resources --- */
 .resources-grid {
@@ -1225,11 +1242,13 @@ body {
 
 /* --- Quick Actions (Dashboard) --- */
 .quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
-.quick-action-card { border-radius: 16px; padding: 20px; color: white; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; position: relative; overflow: hidden; min-height: 100px; display: flex; flex-direction: column; justify-content: space-between; }
-.quick-action-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.15); }
+.quick-action-card { border-radius: 16px; padding: 20px; color: white; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; position: relative; overflow: hidden; min-height: 100px; display: flex; flex-direction: column; justify-content: space-between; }
+.quick-action-card::before { content: ''; position: absolute; top: -50%; right: -50%; width: 100%; height: 100%; background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, transparent 70%); transition: transform 0.4s ease; pointer-events: none; }
+.quick-action-card:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(0,0,0,0.2); }
+.quick-action-card:hover::before { transform: translate(-20%, 20%); }
 .quick-action-card:active { transform: scale(0.97); }
-.qa-icon { font-size: 28px; margin-bottom: 8px; }
-.qa-label { font-size: 18px; font-weight: 800; }
+.qa-icon { font-size: 28px; margin-bottom: 8px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2)); }
+.qa-label { font-size: 18px; font-weight: 800; text-shadow: 0 1px 2px rgba(0,0,0,0.15); }
 .qa-sub { font-size: 12px; opacity: 0.85; margin-top: 4px; font-weight: 500; }
 
 /* --- Sidebar Level --- */
@@ -1259,7 +1278,9 @@ body {
 /* --- Achievements --- */
 .achievements-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
 .achievement-card { background: var(--card); border-radius: 12px; padding: 20px 12px; text-align: center; border: 2px solid var(--border); transition: transform 0.15s; }
-.achievement-card.unlocked { border-color: var(--accent); background: linear-gradient(135deg, #e0f7fa, #fff); }
+.achievement-card.unlocked { border-color: var(--accent); background: linear-gradient(135deg, #e0f7fa, #fff); animation: unlockPop 0.3s ease; }
+@keyframes unlockPop { from { transform: scale(0.95); opacity: 0.8; } to { transform: scale(1); opacity: 1; } }
+[data-theme="dark"] .achievement-card.unlocked { background: linear-gradient(135deg, #1a1a2e, #1e1e3a); border-color: var(--accent); }
 .achievement-card.locked { opacity: 0.4; filter: grayscale(1); }
 .achievement-big-icon { font-size: 36px; margin-bottom: 8px; }
 .achievement-card-name { font-weight: 700; font-size: 13px; margin-bottom: 4px; }

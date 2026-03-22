@@ -1699,11 +1699,11 @@ function submitDiagnosis(caseId, userDiagnosis, correctDiagnosis, history) {
     }
   } catch (e) {}
 
-  // Fallback: simple string matching
+  // Fallback: simple string matching (do NOT reveal the diagnosis)
   var norm = function(s) { return s.toLowerCase().replace(/[^a-z0-9]/g, ''); };
   var isCorrect = norm(correctDiagnosis).indexOf(norm(userDiagnosis)) !== -1 ||
                   norm(userDiagnosis).indexOf(norm(correctDiagnosis)) !== -1;
-  var fb = isCorrect ? 'Correct!' : 'The correct diagnosis was ' + correctDiagnosis + '.';
+  var fb = isCorrect ? 'Correct!' : 'That\'s not the diagnosis for this presentation.';
   if (!isCorrect && isCheatMode) fb += ' The answer was literally on your screen!';
   return { correct: isCorrect, partial: false, score: isCorrect ? 100 : 0, feedback: fb, cheatMode: isCheatMode };
 }
@@ -1854,7 +1854,12 @@ function sendPatientBotMessage(caseId, message, history) {
         'GOOD examples: "Standard assessment procedure performed", "Medication administered, monitoring for effect", "Vital signs being monitored"\n' +
         'BAD examples (NEVER DO THIS): "Helps determine opioid effect", "Guides naloxone dosing", "Appropriate for endocarditis"\n' +
         'The consequence must NEVER hint at, reference, or name any diagnosis, drug class relevance, or clinical reasoning. Just describe what physically happens.\n\n' +
-        'FATAL guidelines: ONLY fatal for guaranteed-death actions (headshot, lethal injection, massive exsanguination). Wrong meds = "caution" or "dangerous", not fatal. Non-vital gunshots = dangerous but survivable. Fear alone cannot kill.\n\n' +
+        'FATAL guidelines:\n' +
+        '- Fatal for: guaranteed-death actions (headshot, lethal injection, massive exsanguination), AND iatrogenic drug kills (e.g. massive potassium IV push causing cardiac arrest, succinylcholine without ventilation causing asphyxiation, massive insulin without glucose correction causing fatal hypoglycemia, rapid undiluted potassium bolus, 10x dose errors on critical drugs like epinephrine/insulin/opioids).\n' +
+        '- "dangerous" (not fatal) for: wrong drug at normal doses, contraindicated meds (e.g. beta-blocker in asthma), moderate dose errors, non-vital gunshots.\n' +
+        '- "caution" for: suboptimal choices, minor dose issues, slightly wrong drug class.\n' +
+        '- Fear/panic alone cannot kill. The patient must have a physiological mechanism of death.\n' +
+        '- If vitals would realistically reach zero (HR 0, SpO2 0) from the action, mark it fatal.\n\n' +
         'Respond with ONLY a JSON object:\n' +
         '{"appropriate": true/false, "consequence": "<1 sentence clinical consequence WITHOUT naming the diagnosis>", ' +
         '"vitalChanges": {"hr": <delta>, "bp_sys": <delta>, "rr": <delta>, "spo2": <delta>}, ' +
@@ -1892,13 +1897,24 @@ function sendPatientBotMessage(caseId, message, history) {
           };
         }
 
-        // Update cached vitals
-        if (vitalChanges && currentVitals.hr) {
-          currentVitals.hr = Math.max(30, Math.min(200, (currentVitals.hr || 80) + (vitalChanges.hr || 0)));
-          currentVitals.spo2 = Math.max(50, Math.min(100, (currentVitals.spo2 || 98) + (vitalChanges.spo2 || 0)));
-          currentVitals.rr = Math.max(4, Math.min(50, (currentVitals.rr || 16) + (vitalChanges.rr || 0)));
+        // Update cached vitals — allow coding (HR/RR/SpO2 can reach 0 for dangerous/fatal actions)
+        if (vitalChanges && currentVitals.hr !== undefined) {
+          currentVitals.hr = Math.max(0, Math.min(220, (currentVitals.hr || 80) + (vitalChanges.hr || 0)));
+          currentVitals.spo2 = Math.max(0, Math.min(100, (currentVitals.spo2 || 98) + (vitalChanges.spo2 || 0)));
+          currentVitals.rr = Math.max(0, Math.min(50, (currentVitals.rr || 16) + (vitalChanges.rr || 0)));
           caseData.vitals = currentVitals;
           CacheService.getUserCache().put('pb_' + caseId, JSON.stringify(caseData), 7200);
+
+          // Auto-fatal if vitals crash to incompatible-with-life
+          if (currentVitals.hr === 0 || currentVitals.spo2 === 0) {
+            return {
+              response: '',
+              consequence: parsed.consequence || 'Patient has coded.',
+              fatal: true,
+              causeOfDeath: parsed.causeOfDeath || 'Cardiopulmonary arrest secondary to iatrogenic cause.',
+              vitals: { hr: 0, bp: '0/0', rr: 0, temp: currentVitals.temp, spo2: 0 }
+            };
+          }
         }
       }
     } catch(e) {
@@ -2052,7 +2068,13 @@ function generateCaseDebrief(caseId, history) {
     '   - Didn\'t harm the patient with wrong meds/procedures\n' +
     '   - ABC approach if emergency\n\n' +
     'TRANSCRIPT:\n' + transcript + '\n\n' +
-    'Be HARSH but fair — this is a licensing exam, not participation marks. Real students regularly score 4-6.\n\n' +
+    'Be HARSH but fair — this is a licensing exam, not participation marks. Real students regularly score 4-6 per domain.\n\n' +
+    'GRADE BOUNDARIES (you MUST follow these based on the average of all 7 domain scores):\n' +
+    '- A: average 8.0-10.0 (Outstanding — thorough in every domain)\n' +
+    '- B: average 6.5-7.9 (Good — solid performance with minor gaps)\n' +
+    '- C: average 5.0-6.4 (Adequate — passes but significant areas to improve)\n' +
+    '- D: average 3.5-4.9 (Below expectations — would likely fail the OSCE station)\n' +
+    '- F: average 0-3.4 (Fail — critical deficiencies, patient safety concerns)\n\n' +
     'Return ONLY JSON:\n' +
     '{"scores": {"history": N, "exam": N, "investigations": N, "diagnosis": N, "management": N, "communication": N, "safety": N}, ' +
     '"overall": N, "grade": "A/B/C/D/F", ' +
@@ -2065,7 +2087,19 @@ function generateCaseDebrief(caseId, history) {
     var response = callAnthropicModel_('claude-sonnet-4-20250514', prompt, [{ role: 'user', content: 'Score this encounter.' }]);
     var jsonMatch = response.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
+      var result = JSON.parse(jsonMatch[0]);
+      // Enforce grade from actual scores to prevent AI inconsistency
+      if (result.scores) {
+        var s = result.scores;
+        var avg = ((s.history || 0) + (s.exam || 0) + (s.investigations || 0) + (s.diagnosis || 0) + (s.management || 0) + (s.communication || 0) + (s.safety || 0)) / 7;
+        result.overall = Math.round(avg * 10) / 10;
+        if (avg >= 8.0) result.grade = 'A';
+        else if (avg >= 6.5) result.grade = 'B';
+        else if (avg >= 5.0) result.grade = 'C';
+        else if (avg >= 3.5) result.grade = 'D';
+        else result.grade = 'F';
+      }
+      return result;
     }
   } catch(e) {}
 

@@ -2542,6 +2542,10 @@ function togglePBCategory(catIndex, btn) {
   var allTabs = document.querySelectorAll('.pb-action-tab');
   for (var i = 0; i < allTabs.length; i++) allTabs[i].classList.remove('active');
 
+  // Clear search when switching categories
+  var searchInput = document.getElementById('pb-action-search');
+  if (searchInput) { searchInput.value = ''; filterPBActions(''); }
+
   if (isOpen) {
     // Close panel
     panel.style.display = 'none';
@@ -2553,7 +2557,64 @@ function togglePBCategory(catIndex, btn) {
   }
 }
 
+function filterPBActions(query) {
+  query = (query || '').toLowerCase().trim();
+  var panel = document.getElementById('pb-actions-panel');
+  if (!panel) return;
+  var chips = panel.querySelectorAll('.pb-action-chip');
+  var headers = panel.querySelectorAll('.pb-section-header');
+  if (!query) {
+    // Reset: show all chips
+    for (var i = 0; i < chips.length; i++) chips[i].style.display = '';
+    for (var i = 0; i < headers.length; i++) headers[i].style.display = '';
+    return;
+  }
+  // Filter chips by data-action match
+  for (var i = 0; i < chips.length; i++) {
+    var match = chips[i].getAttribute('data-action').indexOf(query) !== -1;
+    chips[i].style.display = match ? '' : 'none';
+  }
+  // Hide headers if no visible chips follow them
+  for (var i = 0; i < headers.length; i++) {
+    var next = headers[i].parentElement;
+    var visibleSiblings = next ? next.querySelectorAll('.pb-action-chip:not([style*="display: none"])') : [];
+    headers[i].style.display = visibleSiblings.length > 0 ? '' : 'none';
+  }
+}
+
+// Actions that need a follow-up specification before sending
+var pbActionSpecs = {
+  '*perform I&D*': { prompt: 'I&D of what / where?', placeholder: 'e.g. right gluteal abscess, perianal abscess, left forearm abscess' },
+  '*suture laceration*': { prompt: 'Where is the laceration?', placeholder: 'e.g. forehead, left palm, right shin' },
+  '*apply splint*': { prompt: 'Splint which extremity?', placeholder: 'e.g. right wrist, left ankle, right index finger' },
+  '*reduce fracture*': { prompt: 'Reduce which fracture?', placeholder: 'e.g. left distal radius, right ankle, right shoulder dislocation' },
+  '*pack wound*': { prompt: 'Pack which wound?', placeholder: 'e.g. left thigh wound, right nasal cavity, sacral wound' },
+  '*place chest tube*': { prompt: 'Which side?', placeholder: 'e.g. left, right' },
+  '*perform thoracentesis*': { prompt: 'Which side?', placeholder: 'e.g. left, right' },
+  'order X-ray of extremity': { prompt: 'X-ray of which extremity?', placeholder: 'e.g. right wrist, left ankle, right hand' },
+  'order MRI joint': { prompt: 'MRI of which joint?', placeholder: 'e.g. right knee, left shoulder, right hip' },
+  'order MRI spine': { prompt: 'MRI of which spine level?', placeholder: 'e.g. lumbar, cervical, thoracic' },
+  'order Doppler ultrasound': { prompt: 'Doppler of what?', placeholder: 'e.g. bilateral lower extremity, carotid, left upper extremity' },
+  '*check range of motion*': { prompt: 'ROM of which joint?', placeholder: 'e.g. right shoulder, left knee, cervical spine' },
+  '*palpate joints*': { prompt: 'Palpate which joints?', placeholder: 'e.g. bilateral knees, right wrist, left MCP joints' },
+  '*check sensation*': { prompt: 'Check sensation where?', placeholder: 'e.g. bilateral lower extremities, left arm dermatomes, perineal' },
+  '*insert central line*': { prompt: 'Which site?', placeholder: 'e.g. right IJ, right subclavian, left femoral' },
+  '*reduce dislocation*': { prompt: 'Reduce which dislocation?', placeholder: 'e.g. right shoulder, left patella, right hip' },
+  '*arthrocentesis*': { prompt: 'Aspirate which joint?', placeholder: 'e.g. right knee, left ankle, right elbow' },
+  '*needle decompression*': { prompt: 'Which side?', placeholder: 'e.g. left, right' },
+  '*staple laceration*': { prompt: 'Where is the laceration?', placeholder: 'e.g. scalp, right shin, left forearm' },
+  '*irrigate wound*': { prompt: 'Irrigate which wound?', placeholder: 'e.g. right hand laceration, left forearm bite, facial laceration' },
+  '*debride wound*': { prompt: 'Debride which wound?', placeholder: 'e.g. left leg ulcer, right foot burn, sacral wound' },
+  '*insert packing (epistaxis)*': { prompt: 'Which side?', placeholder: 'e.g. left, right, bilateral' },
+  '*apply sling*': { prompt: 'Sling which arm?', placeholder: 'e.g. left, right' }
+};
+
 function insertPBAction(text) {
+  // Check if this action needs a specification
+  if (pbActionSpecs[text]) {
+    showActionSpecPrompt(text, pbActionSpecs[text]);
+    return;
+  }
   // Ensure text has asterisks for actions
   if (text.indexOf('*') === -1) text = '*' + text + '*';
   // Close panel
@@ -2565,6 +2626,72 @@ function insertPBAction(text) {
   var input = document.getElementById('pb-input');
   if (input) { input.value = text; }
   sendPBMessage();
+}
+
+function showActionSpecPrompt(actionText, spec) {
+  // Close the action panel
+  var panel = document.getElementById('pb-actions-panel');
+  if (panel) panel.style.display = 'none';
+  var allTabs = document.querySelectorAll('.pb-action-tab');
+  for (var i = 0; i < allTabs.length; i++) allTabs[i].classList.remove('active');
+
+  // Show inline prompt above the input
+  var existing = document.getElementById('pb-spec-prompt');
+  if (existing) existing.remove();
+
+  var container = document.querySelector('.chat-input-area');
+  if (!container) return;
+
+  var div = document.createElement('div');
+  div.id = 'pb-spec-prompt';
+  div.className = 'pb-spec-prompt';
+  div.innerHTML = '<div class="pb-spec-label">' + escapeHtml(spec.prompt) + '</div>' +
+    '<div class="pb-spec-row">' +
+    '<input type="text" id="pb-spec-input" class="pb-spec-input" placeholder="' + escapeHtml(spec.placeholder) + '" autocomplete="off" />' +
+    '<button class="btn btn-sm btn-primary pb-spec-go" onclick="submitActionSpec()">Go</button>' +
+    '<button class="btn btn-sm btn-outline pb-spec-cancel" onclick="cancelActionSpec()">Cancel</button>' +
+    '</div>';
+  container.parentNode.insertBefore(div, container);
+
+  // Store pending action
+  App._pendingSpecAction = actionText;
+
+  // Focus and handle enter key
+  setTimeout(function() {
+    var inp = document.getElementById('pb-spec-input');
+    if (inp) {
+      inp.focus();
+      inp.onkeydown = function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); submitActionSpec(); }
+        if (e.key === 'Escape') { e.preventDefault(); cancelActionSpec(); }
+      };
+    }
+  }, 50);
+}
+
+function submitActionSpec() {
+  var inp = document.getElementById('pb-spec-input');
+  var detail = inp ? inp.value.trim() : '';
+  if (!detail) { if (inp) inp.focus(); return; }
+
+  var action = App._pendingSpecAction || '';
+  // Build the full action string, e.g. "*perform I&D* of right gluteal abscess"
+  var fullAction = action + ' — ' + detail;
+  if (fullAction.indexOf('*') === -1) fullAction = '*' + fullAction + '*';
+
+  // Clean up prompt
+  cancelActionSpec();
+
+  // Send it
+  var input = document.getElementById('pb-input');
+  if (input) { input.value = fullAction; }
+  sendPBMessage();
+}
+
+function cancelActionSpec() {
+  var el = document.getElementById('pb-spec-prompt');
+  if (el) el.remove();
+  App._pendingSpecAction = null;
 }
 
 function showDiagnoseModal() { App.pbDiagnosing = true; var fn = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat; fn(); }
@@ -2847,52 +2974,78 @@ function renderPBChatInner() {
   if (!App.pbDiagResolved) {
     var categories = [
       { icon: '&#x1FA7A;', name: 'Exam', items: [
-        '---General---','*check vitals*','*general inspection*','*check pupils*','*check reflexes*','*mental status exam*',
-        '---Head/Neck---','*inspect throat*','*otoscope exam*','*fundoscopy*','*palpate lymph nodes*','*palpate thyroid*',
-        '---Chest---','*auscultate lungs*','*auscultate heart*','*percuss chest*','*inspect chest wall*',
-        '---Abdomen---','*palpate abdomen*','*percuss abdomen*','*auscultate bowel sounds*','*check for rebound*','*Murphy sign*',
-        '---MSK---','*check range of motion*','*straight leg raise*','*palpate joints*','*assess gait*',
-        '---Neuro---','*neurological exam*','*cranial nerve exam*','*check sensation*','*Romberg test*','*finger-to-nose*',
-        '---Other---','*inspect skin*','*rectal exam*','*pelvic exam*','*breast exam*','*testicular exam*'] },
+        '---General---','*check vitals*','*general inspection*','*check pupils*','*check reflexes*','*mental status exam*','*GCS assessment*',
+        '---Head/Neck---','*inspect throat*','*otoscope exam*','*fundoscopy*','*palpate lymph nodes*','*palpate thyroid*','*check JVP*','*inspect oral mucosa*',
+        '---Chest---','*auscultate lungs*','*auscultate heart*','*percuss chest*','*inspect chest wall*','*check for chest wall tenderness*',
+        '---Abdomen---','*palpate abdomen*','*percuss abdomen*','*auscultate bowel sounds*','*check for rebound*','*Murphy sign*','*Rovsing sign*','*McBurney point tenderness*','*check for shifting dullness*','*check for hepatomegaly*','*check for splenomegaly*',
+        '---MSK---','*check range of motion*','*straight leg raise*','*palpate joints*','*assess gait*','*Lachman test*','*anterior drawer test*','*Ottawa ankle rules*',
+        '---Neuro---','*neurological exam*','*cranial nerve exam*','*check sensation*','*Romberg test*','*finger-to-nose*','*check Babinski sign*','*check Kernig sign*','*check Brudzinski sign*','*assess pronator drift*',
+        '---Vascular---','*check peripheral pulses*','*check capillary refill*','*Homan sign*','*check for pedal edema*',
+        '---Other---','*inspect skin*','*rectal exam*','*pelvic exam*','*breast exam*','*testicular exam*','*digital rectal exam*'] },
       { icon: '&#x1F52C;', name: 'Labs', items: [
-        '---Routine---','order CBC','order BMP','order CMP','order LFTs','order coags INR PTT','order urinalysis',
-        '---Cardiac---','draw troponin','order BNP','order D-dimer',
-        '---Metabolic---','order TSH','order HbA1c','order lipase','order amylase','order lactate',
+        '---Routine---','order CBC','order BMP','order CMP','order LFTs','order coags INR PTT','order urinalysis','order serum osmolality',
+        '---Cardiac---','draw troponin','order BNP','order D-dimer','order CK and CK-MB',
+        '---Metabolic---','order TSH','order HbA1c','order lipase','order amylase','order lactate','order magnesium','order phosphate','order uric acid','order cortisol level','order blood glucose',
         '---Inflammatory---','order CRP and ESR','order procalcitonin',
-        '---Micro---','draw blood cultures x2','order urine culture','order sputum culture','rapid strep test',
-        '---Other---','order ABG','tox screen','pregnancy test','type and screen','order ferritin and iron studies'] },
+        '---Micro---','draw blood cultures x2','order urine culture','order sputum culture','rapid strep test','order wound culture','order CSF culture','order C. diff toxin',
+        '---Tox---','tox screen','order serum ethanol level','order acetaminophen level','order salicylate level','order digoxin level','order lithium level','order phenytoin level',
+        '---Hematology---','order blood smear','order reticulocyte count','order haptoglobin','order fibrinogen','order FDP/D-dimer',
+        '---Other---','order ABG','order VBG','pregnancy test','type and screen','type and crossmatch','order ferritin and iron studies','order G6PD level','order hemoglobin electrophoresis'] },
       { icon: '&#x1F4F7;', name: 'Imaging', items: [
-        '---X-ray---','order chest X-ray','order abdominal X-ray','order X-ray of extremity',
-        '---CT---','order CT head','order CT abdomen/pelvis','order CT chest','order CT angiogram','order CT C-spine',
+        '---X-ray---','order chest X-ray','order abdominal X-ray','order X-ray of extremity','order pelvis X-ray','order C-spine X-ray',
+        '---CT---','order CT head','order CT head with contrast','order CT abdomen/pelvis','order CT chest','order CT angiogram','order CT C-spine','order CT pulmonary angiogram','order CT abdomen with contrast',
         '---MRI---','order MRI brain','order MRI spine','order MRI joint',
-        '---Ultrasound---','order abdominal ultrasound','order pelvic ultrasound','order Doppler ultrasound','order FAST exam',
-        '---Cardiac---','order echocardiogram','order EKG','attach cardiac monitor'] },
+        '---Ultrasound---','order abdominal ultrasound','order pelvic ultrasound','order Doppler ultrasound','order FAST exam','order bedside echo','order renal ultrasound',
+        '---Cardiac---','order echocardiogram','order EKG','attach cardiac monitor','order stress test'] },
       { icon: '&#x1F489;', name: 'Meds', items: [
-        '---Fluids---','normal saline 1L IV bolus','lactated ringers 1L IV','D5W 1L IV',
-        '---Pain---','acetaminophen 1g PO','ibuprofen 400mg PO','ketorolac 30mg IV','morphine 4mg IV','fentanyl 50mcg IV',
-        '---Cardiac---','aspirin 325mg PO','nitroglycerin 0.4mg SL','metoprolol 5mg IV','amiodarone 150mg IV','heparin drip','enoxaparin 1mg/kg SC',
-        '---Anti-emetic---','ondansetron 4mg IV','dimenhydrinate 50mg IV','metoclopramide 10mg IV',
-        '---Respiratory---','salbutamol nebulizer','ipratropium nebulizer','prednisone 50mg PO','methylprednisolone 125mg IV',
-        '---Emergency---','epinephrine 0.3mg IM','epinephrine 1mg IV push','atropine 0.5mg IV','naloxone 0.4mg IV','D50W 50mL IV',
-        '---Antibiotics---','ceftriaxone 2g IV','vancomycin 1g IV','piperacillin-tazobactam 4.5g IV','azithromycin 500mg IV','amoxicillin 500mg PO','metronidazole 500mg IV','ciprofloxacin 400mg IV',
-        '---Sedation---','midazolam 2mg IV','lorazepam 1mg IV','propofol infusion','ketamine 1mg/kg IV',
-        '---GI---','pantoprazole 80mg IV bolus','octreotide 50mcg IV',
-        '---Other---','furosemide 40mg IV','dexamethasone 10mg IV','diphenhydramine 50mg IV','insulin 10u regular IV'] },
+        '---IV Fluids---','normal saline 1L IV bolus','normal saline 500mL IV bolus','lactated ringers 1L IV','D5W 1L IV','D5NS 1L IV','D10W 500mL IV','albumin 5% 500mL IV','3% hypertonic saline 150mL IV',
+        '---Blood Products---','transfuse 1 unit pRBC','transfuse 2 units pRBC','give FFP 2 units','give platelets 1 unit','give cryoprecipitate','activate massive transfusion protocol',
+        '---Analgesics---','acetaminophen 1g PO','acetaminophen 1g IV','ibuprofen 400mg PO','ketorolac 30mg IV','ketorolac 15mg IV','naproxen 500mg PO',
+        '---Opioids---','morphine 2mg IV','morphine 4mg IV','morphine 5mg SC','fentanyl 25mcg IV','fentanyl 50mcg IV','fentanyl 100mcg IV','hydromorphone 0.5mg IV','hydromorphone 1mg IV','codeine 30mg PO','tramadol 50mg PO','oxycodone 5mg PO',
+        '---Cardiac---','aspirin 81mg PO','aspirin 325mg PO','clopidogrel 300mg PO loading','clopidogrel 75mg PO','nitroglycerin 0.4mg SL','nitroglycerin drip','metoprolol 5mg IV','metoprolol 25mg PO','atenolol 25mg PO','amiodarone 150mg IV','amiodarone 300mg IV push','adenosine 6mg rapid IV push','adenosine 12mg rapid IV push','diltiazem 0.25mg/kg IV','digoxin 0.5mg IV','heparin bolus 80u/kg IV','heparin drip 18u/kg/hr','enoxaparin 1mg/kg SC','warfarin 5mg PO','ticagrelor 180mg PO loading','alteplase (tPA) IV','tenecteplase IV','dopamine drip','dobutamine drip','norepinephrine drip','vasopressin 20u IV','phenylephrine drip','nitroprusside drip',
+        '---Antihypertensive---','labetalol 20mg IV','hydralazine 10mg IV','nifedipine 10mg PO','amlodipine 5mg PO','enalapril 5mg PO','ramipril 5mg PO','furosemide 40mg IV','furosemide 80mg IV','hydrochlorothiazide 25mg PO','spironolactone 25mg PO','mannitol 1g/kg IV',
+        '---Anti-emetic---','ondansetron 4mg IV','ondansetron 8mg IV','dimenhydrinate 50mg IV','metoclopramide 10mg IV','prochlorperazine 10mg IV','granisetron 1mg IV',
+        '---Respiratory---','salbutamol nebulizer','ipratropium nebulizer','salbutamol + ipratropium neb','prednisone 50mg PO','methylprednisolone 125mg IV','dexamethasone 6mg IV','magnesium sulfate 2g IV','aminophylline 250mg IV','racemic epinephrine neb',
+        '---ACLS / Emergency---','epinephrine 0.3mg IM (anaphylaxis)','epinephrine 1mg IV push (code)','epinephrine drip','atropine 0.5mg IV','atropine 1mg IV','naloxone 0.4mg IV','naloxone 2mg IV','naloxone 0.4mg IM','D50W 50mL IV push','D10W 250mL IV','glucagon 1mg IM','calcium gluconate 1g IV','calcium chloride 1g IV','sodium bicarbonate 50mEq IV','magnesium sulfate 2g IV','amiodarone 300mg IV push (VF/VT)','lidocaine 1mg/kg IV push','procainamide 20mg/min IV','isoproterenol drip','transcutaneous pacing',
+        '---Antidotes---','N-acetylcysteine (NAC) IV','N-acetylcysteine (NAC) PO','flumazenil 0.2mg IV','physostigmine 1mg IV','fomepizole 15mg/kg IV','hydroxocobalamin 5g IV','methylene blue 1mg/kg IV','deferoxamine IV','digoxin immune fab (DigiFab)','lipid emulsion 20% (intralipid)','pralidoxime 1g IV','activated charcoal 50g PO','whole bowel irrigation',
+        '---Antibiotics---','ceftriaxone 2g IV','ceftriaxone 1g IV','cefazolin 2g IV','ceftazidime 2g IV','cefepime 2g IV','vancomycin 1g IV','vancomycin 15mg/kg IV','piperacillin-tazobactam 4.5g IV','meropenem 1g IV','azithromycin 500mg IV','azithromycin 500mg PO','amoxicillin 500mg PO','amoxicillin-clavulanate 875mg PO','metronidazole 500mg IV','metronidazole 500mg PO','ciprofloxacin 400mg IV','ciprofloxacin 500mg PO','levofloxacin 750mg IV','clindamycin 600mg IV','TMP-SMX DS PO','doxycycline 100mg PO','gentamicin 5mg/kg IV','ampicillin 2g IV','penicillin G 4MU IV',
+        '---Antifungals---','fluconazole 400mg IV','amphotericin B IV','micafungin 100mg IV',
+        '---Antivirals---','acyclovir 10mg/kg IV','oseltamivir 75mg PO','valacyclovir 1g PO',
+        '---Sedation / RSI---','midazolam 2mg IV','midazolam 5mg IV','lorazepam 1mg IV','lorazepam 2mg IV','diazepam 5mg IV','diazepam 10mg IV','propofol 1.5mg/kg IV','propofol infusion','etomidate 0.3mg/kg IV','ketamine 1mg/kg IV','ketamine 2mg/kg IV','succinylcholine 1.5mg/kg IV','rocuronium 1.2mg/kg IV','cisatracurium 0.2mg/kg IV','sugammadex 16mg/kg IV','fentanyl 2mcg/kg IV (RSI)',
+        '---Psych---','haloperidol 5mg IM','olanzapine 10mg IM','lorazepam 2mg IM','diazepam 10mg PR','phenobarbital 20mg/kg IV','phenytoin 20mg/kg IV','levetiracetam 20mg/kg IV','valproic acid 40mg/kg IV',
+        '---GI---','pantoprazole 80mg IV bolus','pantoprazole 8mg/hr drip','omeprazole 40mg PO','octreotide 50mcg IV bolus','octreotide drip','lactulose 30mL PO','polyethylene glycol PO',
+        '---Endocrine---','insulin 10u regular IV','insulin regular drip','insulin 0.1u/kg/hr drip','dextrose 50% 25g IV push','hydrocortisone 100mg IV','levothyroxine 200mcg IV',
+        '---Electrolytes---','potassium chloride 20mEq IV over 1hr','potassium chloride 40mEq PO','calcium gluconate 1g IV','magnesium sulfate 2g IV','sodium phosphate IV',
+        '---Anticoagulants---','heparin bolus + drip','enoxaparin 1mg/kg SC','warfarin 5mg PO','rivaroxaban 15mg PO','apixaban 5mg PO','protamine sulfate IV','vitamin K 10mg IV','tranexamic acid 1g IV',
+        '---Other---','diphenhydramine 50mg IV','ranitidine 50mg IV','famotidine 20mg IV','allopurinol 300mg PO','colchicine 0.6mg PO','thiamine 100mg IV','thiamine 500mg IV (Wernicke)','folate 1mg IV','vitamin B12 1000mcg IM','tetanus toxoid IM','rabies immunoglobulin','ceftriaxone 250mg IM (STI)','azithromycin 1g PO (STI)','methotrexate 50mg/m2 IM (ectopic)','oxytocin 10u IM','misoprostol 800mcg PV','magnesium sulfate 4g IV (eclampsia)','terbutaline 0.25mg SC'] },
       { icon: '&#x1FA78;', name: 'Procedures', items: [
-        '*start IV access*','*intubate patient*','*insert foley catheter*','*insert NG tube*','*place chest tube*',
-        '*perform lumbar puncture*','*suture laceration*','*perform I&D*','*insert central line*',
-        '*perform paracentesis*','*perform thoracentesis*','*apply splint*','*reduce fracture*','*pack wound*'] },
+        '---Access---','*start IV access*','*start second IV*','*insert central line*','*insert IO (intraosseous)*','*arterial line insertion*',
+        '---Airway---','*intubate patient*','*rapid sequence intubation*','*bag-mask ventilation*','*insert LMA*','*cricothyrotomy*','*needle cricothyrotomy*','*suction airway*','*insert oral airway (OPA)*','*insert nasal airway (NPA)*',
+        '---Tubes/Catheters---','*insert foley catheter*','*insert NG tube*','*insert OG tube*','*place chest tube*','*insert rectal tube*',
+        '---Diagnostic---','*perform lumbar puncture*','*arthrocentesis*','*perform paracentesis*','*perform thoracentesis*',
+        '---Wound---','*suture laceration*','*perform I&D*','*pack wound*','*apply wound vac*','*staple laceration*','*apply steri-strips*','*irrigate wound*','*debride wound*',
+        '---Ortho---','*apply splint*','*reduce fracture*','*reduce dislocation*','*apply traction*','*buddy tape fingers*',
+        '---Other---','*perform pericardiocentesis*','*emergency thoracotomy*','*needle decompression*','*apply tourniquet*','*perform cardioversion*','*insert packing (epistaxis)*'] },
       { icon: '&#x1F4CB;', name: 'Manage', items: [
-        '---Disposition---','discharge patient home','admit to medicine ward','admit to surgery','admit to ICU','transfer to OR',
-        '---Referral---','refer to cardiology','refer to neurology','refer to surgery','refer to psychiatry','refer to OB/GYN','refer to pediatrics','refer to social work',
-        '---Communication---','counsel patient on diagnosis','explain treatment plan','obtain informed consent','create safety plan','call family member',
-        '---Follow-up---','book follow-up in 1 week','book follow-up in 1 month','arrange home care','prescribe medication for discharge'] },
+        '---Disposition---','discharge patient home','admit to medicine ward','admit to surgery','admit to ICU','admit to step-down/telemetry','transfer to OR','transfer to cath lab','transfer to tertiary centre',
+        '---Referral---','refer to cardiology','refer to neurology','refer to surgery','refer to psychiatry','refer to OB/GYN','refer to pediatrics','refer to social work','refer to orthopedics','refer to ENT','refer to ophthalmology','refer to GI','refer to respirology','refer to nephrology','refer to urology','refer to infectious disease','refer to toxicology',
+        '---Communication---','counsel patient on diagnosis','explain treatment plan','obtain informed consent','create safety plan','call family member','call poison control','notify public health',
+        '---Follow-up---','book follow-up in 1 week','book follow-up in 1 month','arrange home care','prescribe medication for discharge','give discharge instructions'] },
       { icon: '&#x1F6A8;', name: 'Resus', items: [
-        '*start CPR*','*defibrillate*','*bag-mask ventilation*','*apply AED*','call code blue','*rapid sequence intubation*','*cricothyrotomy*'] },
+        '---CPR---','*start CPR*','*high-quality chest compressions*','call code blue','*assign team roles*',
+        '---Defib---','*defibrillate*','*apply AED*','*synchronized cardioversion*',
+        '---Airway---','*bag-mask ventilation*','*rapid sequence intubation*','*cricothyrotomy*','*suction airway*',
+        '---Drugs---','epinephrine 1mg IV push (code)','amiodarone 300mg IV push (VF/VT)','atropine 1mg IV','calcium chloride 1g IV','sodium bicarbonate 50mEq IV','vasopressin 40u IV',
+        '---Other---','*needle decompression*','*pericardiocentesis*','*emergency thoracotomy*','activate massive transfusion protocol','transcutaneous pacing'] },
       { icon: '&#x1F6CF;', name: 'Position', items: [
-        '*elevate head of bed*','*recovery position*','*Trendelenburg position*','*left lateral decubitus*','*sit patient upright*','*prone positioning*'] },
+        '*elevate head of bed*','*recovery position*','*Trendelenburg position*','*reverse Trendelenburg*','*left lateral decubitus*','*sit patient upright*','*prone positioning*','*sniffing position (airway)*'] },
       { icon: '&#x1F50D;', name: 'Scopes', items: [
-        'order endoscopy','order colonoscopy','order bronchoscopy','order cystoscopy','order EGD'] }
+        'order endoscopy','order colonoscopy','order bronchoscopy','order cystoscopy','order EGD','order ERCP','order sigmoidoscopy'] },
+      { icon: '&#x1F9F0;', name: 'Equip', items: [
+        '---Monitoring---','attach cardiac monitor','apply pulse oximeter','place on telemetry','attach end-tidal CO2','insert temperature probe','attach automatic BP cuff',
+        '---Oxygen---','*apply nasal cannula 2L/min*','*apply nasal cannula 4L/min*','*apply simple face mask 8L*','*apply non-rebreather mask 15L*','*start high-flow nasal cannula*','*apply CPAP*','*apply BiPAP*','*apply venturi mask*',
+        '---Immobilization---','*apply cervical collar*','*apply pelvic binder*','*full spinal precautions*','*apply sling*',
+        '---Other---','*insert nasopharyngeal airway*','*insert oropharyngeal airway*','*warming blanket*','*cooling blanket*','*apply cardiac defibrillator pads*','*set up rapid infuser*','*apply 12-lead EKG*'] }
     ];
 
     // Quick action tabs — always visible
@@ -2905,6 +3058,7 @@ function renderPBChatInner() {
 
     // Expandable chip panels per category
     html += '<div id="pb-actions-panel" style="display:none;border-top:1px solid var(--border);background:var(--bg);max-height:40vh;overflow-y:auto">';
+    html += '<input type="text" class="pb-action-search" id="pb-action-search" placeholder="Search actions, meds, procedures..." oninput="filterPBActions(this.value)" autocomplete="off" />';
     for (var ci = 0; ci < categories.length; ci++) {
       html += '<div class="pb-cat-panel" id="pb-cat-' + ci + '" style="display:none;padding:10px 16px">';
       html += '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">';
@@ -2914,9 +3068,9 @@ function renderPBChatInner() {
           // Section header
           var label = item.replace(/---/g, '').trim();
           if (ai > 0) html += '</div><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px">';
-          html += '<span style="font-size:11px;font-weight:800;color:var(--text-light);text-transform:uppercase;letter-spacing:0.5px;width:100%;margin:4px 0 2px">' + escapeHtml(label) + '</span>';
+          html += '<span class="pb-section-header" style="font-size:11px;font-weight:800;color:var(--text-light);text-transform:uppercase;letter-spacing:0.5px;width:100%;margin:4px 0 2px">' + escapeHtml(label) + '</span>';
         } else {
-          html += '<button class="pb-action-chip" onclick="insertPBAction(\'' + item.replace(/'/g, "\\'") + '\')">' + escapeHtml(item) + '</button>';
+          html += '<button class="pb-action-chip" data-action="' + escapeHtml(item.toLowerCase()) + '" onclick="insertPBAction(\'' + item.replace(/'/g, "\\'") + '\')">' + escapeHtml(item) + '</button>';
         }
       }
       html += '</div></div>';
