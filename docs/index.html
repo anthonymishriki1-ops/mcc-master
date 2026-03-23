@@ -7385,9 +7385,10 @@ function renderHouseChat() {
   html += '</div></div>';
   // Input area
   html += '<div class="chat-input-area">';
+  html += '<button class="btn btn-warning pb-diagnose-btn" onclick="endHouseMode_()">Diagnose</button>';
   html += '<textarea id="pb-input" placeholder="Describe your symptoms... or tap 🎤" rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendHouseMessage()}"></textarea>';
-  html += '<button class="btn btn-primary" onclick="sendHouseMessage()">Send</button>';
   html += '<button class="btn btn-outline" id="pb-mic-btn" onclick="togglePBMic()" title="Voice input" style="font-size:18px;padding:0 10px">&#x1F3A4;</button>';
+  html += '<button class="btn btn-primary" onclick="sendHouseMessage()">Send</button>';
   html += '</div></div>';
   el.innerHTML = html;
   var msgs = document.getElementById('pb-messages');
@@ -7418,12 +7419,12 @@ function sendHouseMessage() {
   // Show typing indicator
   App.pbHouseConvHistory.push({ role: 'typing', content: '' });
   renderHouseChat();
-  // Route House through askHouseMode — dedicated endpoint that uses sysPrompt verbatim
+  // Route House through askDrData — the only deployed AI endpoint
   var sysPrompt = buildHousePrompt_(cond, App.pbDifficulty);
   var apiHistory = App.pbHouseConvHistory
     .filter(function(m) { return m.role === 'user' || m.role === 'assistant'; })
     .slice(-16); // Keep last 8 exchanges to stay within URL limits
-  serverCall('askHouseMode', sysPrompt, apiHistory).then(function(result) {
+  serverCall('askDrData', sysPrompt, apiHistory).then(function(result) {
     App.pbHouseConvHistory = App.pbHouseConvHistory.filter(function(m) { return m.role !== 'typing'; });
     var response = result.response || result;
     App.pbHouseConvHistory.push({ role: 'assistant', content: response });
