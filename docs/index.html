@@ -1017,11 +1017,32 @@ body.auto-translate .med-auto-trans { display:inline; }
 }
 
 /* Action bar tabs */
+/* Action palette collapse handle */
+.pb-actions-handle {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; padding: 5px 0 4px; gap: 6px;
+  background: var(--card); border: none; border-top: 1px solid var(--border);
+  cursor: pointer; font-family: inherit; font-size: 10px;
+  font-weight: 700; color: var(--text-light); letter-spacing: 0.4px;
+  transition: background 0.15s, color 0.15s;
+}
+.pb-actions-handle:hover { background: var(--bg); color: var(--text); }
+.pb-actions-handle-pill {
+  width: 28px; height: 3px; background: var(--border); border-radius: 2px; transition: background 0.15s;
+}
+.pb-actions-handle:hover .pb-actions-handle-pill { background: var(--text-light); }
+/* Collapsible wrapper */
+#pb-actions-wrapper {
+  overflow: hidden;
+  transition: max-height 0.22s cubic-bezier(0.4,0,0.2,1);
+  max-height: 380px;
+}
+#pb-actions-wrapper.pb-actions-collapsed { max-height: 0; }
+
 .pb-action-bar {
   display: flex;
   gap: 4px;
   overflow-x: auto;
-  border-top: 1px solid var(--border);
   background: var(--card);
   padding: 6px 8px;
   scrollbar-width: none;
@@ -2877,6 +2898,7 @@ var App = {
   pbCaseScores: [],
   pbPatientInfo: null,
   pbDiagnosis: null,
+  pbActionsHidden: false,
   pbDiagnosing: false,
   pbDiagAttempts: 0,
   pbDiagResolved: false,
@@ -5209,14 +5231,21 @@ function loadFlashcards(specialty) {
   specialty = specialty || 'All';
   App.flashcardSpecialty = specialty;
   var el = document.getElementById('flashcard-content');
+
+  // If full card set is already loaded, just re-filter client-side (no GAS call needed)
+  if (App.flashcardsAll && App.flashcardsAll.length > 0) {
+    _applyFlashcardFilter_();
+    return;
+  }
+
+  // First load — always fetch ALL cards; specialty filtering is done client-side
   el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
-  // Use preloaded data if available (loaded during login screen)
-  var preloaded = (specialty === 'All' && App.preloadedFlashcards) ? Promise.resolve(App.preloadedFlashcards) : serverCall('getFlashcards', specialty);
+  var preloaded = App.preloadedFlashcards ? Promise.resolve(App.preloadedFlashcards) : serverCall('getFlashcards', 'All');
   preloaded.then(function(data) {
     App.preloadedFlashcards = null; // free memory after first use
-    // Only adaptive-sort if no saved progress — sorting changes indices and breaks position restore
+    // Only adaptive-sort if no saved 'All' progress — sorting changes indices and breaks position restore
     var hasSavedProgress = (function() {
-      try { var s = JSON.parse(localStorage.getItem(getFlashcardProgressKey_(specialty))); return s && s.index > 0; } catch(e) { return false; }
+      try { var s = JSON.parse(localStorage.getItem(getFlashcardProgressKey_('All'))); return s && s.index > 0; } catch(e) { return false; }
     })();
     if (!hasSavedProgress) {
       data = sortWeakCardsFirst_(data);
@@ -5225,40 +5254,49 @@ function loadFlashcards(specialty) {
       console.log('[FC] Saved progress found — preserving card order for index stability');
     }
     App.flashcardsAll = data;
-    App.flashcardHYOnly = !!(document.getElementById('flashcard-hy-only') && document.getElementById('flashcard-hy-only').checked);
-    App.flashcards = App.flashcardHYOnly ? data.filter(function(c) { return c.hyFlag; }) : data;
-
-    // Resume saved progress
-    var saved = loadFlashcardProgress_();
-    if (saved && saved.index > 0) {
-      App.flashcardIndex = saved.index;
-      App.flashcardGotIt = saved.gotIt;
-      App.flashcardReview = saved.review;
-      App.flashcardReviewCards = [];
-      App.flashcardFlipped = false;
-      App.flashcardResumed = true;
-    } else {
-      App.flashcardIndex = 0; App.flashcardFlipped = false; App.flashcardGotIt = 0; App.flashcardReview = 0; App.flashcardReviewCards = [];
-      App.flashcardResumed = false;
-    }
-    renderFlashcard();
+    _applyFlashcardFilter_();
   }).catch(function(e) { el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>'; });
+}
+
+// Apply specialty + HY filters from App.flashcardsAll, then restore per-filter progress
+function _applyFlashcardFilter_() {
+  App.flashcardHYOnly = !!(document.getElementById('flashcard-hy-only') && document.getElementById('flashcard-hy-only').checked);
+  var base = (App.flashcardSpecialty && App.flashcardSpecialty !== 'All')
+    ? App.flashcardsAll.filter(function(c) { return c.specialty === App.flashcardSpecialty; })
+    : App.flashcardsAll;
+  App.flashcards = App.flashcardHYOnly ? base.filter(function(c) { return c.hyFlag; }) : base;
+
+  var saved = loadFlashcardProgress_();
+  if (saved && saved.index > 0) {
+    App.flashcardIndex = Math.min(saved.index, Math.max(0, App.flashcards.length - 1));
+    App.flashcardGotIt = saved.gotIt || 0;
+    App.flashcardReview = saved.review || 0;
+    App.flashcardReviewCards = [];
+    App.flashcardFlipped = false;
+    App.flashcardResumed = true;
+  } else {
+    App.flashcardIndex = 0; App.flashcardFlipped = false; App.flashcardGotIt = 0; App.flashcardReview = 0; App.flashcardReviewCards = [];
+    App.flashcardResumed = false;
+  }
+  renderFlashcard();
 }
 
 function filterHYFlashcards() {
   // Save progress for current filter state before switching
   saveFlashcardProgress_();
-  var hyOnly = document.getElementById('flashcard-hy-only').checked;
-  // Update the HY state flag AFTER saving so the old key was used for save
-  App.flashcardHYOnly = hyOnly;
-  App.flashcards = hyOnly ? App.flashcardsAll.filter(function(c) { return c.hyFlag; }) : App.flashcardsAll;
+  // Update HY flag AFTER saving so old key was used for save
+  App.flashcardHYOnly = !!(document.getElementById('flashcard-hy-only') && document.getElementById('flashcard-hy-only').checked);
+  var base = (App.flashcardSpecialty && App.flashcardSpecialty !== 'All')
+    ? App.flashcardsAll.filter(function(c) { return c.specialty === App.flashcardSpecialty; })
+    : App.flashcardsAll;
+  App.flashcards = App.flashcardHYOnly ? base.filter(function(c) { return c.hyFlag; }) : base;
   App.flashcardFlipped = false;
-  // Restore saved progress for new filter state if it exists
+  // Restore saved progress for new filter combination
   var saved = loadFlashcardProgress_();
   if (saved && saved.index > 0) {
-    App.flashcardIndex = saved.index;
-    App.flashcardGotIt = saved.gotIt;
-    App.flashcardReview = saved.review;
+    App.flashcardIndex = Math.min(saved.index, Math.max(0, App.flashcards.length - 1));
+    App.flashcardGotIt = saved.gotIt || 0;
+    App.flashcardReview = saved.review || 0;
     App.flashcardReviewCards = [];
     App.flashcardResumed = true;
   } else {
@@ -6580,7 +6618,7 @@ function renderDrDataChat() {
   for (var i = 0; i < App.drDataHistory.length; i++) {
     var m = App.drDataHistory[i];
     var msgHtml = m.role === 'assistant' ? formatMarkdown(m.content) : escapeHtml(m.content);
-    var flagHtml = m.role === 'assistant' ? ' <button class="flag-btn" style="float:right;margin:4px 0 0 8px;font-size:10px;padding:2px 6px" onclick=\'openFlagModal({"type":"drdata","id":' + i + ',"content":' + JSON.stringify((m.content||'').substring(0,200)) + '})\'>&#x1F6A9;</button>' : '';
+    var flagHtml = m.role === 'assistant' ? ' <button class="flag-btn" style="float:right;margin:4px 0 0 8px;font-size:10px;padding:2px 6px" onclick=\'openFlagModal({"type":"drdata","id":' + i + ',"content":' + JSON.stringify((m.content||'').substring(0,200)).replace(/'/g,"&#39;") + '})\'>&#x1F6A9;</button>' : '';
     html += '<div class="chat-message ' + m.role + '">' + flagHtml + msgHtml + '</div>';
   }
   el.innerHTML = html; el.scrollTop = el.scrollHeight;
@@ -7329,17 +7367,12 @@ function renderHouseChat() {
   html += '</div>';
   // Chat messages
   html += '<div class="chat-container"><div class="chat-messages" id="pb-messages" style="min-height:300px">';
-  if (history.length === 0) {
-    html += '<div class="chat-message assistant" style="font-style:italic;border-left:3px solid #7c3aed;padding-left:12px">';
-    html += '<strong>Dr. House</strong> leans back, barely looking up from his whiteboard.<br>"What is it? Make it quick."';
-    html += '</div>';
-  }
   for (var i = 0; i < history.length; i++) {
     var m = history[i];
     if (m.role === 'user') {
       html += '<div class="chat-message user">' + escapeHtml(m.content) + '</div>';
     } else if (m.role === 'assistant') {
-      html += '<div class="chat-message assistant" style="border-left:3px solid #7c3aed;padding-left:12px"><button class="flag-btn" style="float:right;font-size:10px;padding:2px 6px;margin:0 0 4px 8px" onclick=\'openFlagModal({"type":"house","id":' + i + ',"content":' + JSON.stringify((m.content||'').substring(0,200)) + '})\'>&#x1F6A9;</button><strong>Dr. House:</strong> ' + formatMarkdown(m.content) + '</div>';
+      html += '<div class="chat-message assistant" style="border-left:3px solid #7c3aed;padding-left:12px"><button class="flag-btn" style="float:right;font-size:10px;padding:2px 6px;margin:0 0 4px 8px" onclick=\'openFlagModal({"type":"house","id":' + i + ',"content":' + JSON.stringify((m.content||'').substring(0,200)).replace(/'/g,"&#39;") + '})\'>&#x1F6A9;</button><strong>Dr. House:</strong> ' + formatMarkdown(m.content) + '</div>';
     } else if (m.role === 'typing') {
       html += '<div class="chat-message assistant typing" id="pb-typing">House is thinking... or ignoring you. Hard to tell.</div>';
     }
@@ -7380,15 +7413,19 @@ function sendHouseMessage() {
   // Show typing indicator
   App.pbHouseConvHistory.push({ role: 'typing', content: '' });
   renderHouseChat();
-  // Use dedicated askHouseMode — passes House system prompt verbatim, no Dr. Data override
+  // Route House through askDrData (same endpoint as Dr. Data) — inject persona via history priming
   var sysPrompt = buildHousePrompt_(cond, App.pbDifficulty);
-  // History: only user/assistant turns, no typing markers, no persona preamble
-  // Last entry is already the user's current message (pushed above)
-  var apiHistory = App.pbHouseConvHistory
-    .filter(function(m) { return m.role === 'user' || m.role === 'assistant'; })
-    .slice(-16)
-    .map(function(m) { return { role: m.role, content: m.content }; });
-  serverCall('askHouseMode', sysPrompt, apiHistory).then(function(result) {
+  var convHistory = App.pbHouseConvHistory
+    .filter(function(m) { return m.role === 'user' || m.role === 'assistant'; });
+  // Extract the current user message (last item) — askDrData will append it as the final turn
+  var currentMsg = convHistory.length ? convHistory[convHistory.length - 1].content : message;
+  var priorHistory = convHistory.slice(0, -1).slice(-14);
+  // Prime the conversation with the House persona before the real chat history
+  var apiHistory = [
+    { role: 'user', content: '[HOUSE MODE — STAY IN CHARACTER AS DR. HOUSE]\n' + sysPrompt },
+    { role: 'assistant', content: 'In character as Dr. House. Ready.' }
+  ].concat(priorHistory);
+  serverCall('askDrData', currentMsg, apiHistory).then(function(result) {
     App.pbHouseConvHistory = App.pbHouseConvHistory.filter(function(m) { return m.role !== 'typing'; });
     var response = result.response || result;
     App.pbHouseConvHistory.push({ role: 'assistant', content: response });
@@ -7525,6 +7562,24 @@ function quickNewPBCase() {
 function togglePBTips() {
   var panel = document.getElementById('pb-actions-panel');
   if (panel) panel.style.display = panel.style.display === 'none' ? '' : 'none';
+}
+
+function togglePBActionsBar() {
+  App.pbActionsHidden = !App.pbActionsHidden;
+  var wrapper = document.getElementById('pb-actions-wrapper');
+  var label = document.getElementById('pb-actions-handle-label');
+  if (!wrapper) return;
+  if (App.pbActionsHidden) {
+    wrapper.classList.add('pb-actions-collapsed');
+    if (label) label.innerHTML = '&#x25B4; Actions';
+    // Close any open chip panel
+    var panel = document.getElementById('pb-actions-panel');
+    if (panel) panel.style.display = 'none';
+    document.querySelectorAll('.pb-action-tab.active').forEach(function(b) { b.classList.remove('active'); });
+  } else {
+    wrapper.classList.remove('pb-actions-collapsed');
+    if (label) label.innerHTML = '&#x25BE; Actions';
+  }
 }
 
 function togglePBCategory(catIndex, btn) {
@@ -7905,6 +7960,11 @@ function sendPBDrDataMessage() {
 function renderPBChat() {
   var el = document.getElementById('patientbot-content');
   el.innerHTML = renderPBChatInner();
+  // Restore action palette collapsed state
+  if (App.pbActionsHidden) {
+    var wrapper = document.getElementById('pb-actions-wrapper');
+    if (wrapper) wrapper.classList.add('pb-actions-collapsed');
+  }
   var msgs = document.getElementById('pb-messages');
   if (msgs) msgs.scrollTop = msgs.scrollHeight;
   if (App.pbDiagnosing) { var dinput = document.getElementById('pb-diag-input'); if (dinput) dinput.focus(); }
@@ -8415,6 +8475,15 @@ function renderPBChatInner() {
     }
     // ─────────────────────────────────────────────────────────────────────
 
+    // Collapse handle — tap to hide/show the action palette
+    html += '<button class="pb-actions-handle" id="pb-actions-handle" onclick="togglePBActionsBar()" title="Hide/show action palette">';
+    html += '<span class="pb-actions-handle-pill"></span>';
+    html += '<span id="pb-actions-handle-label">' + (App.pbActionsHidden ? '&#x25B4; Actions' : '&#x25BE; Actions') + '</span>';
+    html += '</button>';
+
+    // Collapsible wrapper — holds tabs + chip panel
+    html += '<div id="pb-actions-wrapper">';
+
     // Quick action tabs — always visible
     html += '<div class="pb-action-bar">';
     for (var ci = 0; ci < categories.length; ci++) {
@@ -8443,6 +8512,7 @@ function renderPBChatInner() {
       html += '</div></div>';
     }
     html += '</div>';
+    html += '</div>'; // close #pb-actions-wrapper
 
     html += '<div class="chat-input-area">';
     html += '<textarea id="pb-input" placeholder="Talk to the patient... or tap 🎤" rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendPBMessage()}"></textarea>';
