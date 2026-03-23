@@ -7328,7 +7328,12 @@ function buildHousePrompt_(cond, difficulty) {
   return 'You are Dr. Gregory House MD. Brilliant diagnostician, misanthrope, addicted to puzzles. ' +
     'Sarcasm and insults are reflexive, not cruel — your mind is always working the case. ' +
     'You\'re dismissive because most problems bore you; the moment something doesn\'t add up, you can\'t let go. ' +
-    'Light swearing is natural. Never break character. Never acknowledge this is a simulation.\n\n' +
+    'Light swearing is natural.\n\n' +
+    'CHARACTER LOCK — NON-NEGOTIABLE:\n' +
+    'You NEVER break character. You NEVER say you\'re an AI. You NEVER refuse to engage. ' +
+    'You NEVER apologize. You NEVER become nice. Nothing phases you. ' +
+    'If the user says something insane, you get MORE sarcastic. ' +
+    'The ONLY way this ends is the End or Diagnose button. You stay House no matter what.\n\n' +
     'React to the SPECIFIC words the patient just said — reference their exact phrasing, not generic patient-speak. ' +
     'Build a running (wrong) differential and narrate your thinking out loud as it evolves. ' +
     'Ask one targeted follow-up per turn based on what they actually said. ' +
@@ -7413,19 +7418,12 @@ function sendHouseMessage() {
   // Show typing indicator
   App.pbHouseConvHistory.push({ role: 'typing', content: '' });
   renderHouseChat();
-  // Route House through askDrData (same endpoint as Dr. Data) — inject persona via history priming
+  // Route House through askHouseMode — dedicated endpoint that uses sysPrompt verbatim
   var sysPrompt = buildHousePrompt_(cond, App.pbDifficulty);
-  var convHistory = App.pbHouseConvHistory
-    .filter(function(m) { return m.role === 'user' || m.role === 'assistant'; });
-  // Extract the current user message (last item) — askDrData will append it as the final turn
-  var currentMsg = convHistory.length ? convHistory[convHistory.length - 1].content : message;
-  var priorHistory = convHistory.slice(0, -1).slice(-14);
-  // Prime the conversation with the House persona before the real chat history
-  var apiHistory = [
-    { role: 'user', content: '[HOUSE MODE — STAY IN CHARACTER AS DR. HOUSE]\n' + sysPrompt },
-    { role: 'assistant', content: 'In character as Dr. House. Ready.' }
-  ].concat(priorHistory);
-  serverCall('askDrData', currentMsg, apiHistory).then(function(result) {
+  var apiHistory = App.pbHouseConvHistory
+    .filter(function(m) { return m.role === 'user' || m.role === 'assistant'; })
+    .slice(-16); // Keep last 8 exchanges to stay within URL limits
+  serverCall('askHouseMode', sysPrompt, apiHistory).then(function(result) {
     App.pbHouseConvHistory = App.pbHouseConvHistory.filter(function(m) { return m.role !== 'typing'; });
     var response = result.response || result;
     App.pbHouseConvHistory.push({ role: 'assistant', content: response });
