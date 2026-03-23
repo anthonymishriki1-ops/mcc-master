@@ -5,16 +5,13 @@ MCC Master is an MCCQE Part I practice app. Frontend is a single-page app (`docs
 
 ## Deployment Pipeline
 
-### GitHub Pages (Frontend)
-1. Push changes to a `claude/` branch
-2. Open a PR from that branch to `master` — the auto-merge workflow (`.github/workflows/auto-merge.yml`) merges it within seconds
-3. Once on `master`, the `static.yml` workflow deploys to GitHub Pages automatically
-4. **Do NOT tell the user "you still need to merge"** — the merge is automatic once the PR exists
-
-### Creating PRs
-- After pushing to a `claude/` branch, create a PR via `gh pr create` if authenticated
-- If `gh` CLI is not authenticated, provide the PR creation URL: `https://github.com/anthonymishriki1-ops/mcc-master/pull/new/<branch-name>`
-- The auto-merge bot handles the rest — no manual merge needed
+### GitHub Pages (Frontend) — Fully Automatic
+1. Push changes to a `claude/` branch — that's it
+2. `auto-pr.yml` automatically creates a PR from the branch to `master`
+3. `auto-merge.yml` automatically merges the PR within seconds
+4. `static.yml` deploys to GitHub Pages on push to `master`
+5. **The entire pipeline is automatic** — just push to a `claude/` branch and the site updates within ~1 minute
+6. **Do NOT tell the user to merge, create PRs, or do anything** — it's all automated
 
 ### Google Apps Script (Backend)
 - Backend code lives in `gas_app/` and is synced via `clasp`
