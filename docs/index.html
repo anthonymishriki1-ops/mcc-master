@@ -6882,8 +6882,9 @@ function renderHouseChat() {
   html += '</div></div>';
   // Input area
   html += '<div class="chat-input-area">';
-  html += '<textarea id="pb-input" placeholder="Describe your symptoms..." rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendHouseMessage()}"></textarea>';
+  html += '<textarea id="pb-input" placeholder="Describe your symptoms... or tap 🎤" rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendHouseMessage()}"></textarea>';
   html += '<button class="btn btn-primary" onclick="sendHouseMessage()">Send</button>';
+  html += '<button class="btn btn-outline" id="pb-mic-btn" onclick="togglePBMic()" title="Voice input" style="font-size:18px;padding:0 10px">&#x1F3A4;</button>';
   html += '</div></div>';
   el.innerHTML = html;
   var msgs = document.getElementById('pb-messages');
