@@ -3680,6 +3680,17 @@ var VitalsEngine = {
   applyEffect: function(key) {
     var eff = this.DRUG_EFFECTS[key];
     if (!eff) return;
+    // Naloxone in opioid code blue → dramatic reversal
+    if (key === 'naloxone' && App.pbCodeBlue && App.pbCodeBlue.category === 'opioid') {
+      this._base.hr = 90; this._base.sbp = 110; this._base.dbp = 70;
+      this._base.rr = 14; this._base.spo2 = 94;
+      this._effects = [];
+      App.pbCodeBlue = null;
+      App.pbHistory.push({ role: 'system-alert', content: '✅ **Naloxone response** — Opioid reversal achieved. Patient regaining respiratory effort. HR recovering. Monitor closely — naloxone duration (30–90 min) is shorter than most opioids; repeat dosing may be required.' });
+      var renderFn2 = (typeof renderDailyPBChat === 'function' && App.dailyPhase === 'pb') ? renderDailyPBChat : renderPBChat;
+      if (typeof renderFn2 === 'function') renderFn2();
+      return;
+    }
     this._effects.push({
       key: key,
       delta: { hr: eff.hr||0, sbp: eff.sbp||0, dbp: eff.dbp||0, spo2: eff.spo2||0, rr: eff.rr||0, temp: eff.temp||0 },
@@ -3689,8 +3700,74 @@ var VitalsEngine = {
     });
   },
 
+  // ── Lethal dose thresholds ──────────────────────────────────────────────
+  // Doses in micrograms (mcg). Exceeding these → Code Blue.
+  // category: 'opioid' allows naloxone reversal; 'cardiac' needs defib; 'neuro' needs supportive
+  LETHAL_DOSES: {
+    fentanyl:      { lethal: 500,      unit: 'mcg', category: 'opioid',   label: 'Fentanyl',      note: 'Therapeutic range: 25–100 mcg IV. This dose is 100× the upper limit.' },
+    morphine:      { lethal: 30000,    unit: 'mcg', category: 'opioid',   label: 'Morphine',      note: 'Therapeutic IV bolus: 2–10 mg. 30 mg IV bolus causes respiratory arrest.' },
+    hydromorphone: { lethal: 6000,     unit: 'mcg', category: 'opioid',   label: 'Hydromorphone', note: 'Therapeutic: 0.5–2 mg IV. >6 mg IV bolus = respiratory arrest.' },
+    propofol:      { lethal: 200000,   unit: 'mcg', category: 'neuro',    label: 'Propofol',      note: 'Induction dose: 1–2.5 mg/kg. Bolus >200 mg without airway = apnea.' },
+    potassium:     { lethal: 40000,    unit: 'mcg', category: 'cardiac',  label: 'Potassium (KCl)', note: 'IV push of >40 mEq causes immediate cardiac arrest. Must be diluted and rate-limited.' },
+    epinephrine:   { lethal: 1000,     unit: 'mcg', category: 'cardiac',  label: 'Epinephrine',   note: 'Therapeutic: 0.3 mg IM anaphylaxis, 1 mg IV in cardiac arrest. >1 mg IV in a perfusing patient = fatal arrhythmia.' },
+    insulin:       { lethal: 50000000, unit: 'mcg', category: 'neuro',    label: 'Insulin',       note: 'Massive insulin overdose causes fatal hypoglycaemia. >50 units IV bolus without monitoring = life-threatening.' },
+    digoxin:       { lethal: 2000,     unit: 'mcg', category: 'cardiac',  label: 'Digoxin',       note: 'Therapeutic: 0.25 mg IV. >2 mg IV = fatal ventricular arrhythmia.' },
+    succinylcholine: { lethal: 200000, unit: 'mcg', category: 'neuro',    label: 'Succinylcholine', note: 'Neuromuscular blockade without airway management causes death by apnea.' },
+    kcl:           { lethal: 40000,    unit: 'mcg', category: 'cardiac',  label: 'Potassium chloride', note: 'IV push of >40 mEq KCl is the mechanism used in lethal injection. Always dilute and rate-limit.' },
+  },
+
+  // Parse dose from a string like "fentanyl 10mg IV" → micrograms
+  _parseDoseMcg: function(msg, drugRegex) {
+    // Look for number + unit near the drug name
+    var doseMatch = msg.match(/(\d+(?:\.\d+)?)\s*(mcg|ug|µg|mg|g|mEq|meq|units?|u\b)/i);
+    if (!doseMatch) return null;
+    var num = parseFloat(doseMatch[1]);
+    var unit = doseMatch[2].toLowerCase();
+    if (unit === 'g') return num * 1000000; // grams → mcg
+    if (unit === 'mg') return num * 1000;   // mg → mcg
+    if (unit === 'meq' || unit === 'mEq') return num * 1000; // treat mEq same as mg for threshold
+    if (unit === 'units' || unit === 'unit' || unit === 'u') return num * 1000; // units treated like mg
+    return num; // already mcg
+  },
+
+  // Check if the administered dose is lethal; returns lethal entry or null
+  checkLethalDose: function(msg) {
+    var self = this;
+    // Special-case: skip if this is a drip/infusion (lethal thresholds are for bolus)
+    if (/drip|infusion|\/hr|per.hour|mcg\/kg\/min|mg\/hr/i.test(msg)) return null;
+    // Check each lethal drug
+    var drugPatterns = {
+      fentanyl:       /\bfentanyl\b/i,
+      morphine:       /\bmorphine\b/i,
+      hydromorphone:  /\bhydromorphone\b|\bdilaudid\b/i,
+      propofol:       /\bpropofol\b|\bdiprivan\b/i,
+      potassium:      /\bpotassium\b|\bKCl\b/i,
+      kcl:            /\bKCl\b|\bpotassium chloride\b/i,
+      epinephrine:    /\bepinephrine\b(?!.*\bIM\b)|\bepi\b(?!.*\bIM\b)/i,
+      insulin:        /\binsulin\b/i,
+      digoxin:        /\bdigoxin\b/i,
+      succinylcholine: /\bsuccinylcholine\b|\bsux\b|\bsucchs\b/i,
+    };
+    for (var drug in drugPatterns) {
+      if (drugPatterns[drug].test(msg)) {
+        var doseMcg = self._parseDoseMcg(msg);
+        var threshold = self.LETHAL_DOSES[drug];
+        if (doseMcg !== null && threshold && doseMcg > threshold.lethal) {
+          return { drug: drug, doseMcg: doseMcg, threshold: threshold };
+        }
+      }
+    }
+    return null;
+  },
+
   detectAndApply: function(msg) {
     var applied = [];
+    // Check for lethal dose FIRST — if lethal, trigger code blue instead of normal effect
+    var lethal = this.checkLethalDose(msg);
+    if (lethal) {
+      this._triggerCodeBlue(lethal);
+      return;
+    }
     for (var i = 0; i < this.DRUG_KEYWORDS.length; i++) {
       var pair = this.DRUG_KEYWORDS[i];
       if (pair[0].test(msg) && applied.indexOf(pair[1]) === -1) {
@@ -3698,6 +3775,54 @@ var VitalsEngine = {
         applied.push(pair[1]);
       }
     }
+  },
+
+  // Trigger a code blue event — collapses vitals and injects a critical event message
+  _triggerCodeBlue: function(lethalInfo) {
+    var t = lethalInfo.threshold;
+    var category = t.category;
+    // Immediately collapse vitals based on mechanism
+    if (category === 'opioid') {
+      // Opioid OD: respiratory arrest → hypoxia → cardiac arrest
+      this._base.rr   = 0;
+      this._base.spo2 = 50;
+      this._base.hr   = 20;
+      this._base.sbp  = 60;
+      this._base.dbp  = 30;
+      App.pbCodeBlue = { cause: lethalInfo.drug, category: 'opioid', reversible: true };
+      setTimeout(function() {
+        VitalsEngine._base.hr = 0; VitalsEngine._base.sbp = 0; VitalsEngine._base.dbp = 0;
+        VitalsEngine._base.spo2 = 0; VitalsEngine._base.rr = 0;
+      }, 8000);
+    } else if (category === 'cardiac') {
+      // Cardiac arrest: immediate
+      this._base.hr = 0; this._base.sbp = 0; this._base.dbp = 0;
+      this._base.spo2 = 0; this._base.rr = 0;
+      App.pbCodeBlue = { cause: lethalInfo.drug, category: 'cardiac', reversible: false };
+    } else {
+      // Neuro/apnea: respiratory arrest
+      this._base.rr = 0; this._base.spo2 = 40; this._base.hr = 30;
+      this._base.sbp = 50; this._base.dbp = 25;
+      App.pbCodeBlue = { cause: lethalInfo.drug, category: 'neuro', reversible: false };
+      setTimeout(function() {
+        VitalsEngine._base.hr = 0; VitalsEngine._base.sbp = 0; VitalsEngine._base.dbp = 0;
+        VitalsEngine._base.spo2 = 0; VitalsEngine._base.rr = 0;
+      }, 10000);
+    }
+    this._effects = []; // clear any pending effects
+    // Inject a code blue event into the chat
+    var reversibleNote = (category === 'opioid')
+      ? ' Naloxone may reverse this if given immediately.' : '';
+    var eventMsg = '⚠️ **CRITICAL EVENT — CODE BLUE**\n\n' +
+      'Patient has gone into ' + (category === 'opioid' ? 'respiratory arrest following opioid overdose' :
+        category === 'cardiac' ? 'cardiac arrest' : 'respiratory arrest') + '.\n\n' +
+      '**Drug:** ' + t.label + '\n' +
+      '**Cause:** ' + t.note + reversibleNote + '\n\n' +
+      'Vitals: HR 0, BP 0/0, RR 0, SpO₂ 0%.\n' +
+      'Initiate CPR. Call code blue. Assign team roles.';
+    App.pbHistory.push({ role: 'system-alert', content: eventMsg });
+    var renderFn = (typeof renderDailyPBChat === 'function' && App.dailyPhase === 'pb') ? renderDailyPBChat : renderPBChat;
+    if (typeof renderFn === 'function') renderFn();
   },
 
   sync: function(sv) {
@@ -7645,22 +7770,19 @@ function renderPBChatInner() {
     var bpAlert = (parseInt(bpParts[0]) > 180 || parseInt(bpParts[0]) < 90 || parseInt(bpParts[1]) > 120 || parseInt(bpParts[1]) < 60);
     var tempAlert = (v.temp > 38.5 || v.temp < 35.5);
 
-    // Dot matrix wristband — patient ID + appearance
-    html += '<div class="pb-patient-bar pb-dotmatrix">';
-    html += '<div class="pb-dm-holes pb-dm-holes-left"></div>';
-    html += '<div class="pb-dm-content">';
-    html += '<div class="pb-dm-row">';
-    html += '<span class="pb-dm-field"><span class="pb-dm-label">PT:</span> ' + escapeHtml(p.name || '?').toUpperCase() + '</span>';
-    html += '<span class="pb-dm-field"><span class="pb-dm-label">AGE/SEX:</span> ' + (p.age || '?') + '/' + sexLabel + '</span>';
-    if (p.ethnicity) html += '<span class="pb-dm-field"><span class="pb-dm-label">ETH:</span> ' + escapeHtml(p.ethnicity).toUpperCase() + '</span>';
+    // Patient chart header card
+    html += '<div style="background:var(--card);border-bottom:2px solid var(--border);padding:14px 18px 12px">';
+    html += '<div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:6px;letter-spacing:0.2px">' + escapeHtml(p.name || 'Unknown Patient') + '</div>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px 20px;font-size:13px;color:var(--text-light)">';
+    html += '<span><strong style="color:var(--text)">Age/Sex:</strong> ' + (p.age || '?') + ' · ' + sexLabel + '</span>';
+    if (p.ethnicity) html += '<span><strong style="color:var(--text)">Ethnicity:</strong> ' + escapeHtml(p.ethnicity) + '</span>';
+    if (p.mrn || p.id) html += '<span style="margin-left:auto;font-family:monospace;font-size:12px;opacity:0.5">MRN: ' + escapeHtml(p.mrn || p.id) + '</span>';
     html += '</div>';
     if (p.appearance) {
-      html += '<div class="pb-dm-row">';
-      html += '<span class="pb-dm-field pb-dm-appearance"><span class="pb-dm-label">GEN APPEARANCE:</span> ' + escapeHtml(p.appearance).toUpperCase() + '</span>';
+      html += '<div style="margin-top:8px;font-size:13px;color:var(--text);border-top:1px solid var(--border);padding-top:8px">';
+      html += '<strong>General Appearance:</strong> ' + escapeHtml(p.appearance);
       html += '</div>';
     }
-    html += '</div>';
-    html += '<div class="pb-dm-holes pb-dm-holes-right"></div>';
     html += '</div>';
 
     // Bedside monitor — only shown after user attaches it
@@ -7786,6 +7908,12 @@ function renderPBChatInner() {
       var s = sevStyles[sev] || sevStyles['safe'];
       html += '<div class="chat-consequence" style="background:' + s.bg + ';border-left:3px solid ' + s.border + ';color:var(--text);font-size:13px;padding:8px 14px;margin:4px 20px;border-radius:6px">';
       html += s.icon + ' ' + (s.label ? '<strong>' + s.label + '</strong>' : '') + escapeHtml(m.content);
+      html += '</div>';
+    } else if (m.role === 'system-alert') {
+      // Code Blue / critical event — prominent alert
+      html += '<div style="background:linear-gradient(135deg,#b71c1c,#7f0000);color:white;padding:20px 24px;margin:12px 0;border-radius:12px;border:2px solid #ef5350;box-shadow:0 4px 20px rgba(183,28,28,0.5)">';
+      html += '<div style="font-size:28px;margin-bottom:6px">&#x26A0;&#xFE0F;</div>';
+      html += '<div style="font-size:13px;line-height:1.7">' + formatMarkdown(m.content) + '</div>';
       html += '</div>';
     } else if (m.role === 'user' && m.content && (m.content.match(/^\*.*\*$/) || isPBAction_(m.content))) {
       // Action message — render with contextual verb
