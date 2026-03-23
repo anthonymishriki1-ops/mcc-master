@@ -6334,7 +6334,7 @@ function showPBTutorial(onDone) {
     { title: 'Treat the Patient', text: 'Give medications with real doses: <strong>morphine 4mg IV</strong>, <strong>ceftriaxone 2g IV</strong>. Actions have consequences \u2014 vitals change based on what you give. Wrong drug or dose? The patient reacts accordingly.' },
     { title: 'Live Vitals Monitor', text: 'Watch the live ECG and vitals display at the top. Heart rate, BP, O2 sat, temp, and respiratory rate update in real time as you treat the patient.' },
     { title: 'Make Your Diagnosis', text: 'When you think you know what\'s going on, hit the <strong>Diagnose</strong> button. You get partial credit for close answers. After diagnosis, you receive an <strong>OSCE-style scorecard</strong> graded on 7 domains (A through F).' },
-    { title: 'You\'re Ready!', text: 'Choose a specialty or go with <strong>Random</strong> for exam-style practice. Adjust difficulty, customize the patient, and hit Start. Good luck!' }
+    { title: 'That\'s it.', text: 'Pick a specialty or hit <strong>Random</strong>. Set difficulty. Start.' }
   ];
 
   var currentStep = 0;
@@ -7021,19 +7021,6 @@ function endHouseMode_() {
   html += '<div style="background:rgba(99,102,241,0.08);border-radius:10px;padding:16px;text-align:left;margin:16px 0">';
   html += '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;opacity:0.6">Clinical Pearl</div>';
   html += '<span style="font-size:14px;line-height:1.6">' + escapeHtml(cond.clues.join(' ')) + '</span></div>';
-  // Patient advocacy lesson
-  var advocacyLines = {
-    A: 'You advocated well. You gave House everything he needed and he had no excuse to dismiss you. This is what good patient communication looks like.',
-    B: 'Solid. You got most of it across. In real life, being persistent and specific about symptoms — especially the weird ones — is what catches diagnoses early.',
-    C: 'You got some key symptoms out. Real patients with this condition often get missed for months or years because they only mention the obvious symptoms. The specific ones matter.',
-    D: 'House would\'ve sent you home with antacids. In real medicine, patients who can\'t articulate their full symptom picture — timeline, specifics, context — get missed. Practice the language.',
-    F: 'You got dismissed. This happens constantly to real patients, especially with complex diagnoses. The lesson: every symptom is data. Describe all of it, in sequence, with timing. Doctors who dismiss you are the ones who\'ll miss something.'
-  };
-  html += '<div style="background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.18);border-radius:10px;padding:16px;text-align:left;margin:12px 0">';
-  html += '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;color:#ef4444">&#x1F3AF; The Real Lesson</div>';
-  html += '<div style="font-size:13px;line-height:1.7;color:var(--text)">' + (advocacyLines[grade] || advocacyLines.C) + ' ';
-  html += 'As a <strong>future doctor</strong>: every time you\'re about to dismiss a patient, remember this game. The ones who "seem fine" are sometimes the ones with kala-azar.</div>';
-  html += '</div>';
   html += '<div style="display:flex;gap:12px;justify-content:center;margin-top:20px;flex-wrap:wrap">';
   html += '<button class="btn btn-primary" onclick="startHouseMode()" style="padding:12px 24px">&#x1F504; Play Again</button>';
   html += '<button class="btn btn-outline" onclick="showHouseSetup()">&#x2190; Change Difficulty</button>';
@@ -7078,11 +7065,11 @@ function loadHouseDrDataEval_() {
     'CLINICAL CLUES: ' + (cond ? cond.clues.join(' ') : 'N/A') + '\n' +
     'PERFORMANCE: ' + (score ? score.symptoms_mentioned + '/' + (cond ? cond.symptoms.length : '?') + ' key symptoms mentioned, pushed for ' + score.tests_pushed + ' correct tests, ' + score.turns + ' turns total' : 'N/A') + '\n\n' +
     'TRANSCRIPT:\n' + (transcript || '(No conversation recorded)') + '\n\n' +
-    'As a clinical educator, give a sharp 2-3 paragraph evaluation:\n' +
-    '1. Which symptoms did the student describe well, and what was missing or vague?\n' +
-    '2. Did they advocate for the right investigations? What should they have pushed for?\n' +
-    '3. One specific clinical pearl for this condition on the MCCQE.\n' +
-    'Be specific, not generic. No fluff.';
+    'Give a short, specific breakdown — no preamble, no motivational speech:\n' +
+    '- Which key symptoms came through clearly, and which were absent or too vague to diagnose on?\n' +
+    '- Which investigations did they push for correctly? What was missing?\n' +
+    '- One clinical pearl for this condition that\'s actually useful on the MCCQE.\n' +
+    'Tone: like a colleague giving fast feedback after a clinical skills session. Specific and factual. No lecturing, no "great effort", no life lessons.';
   serverCall('askDrData', prompt, []).then(function(result) {
     App.pbDrDataEval = result.response || result;
     App.pbDrDataEvalLoading = false;
