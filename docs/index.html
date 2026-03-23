@@ -3384,18 +3384,38 @@ function dismissGuide() {
 }
 
 function loadDashboard() {
-  var el = document.getElementById('dashboard-content');
-  el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
+  // Default stats for a brand-new user — dashboard renders instantly with these
+  var defaultStats = {
+    totalQuizzes: 0, avgScore: 0, weakAreas: [], recentQuizzes: [],
+    totalPoints: 0, streak: 0, achievements: [],
+    pbCorrect: 0, pbTotal: 0, totalCardsReviewed: 0,
+    dailyChallengesCompleted: 0, dailyCompleted: false,
+    level: { name: 'Medical Student', icon: '\uD83C\uDF93', number: 1, progress: 0, points: 0 }
+  };
 
-  var statsPromise = App.stats ? Promise.resolve(App.stats) : serverCall('getUserStats');
-  statsPromise.then(function(stats) {
+  // Render immediately — use cached stats if available, otherwise defaults
+  var initialStats = App.stats || defaultStats;
+  renderDashboard(initialStats);
+  updateSidebarLevel(initialStats.level);
+
+  // Already have real stats — just check weekly report and done
+  if (App.stats) {
+    checkWeeklyReport_(App.stats);
+    return;
+  }
+
+  // Fetch real stats in the background; silently update when ready
+  serverCall('getUserStats').then(function(stats) {
     App.stats = stats;
-    renderDashboard(stats);
-    updateSidebarLevel(stats.level);
-    // Check for weekly report on Saturdays
+    // Only re-render if user is still on dashboard
+    var dash = document.getElementById('page-dashboard');
+    if (dash && dash.classList.contains('active')) {
+      renderDashboard(stats);
+      updateSidebarLevel(stats.level);
+    }
     checkWeeklyReport_(stats);
-  }).catch(function(e) {
-    el.innerHTML = '<div class="card"><p>Error loading dashboard: ' + escapeHtml(e.message || String(e)) + '</p></div>';
+  }).catch(function() {
+    // Silently ignore — user already sees a working dashboard with defaults
   });
 }
 
