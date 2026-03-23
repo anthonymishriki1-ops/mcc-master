@@ -242,6 +242,50 @@ body {
 [data-theme="dark"] .med-term:hover { background: rgba(96,165,250,0.15); }
 [data-theme="dark"] .med-term.active { background: rgba(96,165,250,0.22); }
 
+/* Med term on purple/blue flashcard-front — white so it's legible */
+.flashcard-front .med-term {
+  color: #fff;
+  text-decoration-color: rgba(255,255,255,0.55);
+  background: rgba(255,255,255,0.1);
+}
+.flashcard-front .med-term:hover,
+.flashcard-front .med-term.active { background: rgba(255,255,255,0.22); }
+
+/* Inline persistent expansion pill — injected right after the term */
+.med-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 2px;
+  padding: 2px 8px 2px 6px;
+  background: rgba(37,99,235,0.09);
+  border: 1px solid rgba(37,99,235,0.22);
+  border-radius: 100px;
+  font-size: 12px;
+  line-height: 1.4;
+  vertical-align: middle;
+  white-space: nowrap;
+  animation: tooltipIn 0.13s ease;
+  cursor: default;
+}
+.med-inline-trans { font-weight: 700; color: var(--text); }
+.med-inline-trans.ltr-t { direction: ltr; }
+.med-inline-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 14px; padding: 0 1px; line-height: 1;
+  opacity: 0.65; transition: opacity 0.1s;
+}
+.med-inline-btn:hover { opacity: 1; }
+.flashcard-front .med-inline {
+  background: rgba(255,255,255,0.15);
+  border-color: rgba(255,255,255,0.35);
+}
+.flashcard-front .med-inline-trans { color: #fff; }
+[data-theme="dark"] .med-inline {
+  background: rgba(96,165,250,0.1);
+  border-color: rgba(96,165,250,0.25);
+}
+
 /* Persistent click panel — stays open until dismissed */
 .med-panel {
   position: fixed;
@@ -1879,15 +1923,39 @@ label {
   }
 
   .flashcard {
-    height: 220px;
+    /* Portrait mobile — fill most of the viewport */
+    height: clamp(280px, 52vh, 480px);
   }
 
   .flashcard-front,
   .flashcard-back {
-    padding: 24px;
+    padding: 20px 24px;
     font-size: 15px;
   }
 
+}
+
+/* ── Landscape phone (rotated) ─────────────────────────────────────────── */
+@media (orientation: landscape) and (max-height: 560px) {
+  .flashcard-container { max-width: none; }
+  .flashcard {
+    height: calc(100vh - 230px);
+    min-height: 130px;
+  }
+  .flashcard-front,
+  .flashcard-back {
+    padding: 12px 20px;
+    font-size: 13.5px;
+    line-height: 1.5;
+  }
+  .flashcard-meta { margin-bottom: 8px; font-size: 13px; }
+  .flashcard-nav { margin-top: 8px; gap: 8px; }
+  .flashcard-nav .btn { padding: 10px; font-size: 14px; }
+  /* stack the progress meter and goal bar horizontally in landscape */
+  #flashcard-content > div:first-child { margin-bottom: 6px; padding: 6px 12px; }
+}
+
+@media (max-width: 768px) {
   .stat-grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -2797,8 +2865,17 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '2.7';
+var APP_VERSION = '2.8';
 var APP_CHANGELOG = [
+  { version: '2.8', date: 'Mar 23 2026', label: 'Flashcard UI + Med Term Overhaul', items: [
+    'FLASHCARD: Portrait mode — cards now fill ~52% of viewport height instead of a tiny fixed 220px box',
+    'FLASHCARD: Landscape phone support — cards adapt to rotated orientation with compact layout',
+    'FLASHCARD: Tapping a medical term no longer accidentally flips the card (stopPropagation guard added)',
+    'MED TERMS: Replaced floating hover panel with persistent INLINE pill — translation and 🔊/🐌 buttons appear right next to the word, never disappear',
+    'MED TERMS: Blue term text is now white on the purple card front so it\'s legible',
+    'MED TERMS: First-time tap hint banner — "Tap blue underlined words for pronunciation & translation" (dismisses after first use)',
+    'MED TERMS: Glossary expanded from 50 → 115+ terms covering cardiology, neuro, GI, hematology, endo, rheum, obs, onco, pharm — focus on pronunciation-tricky words for FMGs',
+  ]},
   { version: '2.7', date: 'Mar 23 2026', label: 'PatientBot OSCE Scorecard Bug Fix', items: [
     'BUG FIX: "substring is not a function" crash after diagnosis — getPBTranscript() was calling .substring() on object-typed message content (diagnosis_result, debrief, partial roles store objects, not strings)',
     'BUG FIX: OSCE scorecard spinner would freeze forever if generateCaseDebrief failed — catch handler now clears the spinner and shows a Retry button instead of silently hanging',
@@ -4441,6 +4518,14 @@ function renderFlashcard() {
 
   var html = '';
 
+  // One-time tap hint for medical terms (dismissed after first tap or explicit close)
+  if (App.glossary && !localStorage.getItem('mcc_medterm_hint_seen')) {
+    html += '<div id="medterm-hint-banner" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;background:rgba(37,99,235,0.07);border:1px solid rgba(37,99,235,0.18);border-radius:10px;font-size:13px;color:var(--text);line-height:1.4">';
+    html += '&#x1F4A1; Tap <span style="color:#2563eb;font-weight:700;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px">blue underlined words</span> for pronunciation &amp; translation';
+    html += '<button onclick="dismissMedHint()" style="margin-left:auto;flex-shrink:0;background:none;border:none;cursor:pointer;font-size:17px;color:var(--text-light);padding:0;line-height:1">&#x2715;</button>';
+    html += '</div>';
+  }
+
   // Daily goal meter
   html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:10px 16px;background:var(--card);border:1px solid var(--border);border-radius:10px">';
   html += '<span style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;cursor:pointer" onclick="promptDailyGoal()" title="Click to change goal">Today: ' + dailyCount + '/' + dailyGoal + '</span>';
@@ -4471,7 +4556,8 @@ function renderFlashcard() {
   html += '<button class="btn btn-primary" onclick="jumpToFlashcard()" style="padding:6px 14px;font-size:13px">Go</button>';
   html += '</div>';
   html += '<div class="progress-bar" style="margin-bottom:20px"><div class="progress-fill" style="width:' + ((current / total) * 100) + '%"></div></div>';
-  html += '<div class="flashcard-container"><div class="flashcard' + (App.flashcardFlipped ? ' flipped' : '') + '" onclick="flipFlashcard()">';
+  // Guard: don't flip if the tap landed on a med-term or its inline pill
+  html += '<div class="flashcard-container"><div class="flashcard' + (App.flashcardFlipped ? ' flipped' : '') + '" onclick="if(!event.target.closest(\'.med-term,.med-inline\')){flipFlashcard()}">';
   html += '<div class="flashcard-front"><div>' + medHtml(card.front) + '</div></div>';
   html += '<div class="flashcard-back"><div>' + medHtml(card.back) + '</div></div>';
   html += '</div></div>';
@@ -7276,7 +7362,81 @@ var FALLBACK_GLOSSARY = [
   {Term:'biopsy',Category:'Pathology',Definition:'Removal of tissue for microscopic examination',fa:'بیوپسی / نمونه‌برداری',ar:'خزعة',fr:'biopsie'},
   {Term:'echocardiogram',Category:'Cardiology',Definition:'Ultrasound imaging of the heart',fa:'اکوکاردیوگرام / سونوگرافی قلب',ar:'صدى صوت القلب',fr:'échocardiogramme'},
   {Term:'electrocardiogram',Category:'Cardiology',Definition:'Recording of heart electrical activity',fa:'نوار قلب',ar:'تخطيط القلب',fr:'électrocardiogramme'},
-  {Term:'hypertension',Category:'Cardiology',Definition:'Persistently elevated blood pressure ≥130/80 mmHg',fa:'فشار خون بالا',ar:'ارتفاع ضغط الدم',fr:'hypertension artérielle'}
+  // ── Extended set: pronunciation focus for non-native English speakers ──────
+  {Term:'ischemia',Category:'Cardiology',Definition:'Insufficient blood supply to tissue',fa:'ایسکمی / کمبود خون‌رسانی',ar:'نقص التروية',fr:'ischémie'},
+  {Term:'pericarditis',Category:'Cardiology',Definition:'Inflammation of the pericardium (sac around the heart)',fa:'پریکاردیت / التهاب پریکارد',ar:'التهاب التامور',fr:'péricardite'},
+  {Term:'aortic stenosis',Category:'Cardiology',Definition:'Narrowing of the aortic valve opening',fa:'تنگی دریچه آئورت',ar:'تضيق الأبهر',fr:'sténose aortique'},
+  {Term:'mitral regurgitation',Category:'Cardiology',Definition:'Backflow of blood through an incompetent mitral valve',fa:'نارسایی دریچه میترال',ar:'قلس التاجي',fr:'insuffisance mitrale'},
+  {Term:'arrhythmia',Category:'Cardiology',Definition:'Any abnormal heart rhythm',fa:'آریتمی / اختلال ریتم قلب',ar:'عدم انتظام ضربات القلب',fr:'arythmie'},
+  {Term:'atherosclerosis',Category:'Cardiology',Definition:'Plaque build-up in artery walls causing narrowing',fa:'آترواسکلروز / سخت شدن شریان‌ها',ar:'تصلب الشرايين',fr:'athérosclérose'},
+  {Term:'endocarditis',Category:'Cardiology',Definition:'Infection of the inner lining or valves of the heart',fa:'اندوکاردیت / عفونت قلب',ar:'التهاب الشغاف',fr:'endocardite'},
+  {Term:'pneumothorax',Category:'Respirology',Definition:'Air in the pleural space causing lung collapse',fa:'پنوموتوراکس / هوا در پلور',ar:'استرواح الصدر',fr:'pneumothorax'},
+  {Term:'pleural effusion',Category:'Respirology',Definition:'Fluid accumulation in the pleural space',fa:'پلورال افیوژن / آب در پلور',ar:'الانصباب الجنبي',fr:'épanchement pleural'},
+  {Term:'atelectasis',Category:'Respirology',Definition:'Partial or complete collapse of lung tissue',fa:'آتلکتازی / فروپاشی ریه',ar:'انخماص الرئة',fr:'atélectasie'},
+  {Term:'bronchiectasis',Category:'Respirology',Definition:'Permanent widening of bronchi with chronic mucus build-up',fa:'برونشیکتازی / گشادی برونش‌ها',ar:'توسع القصبات',fr:'bronchectasie'},
+  {Term:'pleurisy',Category:'Respirology',Definition:'Inflammation of the pleura causing sharp pleuritic chest pain',fa:'پلوریزی / التهاب پرده پلور',ar:'ذات الجنب',fr:'pleurésie'},
+  {Term:'hepatomegaly',Category:'Gastroenterology',Definition:'Pathological enlargement of the liver',fa:'هپاتومگالی / بزرگ شدن کبد',ar:'تضخم الكبد',fr:'hépatomégalie'},
+  {Term:'splenomegaly',Category:'Gastroenterology',Definition:'Pathological enlargement of the spleen',fa:'اسپلنومگالی / بزرگ شدن طحال',ar:'تضخم الطحال',fr:'splénomégalie'},
+  {Term:'ascites',Category:'Gastroenterology',Definition:'Fluid accumulation in the peritoneal cavity',fa:'آسیت / آب در شکم',ar:'الاستسقاء البطني',fr:'ascite'},
+  {Term:'cirrhosis',Category:'Gastroenterology',Definition:'Extensive liver scarring with loss of hepatic function',fa:'سیروز کبدی / فیبروز کبد',ar:'تليف الكبد',fr:'cirrhose'},
+  {Term:'cholelithiasis',Category:'Gastroenterology',Definition:'Gallstones within the gallbladder',fa:'کوله‌لیتیازیس / سنگ کیسه صفرا',ar:'حصى المرارة',fr:'lithiase biliaire'},
+  {Term:'nephrolithiasis',Category:'Nephrology',Definition:'Kidney stones in the collecting system',fa:'نفرولیتیازیس / سنگ کلیه',ar:'حصى الكلى',fr:'néphrolithiase'},
+  {Term:'glomerulonephritis',Category:'Nephrology',Definition:'Immune-mediated inflammation of the glomeruli',fa:'گلومرولونفریت / التهاب گلومرول‌ها',ar:'التهاب كبيبات الكلى',fr:'glomérulonéphrite'},
+  {Term:'proteinuria',Category:'Nephrology',Definition:'Excess protein in the urine (>150 mg/day)',fa:'پروتئینوری / پروتئین در ادرار',ar:'بيلة بروتينية',fr:'protéinurie'},
+  {Term:'oliguria',Category:'Nephrology',Definition:'Urine output <400 mL per day',fa:'اولیگوری / کاهش ادرار',ar:'قلة البول',fr:'oligurie'},
+  {Term:'thrombocytopenia',Category:'Hematology',Definition:'Platelet count below normal (<150 × 10⁹/L)',fa:'ترومبوسیتوپنی / کاهش پلاکت',ar:'نقص الصفيحات',fr:'thrombocytopénie'},
+  {Term:'leukocytosis',Category:'Hematology',Definition:'White blood cell count above normal (>11 × 10⁹/L)',fa:'لوکوسیتوز / افزایش گلبول سفید',ar:'كثرة الكريات البيضاء',fr:'leucocytose'},
+  {Term:'lymphoma',Category:'Hematology',Definition:'Malignancy of lymphocytes in the lymphatic system',fa:'لنفوم / سرطان لنفاوی',ar:'سرطان الغدد الليمفاوية',fr:'lymphome'},
+  {Term:'leukemia',Category:'Hematology',Definition:'Malignancy of white blood cell precursors',fa:'لوکمی / سرطان خون',ar:'سرطان الدم',fr:'leucémie'},
+  {Term:'coagulopathy',Category:'Hematology',Definition:'Any disorder impairing normal blood clotting',fa:'کواگولوپاتی / اختلال انعقاد خون',ar:'اعتلال التخثر',fr:'coagulopathie'},
+  {Term:'thromboembolism',Category:'Hematology',Definition:'Obstruction of a blood vessel by a dislodged clot',fa:'ترومبوآمبولیسم / لخته‌ی سرگردان',ar:'الجلطة الانصمامية',fr:'thromboembolie'},
+  {Term:'meningitis',Category:'Neurology',Definition:'Inflammation of the meninges surrounding brain and spinal cord',fa:'مننژیت / التهاب پرده مغز',ar:'التهاب السحايا',fr:'méningite'},
+  {Term:'encephalitis',Category:'Neurology',Definition:'Inflammation of the brain parenchyma itself',fa:'آنسفالیت / التهاب مغز',ar:'التهاب الدماغ',fr:'encéphalite'},
+  {Term:'paresthesia',Category:'Neurology',Definition:'Abnormal sensation — tingling, numbness, or pins-and-needles',fa:'پارستزی / سوزش یا بی‌حسی',ar:'تنميل أو وخز',fr:'paresthésie'},
+  {Term:'neuropathy',Category:'Neurology',Definition:'Disease or dysfunction of peripheral nerves',fa:'نوروپاتی / آسیب اعصاب',ar:'اعتلال الأعصاب',fr:'neuropathie'},
+  {Term:'aphasia',Category:'Neurology',Definition:'Loss of ability to produce or comprehend language from brain damage',fa:'آفازی / اختلال گفتار مغزی',ar:'الحبسة الكلامية',fr:'aphasie'},
+  {Term:'dysarthria',Category:'Neurology',Definition:'Slurred speech from motor weakness or incoordination',fa:'دیزارتری / اختلال تلفظ',ar:'عسر التلفظ',fr:'dysarthrie'},
+  {Term:'ataxia',Category:'Neurology',Definition:'Loss of voluntary muscle coordination',fa:'آتاکسی / اختلال تعادل و هماهنگی',ar:'الرنح',fr:'ataxie'},
+  {Term:'nystagmus',Category:'Neurology',Definition:'Involuntary rhythmic oscillation of the eyes',fa:'نیستاگموس / لرزش چشم',ar:'رأرأة',fr:'nystagmus'},
+  {Term:'pheochromocytoma',Category:'Endocrinology',Definition:'Adrenal tumour causing catecholamine excess and hypertensive crises',fa:'فئوکروموسیتوما / تومور غده فوق کلیوی',ar:'ورم القواتم',fr:'phéochromocytome'},
+  {Term:'Cushing syndrome',Category:'Endocrinology',Definition:'Clinical syndrome from chronic cortisol excess',fa:'سندرم کوشینگ / افزایش کورتیزول',ar:'متلازمة كوشينغ',fr:'syndrome de Cushing'},
+  {Term:'Addison disease',Category:'Endocrinology',Definition:'Primary adrenal insufficiency with cortisol and aldosterone deficiency',fa:'بیماری آدیسون / نارسایی قشر فوق کلیوی',ar:'مرض أديسون',fr:'maladie d\'Addison'},
+  {Term:'acromegaly',Category:'Endocrinology',Definition:'Excess growth hormone in adults causing bony and soft-tissue overgrowth',fa:'آکرومگالی / افزایش هورمون رشد در بزرگسالان',ar:'ضخامة الأطراف',fr:'acromégalie'},
+  {Term:'hyperlipidemia',Category:'Endocrinology',Definition:'Elevated blood cholesterol and/or triglycerides',fa:'هایپرلیپیدمی / چربی خون بالا',ar:'فرط شحوم الدم',fr:'hyperlipidémie'},
+  {Term:'dyslipidemia',Category:'Endocrinology',Definition:'Any abnormality of blood lipid levels',fa:'دیس‌لیپیدمی / اختلال چربی خون',ar:'عسر شحوم الدم',fr:'dyslipidémie'},
+  {Term:'cellulitis',Category:'Dermatology',Definition:'Bacterial infection of skin and subcutaneous tissue',fa:'سلولیت / عفونت بافت زیر پوست',ar:'التهاب النسيج الخلوي',fr:'cellulite'},
+  {Term:'erythema',Category:'Dermatology',Definition:'Redness of skin from vasodilation',fa:'اریتم / قرمزی پوست',ar:'احمرار الجلد',fr:'érythème'},
+  {Term:'urticaria',Category:'Dermatology',Definition:'Hives — raised itchy wheals from mast cell degranulation',fa:'کهیر / آرتیکاریا',ar:'شرى',fr:'urticaire'},
+  {Term:'psoriasis',Category:'Dermatology',Definition:'Chronic autoimmune skin condition with scaly plaques',fa:'پسوریازیس / صدف پوستی',ar:'الصدفية',fr:'psoriasis'},
+  {Term:'alopecia',Category:'Dermatology',Definition:'Hair loss from scalp or body',fa:'آلوپسی / ریزش مو',ar:'ثعلبة',fr:'alopécie'},
+  {Term:'ecchymosis',Category:'General',Definition:'Bruising from extravasation of blood into subcutaneous tissue',fa:'اکیموز / کبودی زیر پوست',ar:'كدمة',fr:'ecchymose'},
+  {Term:'petechiae',Category:'General',Definition:'Pinpoint hemorrhagic spots on skin from capillary bleeding',fa:'پتشی / نقاط خون‌ریزی ریز پوستی',ar:'نمشات',fr:'pétéchies'},
+  {Term:'cachexia',Category:'General',Definition:'Profound weight loss and muscle wasting in serious illness',fa:'کاشکسی / لاغری مفرط در بیماری مزمن',ar:'دنف',fr:'cachexie'},
+  {Term:'hypoxia',Category:'General',Definition:'Insufficient oxygen delivery to tissues',fa:'هیپوکسی / کمبود اکسیژن بافتی',ar:'نقص الأكسجين',fr:'hypoxie'},
+  {Term:'anorexia',Category:'General',Definition:'Loss of appetite',fa:'بی‌اشتهایی',ar:'فقدان الشهية',fr:'anorexie'},
+  {Term:'hemorrhage',Category:'General',Definition:'Significant bleeding from ruptured blood vessels',fa:'خون‌ریزی شدید',ar:'نزيف',fr:'hémorragie'},
+  {Term:'hematoma',Category:'General',Definition:'Localized collection of blood outside blood vessels',fa:'هماتوم / جمع‌شدگی خون',ar:'ورم دموي',fr:'hématome'},
+  {Term:'abscess',Category:'Surgery',Definition:'Localized pus collection surrounded by inflamed tissue',fa:'آبسه / کیسه چرک',ar:'خراج',fr:'abcès'},
+  {Term:'fistula',Category:'Surgery',Definition:'Abnormal epithelium-lined connection between two structures',fa:'فیستول / کانال غیرطبیعی',ar:'ناسور',fr:'fistule'},
+  {Term:'claudication',Category:'Vascular',Definition:'Leg pain from arterial insufficiency brought on by walking',fa:'لنگش / درد پا هنگام راه رفتن',ar:'العرج المتقطع',fr:'claudication'},
+  {Term:'bacteremia',Category:'Infectious Disease',Definition:'Presence of viable bacteria in the bloodstream',fa:'باکتریمی / ورود باکتری به خون',ar:'جرثومية الدم',fr:'bactériémie'},
+  {Term:'osteoporosis',Category:'Rheumatology',Definition:'Reduced bone mineral density increasing fracture risk',fa:'پوکی استخوان',ar:'هشاشة العظام',fr:'ostéoporose'},
+  {Term:'gout',Category:'Rheumatology',Definition:'Painful arthritis from monosodium urate crystal deposition',fa:'نقرس / رسوب اسید اوریک',ar:'النقرس',fr:'goutte'},
+  {Term:'rheumatoid arthritis',Category:'Rheumatology',Definition:'Systemic autoimmune inflammatory joint disease',fa:'آرتریت روماتوئید / التهاب مفصل خودایمنی',ar:'التهاب المفاصل الروماتويدي',fr:'polyarthrite rhumatoïde'},
+  {Term:'lupus',Category:'Rheumatology',Definition:'Systemic autoimmune disease affecting multiple organs',fa:'لوپوس / بیماری خودایمنی سیستمیک',ar:'الذئبة الحمراء',fr:'lupus'},
+  {Term:'preeclampsia',Category:'Obstetrics',Definition:'Hypertension and proteinuria in pregnancy after 20 weeks',fa:'پره‌اکلامپسی / فشار خون دوران بارداری',ar:'ما قبل الارتعاج',fr:'prééclampsie'},
+  {Term:'eclampsia',Category:'Obstetrics',Definition:'New-onset seizures in setting of preeclampsia',fa:'اکلامپسی / تشنج دوران بارداری',ar:'الارتعاج',fr:'éclampsie'},
+  {Term:'neoplasm',Category:'Oncology',Definition:'Abnormal new tissue growth — benign or malignant',fa:'نئوپلاسم / رشد غیرطبیعی بافتی',ar:'ورم',fr:'néoplasme'},
+  {Term:'carcinoma',Category:'Oncology',Definition:'Malignant tumour arising from epithelial cells',fa:'کارسینوم / سرطان اپیتلیال',ar:'سرطانة',fr:'carcinome'},
+  {Term:'metastasis',Category:'Oncology',Definition:'Spread of cancer from the primary site to distant organs',fa:'متاستاز / انتشار سرطان',ar:'نقيلة سرطانية',fr:'métastase'},
+  {Term:'immunodeficiency',Category:'Infectious Disease',Definition:'Impaired immune system unable to mount normal responses',fa:'نقص ایمنی',ar:'نقص المناعة',fr:'immunodéficience'},
+  {Term:'anaphylaxis',Category:'Emergency',Definition:'Severe systemic allergic reaction with cardiovascular collapse risk',fa:'آنافیلاکسی / واکنش آلرژیک شدید',ar:'صدمة الحساسية',fr:'anaphylaxie'},
+  {Term:'prophylaxis',Category:'Pharmacology',Definition:'Preventive treatment to avoid disease onset',fa:'پروفیلاکسی / پیشگیری دارویی',ar:'الوقاية',fr:'prophylaxie'},
+  {Term:'analgesic',Category:'Pharmacology',Definition:'Pain-relieving medication',fa:'مسکن درد',ar:'مسكن للألم',fr:'analgésique'},
+  {Term:'antipyretic',Category:'Pharmacology',Definition:'Fever-reducing medication',fa:'ضد تب / داروی کاهنده تب',ar:'خافض للحرارة',fr:'antipyrétique'},
+  {Term:'anticoagulant',Category:'Pharmacology',Definition:'Blood-thinning agent that prevents clot formation',fa:'ضد انعقاد خون',ar:'مضاد للتخثر',fr:'anticoagulant'},
+  {Term:'diuretic',Category:'Pharmacology',Definition:'Medication that increases renal water and salt excretion',fa:'مدر ادرار',ar:'مدر البول',fr:'diurétique'},
+  {Term:'vasodilator',Category:'Pharmacology',Definition:'Agent that relaxes vascular smooth muscle to widen vessels',fa:'گشادکننده عروق',ar:'موسع للأوعية',fr:'vasodilatateur'},
 ];
 
 function buildGlossaryIndex_(data) {
@@ -7319,97 +7479,76 @@ function highlightMedTerms(html) {
   });
 }
 
-// ── Click-to-open persistent med term panel ────────────────────────────────
-var _medPanelDismiss = null; // outside-click listener reference
+// ── Inline persistent med term expansion ──────────────────────────────────
+// Tapping a term injects a pill INLINE right after it — no floating popup,
+// no outside-click dismiss. Tap the same term again to collapse it.
 
 function toggleMedPanel(e) {
   e.stopPropagation();
+  // Clicks from inside an already-open inline pill — just let them fire
+  if (e.target && e.target.classList && e.target.classList.contains('med-inline-btn')) return;
+
   var span = e.currentTarget || e.target;
+  // Walk up if click landed on a child node of the span
+  while (span && !span.getAttribute('data-term')) span = span.parentElement;
+  if (!span) return;
   var termKey = span.getAttribute('data-term');
   if (!termKey || !App.glossary[termKey]) return;
 
-  // If this exact term's panel is already open → close it
-  var existing = document.getElementById('med-panel-active');
-  if (existing) {
-    var wasFor = existing.getAttribute('data-for');
-    closeMedPanel();
-    if (wasFor === termKey) return; // toggle off
+  // Toggle: if this term's pill is already open, close it
+  var nextEl = span.nextSibling;
+  if (nextEl && nextEl.nodeType === 1 && nextEl.classList.contains('med-inline') &&
+      nextEl.getAttribute('data-for') === termKey) {
+    nextEl.remove();
+    span.classList.remove('active');
+    return;
   }
+
+  // Close any other open inline pills first
+  document.querySelectorAll('.med-inline').forEach(function(el) { el.remove(); });
+  document.querySelectorAll('.med-term.active').forEach(function(el) { el.classList.remove('active'); });
 
   var entry = App.glossary[termKey];
   var lang = App.glossaryLang;
   var rtlLangs = ['fa', 'ar', 'ur'];
   var isRTL = rtlLangs.indexOf(lang) !== -1;
-
-  var catLabel  = entry.Category    || entry.category    || '';
-  var def       = entry.Definition  || entry.definition  || '';
-  var dispTerm  = entry.Term        || entry.term        || termKey;
+  var dispTerm = entry.Term || entry.term || termKey;
   var translation = (lang && lang !== 'en') ? (entry[lang] || entry.translation || '') : '';
 
-  var panel = document.createElement('div');
-  panel.className = 'med-panel';
-  panel.id = 'med-panel-active';
-  panel.setAttribute('data-for', termKey);
+  var pill = document.createElement('span');
+  pill.className = 'med-inline';
+  pill.setAttribute('data-for', termKey);
 
-  var html = '<button class="med-panel-close" onclick="closeMedPanel()" title="Close">&#x2715;</button>';
-  html += '<div class="med-panel-term">' + escapeHtml(dispTerm);
-  if (catLabel) html += '<span class="med-panel-cat">' + escapeHtml(catLabel) + '</span>';
-  html += '</div>';
-  if (def) html += '<div class="med-panel-def">' + escapeHtml(def) + '</div>';
-
+  var inner = '';
   if (translation) {
-    html += '<div class="med-panel-translation' + (isRTL ? '' : ' ltr') + '">';
-    html += '<div class="med-panel-translation-label">Translation</div>';
-    html += escapeHtml(translation);
-    html += '</div>';
+    inner += '<span class="med-inline-trans' + (isRTL ? '' : ' ltr-t') + '">' + escapeHtml(translation) + '</span>';
+    inner += '<span aria-hidden="true" style="opacity:0.25;font-size:9px;margin:0 1px">&#x2502;</span>';
   }
+  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(dispTerm) + ',1.0)" title="Pronounce (normal speed)">&#x1F50A;</button>';
+  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(dispTerm) + ',0.45)" title="Pronounce (slow — hear every syllable)">&#x1F40C;</button>';
 
-  html += '<div class="med-panel-pronounce">';
-  html += '<button onclick="pronounceMedTerm(' + JSON.stringify(dispTerm) + ', 1.0)" title="Normal speed">&#x1F50A; Normal</button>';
-  html += '<button onclick="pronounceMedTerm(' + JSON.stringify(dispTerm) + ', 0.45)" title="Slow — hear every syllable">&#x1F40C; Slow</button>';
-  html += '</div>';
-
-  panel.innerHTML = html;
-  document.body.appendChild(panel);
-
-  // Mark span as active
-  document.querySelectorAll('.med-term.active').forEach(function(el) { el.classList.remove('active'); });
+  pill.innerHTML = inner;
   span.classList.add('active');
+  if (span.parentNode) span.parentNode.insertBefore(pill, span.nextSibling);
 
-  // Position: below the term, clamped to viewport
-  var rect = span.getBoundingClientRect();
-  panel.style.visibility = 'hidden';
-  panel.style.top = '0px';
-  panel.style.left = '0px';
-  requestAnimationFrame(function() {
-    var pw = panel.offsetWidth;
-    var ph = panel.offsetHeight;
-    var top = rect.bottom + 8;
-    var left = rect.left;
-    if (top + ph > window.innerHeight - 12) top = rect.top - ph - 8;
-    if (top < 8) top = 8;
-    if (left + pw > window.innerWidth - 12) left = window.innerWidth - pw - 12;
-    if (left < 12) left = 12;
-    panel.style.top  = top  + 'px';
-    panel.style.left = left + 'px';
-    panel.style.visibility = '';
-  });
-
-  // Dismiss when clicking outside
-  _medPanelDismiss = function(ev) {
-    if (!panel.contains(ev.target)) closeMedPanel();
-  };
-  setTimeout(function() { document.addEventListener('click', _medPanelDismiss); }, 10);
+  // Dismiss first-time hint after any successful tap
+  if (!localStorage.getItem('mcc_medterm_hint_seen')) {
+    localStorage.setItem('mcc_medterm_hint_seen', '1');
+    var hintEl = document.getElementById('medterm-hint-banner');
+    if (hintEl) hintEl.style.display = 'none';
+  }
 }
 
 function closeMedPanel() {
-  if (_medPanelDismiss) {
-    document.removeEventListener('click', _medPanelDismiss);
-    _medPanelDismiss = null;
-  }
-  var panel = document.getElementById('med-panel-active');
-  if (panel) panel.remove();
+  // Close all inline pills (called when card re-renders or content changes)
+  document.querySelectorAll('.med-inline').forEach(function(el) { el.remove(); });
   document.querySelectorAll('.med-term.active').forEach(function(el) { el.classList.remove('active'); });
+}
+
+function dismissMedHint() {
+  localStorage.setItem('mcc_medterm_hint_seen', '1');
+  var el = document.getElementById('medterm-hint-banner');
+  if (el) el.remove();
 }
 
 function pronounceMedTerm(term, rate) {
