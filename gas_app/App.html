@@ -2901,7 +2901,9 @@ function showPBSummary() {
 function getPBTranscript() {
   // Save compact transcript for case library (max 20 messages, truncated)
   return App.pbHistory.slice(0, 20).map(function(m) {
-    return { role: m.role, content: (m.content || '').substring(0, 400) };
+    var c = m.content;
+    if (typeof c !== 'string') c = JSON.stringify(c) || '';
+    return { role: m.role, content: c.substring(0, 400) };
   });
 }
 
@@ -3201,7 +3203,7 @@ function renderPBChatInner() {
       html += '<div class="chat-consequence" style="background:' + s.bg + ';border-left:3px solid ' + s.border + ';color:var(--text);font-size:13px;padding:8px 14px;margin:4px 20px;border-radius:6px">';
       html += s.icon + ' ' + (s.label ? '<strong>' + s.label + '</strong>' : '') + escapeHtml(m.content);
       html += '</div>';
-    } else if (m.role === 'user' && m.content && (m.content.match(/^\*.*\*$/) || isPBAction_(m.content))) {
+    } else if (m.role === 'user' && m.content && typeof m.content === 'string' && (m.content.match(/^\*.*\*$/) || isPBAction_(m.content))) {
       // Action message — render with contextual verb
       var actionText = m.content.replace(/^\*|\*$/g, '').trim();
       var actionVerb = getPBActionVerb_(actionText);
@@ -3210,7 +3212,8 @@ function renderPBChatInner() {
       html += '</div>';
     } else {
       html += '<div class="chat-message ' + m.role + '">';
-      html += m.role === 'user' ? formatPBInput(m.content) : formatMarkdown(stripPatientJSON(m.content));
+      var sc = safeStr(m.content);
+      html += m.role === 'user' ? formatPBInput(sc) : formatMarkdown(stripPatientJSON(sc));
       html += '</div>';
     }
   }
@@ -3616,9 +3619,17 @@ function closeBook() {
   document.getElementById('library-iframe').src = '';
 }
 
+function safeStr(v) {
+  if (!v) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'object' && v.text) return String(v.text);
+  if (typeof v === 'object' && v.content) return String(v.content);
+  if (typeof v === 'object' && v.feedback) return String(v.feedback);
+  return String(v);
+}
 function escapeHtml(text) {
   if (!text) return '';
-  return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return safeStr(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 // Escape + highlight medical terms (use instead of escapeHtml for study content)

@@ -567,6 +567,43 @@ body {
   vertical-align: middle;
 }
 
+/* --- Translate Button & Result --- */
+.translate-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-light);
+  font-size: 13px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.translate-btn:hover { border-color: var(--primary); color: var(--primary); }
+.translate-btn.loading { opacity: 0.6; pointer-events: none; }
+.translate-result {
+  margin-top: 12px;
+  padding: 14px 18px;
+  background: rgba(33,150,243,0.06);
+  border: 1px solid rgba(33,150,243,0.2);
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+.translate-result[dir="rtl"] { text-align: right; }
+.translate-result .tr-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+  display: block;
+}
+
 /* --- Daily Challenge Cards --- */
 .daily-card-progress-bar { height: 4px; background: #e0e0e0; border-radius: 2px; margin-bottom: 24px; }
 .daily-card-progress-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.3s; }
@@ -1273,6 +1310,7 @@ body {
 .tutorial-dot { height: 4px; flex: 1; border-radius: 2px; background: var(--border); transition: background 0.3s; }
 .tutorial-dot.active { background: var(--accent); }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 
 /* --- Quick Actions (Dashboard) --- */
 .quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
@@ -2321,22 +2359,24 @@ label {
       <li data-page="devpanel" onclick="navigateTo('devpanel')" id="nav-dev" style="display:none;border-top:1px solid rgba(255,255,255,0.1);margin-top:8px;color:#ff9800">&#x1F6E0; Dev Panel</li>
     </ul>
     <div class="sidebar-footer">
-      <select class="sidebar-lang-select" id="lang-select" onchange="setLanguage(this.value)" title="Translation language for medical terms">
-        <option value="">&#x1F310; Translations Off</option>
+      <select class="sidebar-lang-select" id="lang-select" onchange="setLanguage(this.value)" title="Add a secondary language for translations">
+        <option value="">&#x1F310; Add a Secondary Language</option>
         <option value="fa">&#x1F1EE;&#x1F1F7; فارسی (Persian)</option>
         <option value="ar">&#x1F1F8;&#x1F1E6; العربية (Arabic)</option>
         <option value="fr">&#x1F1EB;&#x1F1F7; Français (French)</option>
-        <option value="zh">&#x1F1E8;&#x1F1F3; 中文 (Chinese)</option>
-        <option value="hi">&#x1F1EE;&#x1F1F3; हिन्दी (Hindi)</option>
-        <option value="es">&#x1F1EA;&#x1F1F8; Español (Spanish)</option>
-        <option value="pt">&#x1F1E7;&#x1F1F7; Português (Portuguese)</option>
-        <option value="ru">&#x1F1F7;&#x1F1FA; Русский (Russian)</option>
-        <option value="ko">&#x1F1F0;&#x1F1F7; 한국어 (Korean)</option>
-        <option value="ja">&#x1F1EF;&#x1F1F5; 日本語 (Japanese)</option>
-        <option value="de">&#x1F1E9;&#x1F1EA; Deutsch (German)</option>
-        <option value="tr">&#x1F1F9;&#x1F1F7; Türkçe (Turkish)</option>
-        <option value="ur">&#x1F1F5;&#x1F1F0; اردو (Urdu)</option>
-        <option value="tl">&#x1F1F5;&#x1F1ED; Filipino (Tagalog)</option>
+        <optgroup label="More Languages">
+          <option value="zh">&#x1F1E8;&#x1F1F3; 中文 (Chinese)</option>
+          <option value="hi">&#x1F1EE;&#x1F1F3; हिन्दी (Hindi)</option>
+          <option value="es">&#x1F1EA;&#x1F1F8; Español (Spanish)</option>
+          <option value="pt">&#x1F1E7;&#x1F1F7; Português (Portuguese)</option>
+          <option value="ru">&#x1F1F7;&#x1F1FA; Русский (Russian)</option>
+          <option value="ko">&#x1F1F0;&#x1F1F7; 한국어 (Korean)</option>
+          <option value="ja">&#x1F1EF;&#x1F1F5; 日本語 (Japanese)</option>
+          <option value="de">&#x1F1E9;&#x1F1EA; Deutsch (German)</option>
+          <option value="tr">&#x1F1F9;&#x1F1F7; Türkçe (Turkish)</option>
+          <option value="ur">&#x1F1F5;&#x1F1F0; اردو (Urdu)</option>
+          <option value="tl">&#x1F1F5;&#x1F1ED; Filipino (Tagalog)</option>
+        </optgroup>
       </select>
       <button class="dark-mode-toggle" onclick="toggleDarkMode()" id="dark-mode-btn" title="Toggle dark mode" style="margin-top:8px">&#x1F319; Dark Mode</button>
       <button class="dark-mode-toggle" onclick="switchProfile()" style="margin-top:6px">&#x1F465; Switch Profile</button>
@@ -2748,46 +2788,31 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '2.2';
+var APP_VERSION = '2.3';
 var APP_CHANGELOG = [
-  { version: '2.2', date: 'Mar 23 2026', label: 'Bug Fixes & Transparency', items: [
-    'FLAG SYSTEM: Users can now flag incorrect, unclear, or outdated content on flashcards, quiz, notes, and PatientBot — flags are logged for review',
-    'BUG FIX: 14 quiz questions were missing their clinical vignettes (showed only "Which of the following..." with no patient scenario) — these are now filtered out automatically',
-    'BUG FIX: Quiz history was not saving because the user profile was not being passed to the backend — fixed',
-    'BUG FIX: Notes page would not expand when clicking a specialty — caused by an inline CSS override — fixed',
-    'CONTENT FIX: Nasal midline dermoid cyst flashcard incorrectly said "hamartoma" — corrected to "choristoma"',
-    'CONTENT FIX: CKD/naproxen pain question had opioids as first-line answer — corrected to acetaminophen per Canadian guidelines, relabeled from Neurology to Nephrology',
-    'CONTENT FIX: Erythroplakia question was pure percentage recall — rewritten as a clinical vignette with management decision',
-    'CONTENT FIX: Questions with only 4 answer options now get a 5th distractor to match MCCQE format',
-    'Pass threshold note added: "Set above the estimated ~70% MCCQE cut score to push you harder"',
-    'Flashcard progress now saves per-profile (multiple users on same device keep separate positions)',
-    'Jump to any card number + shareable links so study groups can sync to the same card',
-    'Session-based login — closing the tab logs you out, but refreshing stays logged in',
-    'All heavy data preloads during login screen — dashboard, flashcards, notes, key topics load instantly after login',
-    'Desktop clock with alarm (top-right corner, desktop only)',
-    'Late-night study nudge: witty AI popups at 3h/4h/6h between 11pm–4am',
-    'PatientBot vitals monitor shrunk from 480px to 340px for less screen clutter'
-  ]},
-  { version: '2.1', date: 'Mar 2026', label: 'GitHub Pages & Polish', items: [
-    'GitHub Pages deployment (works without Netlify)',
-    'Screen zoom controls (+/-)',
-    'Medical term highlighting — tap blue words for definitions',
-    'Weekly AI progress report every Saturday',
-    'First-name login with saved progress',
-    'Dev mode for admin users',
-    'Compact PatientBot vitals monitor',
-    'Faster loading with background preload'
+  { version: '2.3', date: 'Mar 23 2026', label: 'Translations & Fixes', items: [
+    'Full content translation - translate flashcards, quiz questions, and notes into 14+ languages',
+    'Translations are AI-verified and cached so they load instantly after the first request',
+    'Pinned language shortcuts for Farsi, Arabic, and French',
+    'Flag content issues directly from flashcards, quiz, notes, and PatientBot',
+    'Improved quiz questions with full clinical vignettes and 5 answer options',
+    'Content corrections for dermoid cyst, CKD/pain management, and erythroplakia questions',
+    'Flashcard progress saves per-profile (multiple users on same device)',
+    'Jump to any card number + shareable card links for study groups',
+    'Desktop clock with alarm',
+    'Late-night study nudge with witty AI popups'
   ]},
   { version: '2.0', date: 'Mar 2026', label: 'Major Overhaul', items: [
     'Duolingo-style skill map dashboard',
     'Mastery tracking per specialty',
-    'PatientBot with MCCQE clinical presentations',
-    'OSCE scorecard',
+    'PatientBot with MCCQE clinical presentations and OSCE scorecard',
     'Partial credit diagnosis',
     'Management actions (discharge, prescribe, refer)',
     'Library ebook viewer',
-    'Medical term translations (Persian/Arabic)',
-    'Colorful action palette'
+    'Medical term highlighting - tap blue words for definitions and translations',
+    'Screen zoom controls (+/-)',
+    'Weekly AI progress report every Saturday',
+    'Faster loading with background preload'
   ]},
   { version: '1.0', date: 'Mar 2026', label: 'Initial Release', items: [
     'Flashcards, Quiz, PatientBot, Daily Challenge',
@@ -3069,8 +3094,8 @@ function patchApiResult_(fn, result) {
 }
 
 // ===== PROFILE / LOGIN =====
-var ALLOWED_NAMES = ['tony','roxanna','soroosh','amin','noha','said','sarah'];
-var DEV_USERS = ['tony'];
+var ALLOWED_NAMES = ['tony','roxanna','soroosh','amin','noha','said','sarah','dev','admin'];
+var DEV_USERS = ['tony', 'dev', 'admin'];
 
 function getGuestId() {
   var profile = sessionStorage.getItem('mcc_profile');
@@ -3211,15 +3236,15 @@ function afterLogin_(displayName) {
 
 function startTutorial() {
   var steps = [
-    { title: 'Welcome to MCC Master', text: 'Your all-in-one study tool for the MCCQE Part I. Everything here \u2014 the flashcards, quiz questions, clinical scenarios, lab values, and scoring criteria \u2014 is built from <strong>real medical references</strong> including Toronto Notes, Canadian clinical practice guidelines, and established MCCQE exam objectives. The content is accurate and evidence-based, not randomly generated.', target: null },
+    { title: 'Welcome to MCC Master', text: 'Your all-in-one study tool for the MCCQE Part I. Everything here - the flashcards, quiz questions, clinical scenarios, lab values, and scoring criteria - is built from <strong>real medical references</strong> including Toronto Notes, Canadian clinical practice guidelines, and established MCCQE exam objectives. The content is accurate and evidence-based, not randomly generated.', target: null },
     { title: 'Flashcards', text: 'Over 10,000 flashcards organized by specialty. Each card is written from verified medical content and cross-referenced with standard Canadian medical education sources. You flip each card, self-evaluate, and the app tracks which topics you\'re weak in to prioritize your review.', target: 'flashcards' },
-    { title: 'Practice Quiz', text: 'MCQ questions modeled on the real MCCQE format. Questions, answer choices, and explanations are grounded in established clinical guidelines and diagnostic criteria \u2014 not guesswork. After each quiz, you see exactly which areas need more work.', target: 'quiz' },
-    { title: 'PatientBot', text: 'AI-powered simulated patient encounters. Each case is built from real clinical presentations, with accurate vitals, lab results, imaging findings, and physical exam signs that match the underlying diagnosis. You take a history, examine the patient, order real tests (with realistic results), give actual medications with correct doses, and perform procedures \u2014 all with a clinical consequence engine that tracks what happens to the patient based on your actions.', target: 'patientbot' },
-    { title: 'PatientBot Scoring', text: 'After each case, you get an <strong>OSCE-style scorecard</strong> graded on 7 domains: History, Physical Exam, Investigations, Diagnosis, Management, Communication, and Patient Safety. The grading follows real MCCQE rubric standards with defined boundaries (A through F). Your actions have real consequences \u2014 give the wrong drug at the wrong dose and the patient\'s vitals will change accordingly.', target: 'patientbot' },
+    { title: 'Practice Quiz', text: 'MCQ questions modeled on the real MCCQE format. Questions, answer choices, and explanations are grounded in established clinical guidelines and diagnostic criteria - not guesswork. After each quiz, you see exactly which areas need more work.', target: 'quiz' },
+    { title: 'PatientBot', text: 'AI-powered simulated patient encounters. Each case is built from real clinical presentations, with accurate vitals, lab results, imaging findings, and physical exam signs that match the underlying diagnosis. You take a history, examine the patient, order real tests (with realistic results), give actual medications with correct doses, and perform procedures - all with a clinical consequence engine that tracks what happens to the patient based on your actions.', target: 'patientbot' },
+    { title: 'PatientBot Scoring', text: 'After each case, you get an <strong>OSCE-style scorecard</strong> graded on 7 domains: History, Physical Exam, Investigations, Diagnosis, Management, Communication, and Patient Safety. The grading follows real MCCQE rubric standards with defined boundaries (A through F). Your actions have real consequences - give the wrong drug at the wrong dose and the patient\'s vitals will change accordingly.', target: 'patientbot' },
     { title: 'Daily Challenge', text: 'A structured daily session: 20 flashcards, 10 quiz questions, and 2 patient cases. Covers material across all specialties to build well-rounded knowledge. Completing it each day keeps your streak going and earns XP toward your level.', target: 'daily' },
     { title: 'Skill Map & Mastery', text: 'The dashboard tracks your mastery percentage for each specialty based on quiz scores and flashcard performance. Green means strong, yellow means decent, red means it needs work. Your weak areas get prioritized in Daily Challenges so you improve where it matters most.', target: 'dashboard' },
-    { title: 'About the Content', text: 'A note on accuracy: all clinical content, drug dosages, lab reference ranges, and scoring criteria are sourced from established medical references. When PatientBot gives you lab results or vital sign changes, those numbers reflect what would actually happen in a real clinical scenario with that diagnosis and those interventions. This isn\'t a chatbot making things up \u2014 it\'s a structured clinical simulator with guardrails.', target: null },
-    { title: 'Let\'s Get Started', text: 'Start with the <strong>Daily Challenge</strong> to try a bit of everything, or dive straight into <strong>Flashcards</strong> or <strong>PatientBot</strong>. Consistency beats intensity \u2014 even 20 minutes a day adds up fast.', target: null }
+    { title: 'About the Content', text: 'A note on accuracy: all clinical content, drug dosages, lab reference ranges, and scoring criteria are sourced from established medical references. When PatientBot gives you lab results or vital sign changes, those numbers reflect what would actually happen in a real clinical scenario with that diagnosis and those interventions. This isn\'t a chatbot making things up - it\'s a structured clinical simulator with guardrails.', target: null },
+    { title: 'Let\'s Get Started', text: 'Start with the <strong>Daily Challenge</strong> to try a bit of everything, or dive straight into <strong>Flashcards</strong> or <strong>PatientBot</strong>. Consistency beats intensity - even 20 minutes a day adds up fast.', target: null }
   ];
 
   App.tutorialSteps = steps;
@@ -3345,6 +3370,9 @@ function finishInit() {
   }
 
   loadDashboard();
+
+  // Start heartbeat for online presence
+  startHeartbeat_();
 
   // If shared flashcard link, navigate directly to that card
   if (App.sharedFlashcard) {
@@ -3540,6 +3568,9 @@ function renderDashboard(stats) {
     html += '<div class="dash-streak">' + stats.streak + ' day streak! &#x1F525;</div>';
   }
   html += '</div>';
+
+  // Online users widget
+  html += '<div id="online-users-widget" style="margin-bottom:12px;padding:8px 14px;background:var(--card);border:1px solid var(--border);border-radius:10px;min-height:20px"></div>';
 
   // XP progress bar (compact)
   html += '<div class="progress-bar" style="margin-bottom:24px;height:6px"><div class="progress-fill" style="width:' + (lvl.progress || 0) + '%"></div></div>';
@@ -4418,6 +4449,10 @@ function renderFlashcard() {
   html += '<div class="flashcard-back"><div>' + medHtml(card.back) + '</div></div>';
   html += '</div></div>';
 
+  // Translate button (shown when a language is selected)
+  var fcTransText = card.front + '\n---\n' + card.back;
+  html += '<div style="text-align:center;margin-top:10px">' + buildTranslateBtn('flashcard', card.id, fcTransText) + '</div>';
+
   if (App.flashcardFlipped) {
     html += '<div class="flashcard-nav">';
     html += '<button class="btn btn-error" onclick="rateFlashcard(false)" style="flex:1;padding:14px;font-size:15px">&#x274C; I Was Wrong</button>';
@@ -4616,7 +4651,8 @@ function renderBulletNotes(filterText) {
       var topic = topicKeys[ti];
       var items = topics[topic];
       html += '<div style="margin-top:12px">';
-      html += '<div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:6px;display:flex;align-items:center;gap:8px">' + escapeHtml(topic) + ' <span style="color:var(--text-light);font-weight:400">(' + items.length + ')</span> ' + buildFlagButton({ type: 'note', id: spec + '/' + topic, specialty: spec, content: topic }) + '</div>';
+      var noteTexts = items.map(function(n) { return n.note; }).join('\n');
+      html += '<div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">' + escapeHtml(topic) + ' <span style="color:var(--text-light);font-weight:400">(' + items.length + ')</span> ' + buildTranslateBtn('note', spec + '_' + topic, noteTexts) + ' ' + buildFlagButton({ type: 'note', id: spec + '/' + topic, specialty: spec, content: topic }) + '</div>';
 
       if (longForm) {
         // Long form: full text for each note
@@ -4779,7 +4815,12 @@ function renderQuizQuestion() {
   html += '<span style="color:var(--text-light);font-size:13px">' + answered + '/' + total + ' answered</span>';
   html += current === total ? '<button class="btn btn-success" onclick="finishQuiz()" style="padding:10px 24px">Finish Quiz</button>' : '<button class="btn btn-primary" onclick="nextQuizQuestion()">Next &rarr;</button>';
   html += '</div>';
-  html += '<div style="text-align:center;margin-top:8px">' + buildFlagButton({ type: 'quiz', id: q.id, specialty: q.specialty, content: q.question.substring(0, 150) }) + '</div>';
+  // Translate + Flag buttons
+  var qTransText = q.question + '\n\nA) ' + (q.options.A||'') + '\nB) ' + (q.options.B||'') + '\nC) ' + (q.options.C||'') + '\nD) ' + (q.options.D||'') + '\nE) ' + (q.options.E||'');
+  html += '<div style="text-align:center;margin-top:8px;display:flex;justify-content:center;gap:12px;flex-wrap:wrap">';
+  html += buildTranslateBtn('quiz', q.id, qTransText);
+  html += buildFlagButton({ type: 'quiz', id: q.id, specialty: q.specialty, content: q.question.substring(0, 150) });
+  html += '</div>';
   el.innerHTML = html;
 }
 
@@ -6262,7 +6303,7 @@ function renderPBChatInner() {
       html += '<div class="chat-consequence" style="background:' + s.bg + ';border-left:3px solid ' + s.border + ';color:var(--text);font-size:13px;padding:8px 14px;margin:4px 20px;border-radius:6px">';
       html += s.icon + ' ' + (s.label ? '<strong>' + s.label + '</strong>' : '') + escapeHtml(m.content);
       html += '</div>';
-    } else if (m.role === 'user' && m.content && (m.content.match(/^\*.*\*$/) || isPBAction_(m.content))) {
+    } else if (m.role === 'user' && m.content && typeof m.content === 'string' && (m.content.match(/^\*.*\*$/) || isPBAction_(m.content))) {
       // Action message — render with contextual verb
       var actionText = m.content.replace(/^\*|\*$/g, '').trim();
       var actionVerb = getPBActionVerb_(actionText);
@@ -6271,7 +6312,8 @@ function renderPBChatInner() {
       html += '</div>';
     } else {
       html += '<div class="chat-message ' + m.role + '">';
-      html += m.role === 'user' ? formatPBInput(m.content) : formatMarkdown(stripPatientJSON(m.content));
+      var sc = safeStr(m.content);
+      html += m.role === 'user' ? formatPBInput(sc) : formatMarkdown(stripPatientJSON(sc));
       html += '</div>';
     }
   }
@@ -6560,6 +6602,43 @@ function formatPBInput(text) {
 // =============================================
 
 // =============================================
+// ONLINE PRESENCE
+// =============================================
+
+function startHeartbeat_() {
+  // Send initial heartbeat
+  serverCall('sendHeartbeat').catch(function() {});
+  // Refresh online users immediately and then every 2 minutes
+  refreshOnlineUsers_();
+  setInterval(function() {
+    serverCall('sendHeartbeat').catch(function() {});
+    refreshOnlineUsers_();
+  }, 120000);
+}
+
+function refreshOnlineUsers_() {
+  serverCall('getOnlineUsers').then(function(users) {
+    if (!users) return;
+    var el = document.getElementById('online-users-widget');
+    if (!el) return;
+    if (users.length === 0) {
+      el.innerHTML = '<span style="color:var(--text-light);font-size:12px">No one else online</span>';
+      return;
+    }
+    var html = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#4caf50;margin-right:6px;animation:pulse 2s infinite"></span>';
+    html += '<span style="font-size:13px;color:var(--text)">';
+    var names = users.map(function(n) { return n.charAt(0).toUpperCase() + n.slice(1); });
+    if (names.length <= 3) {
+      html += names.join(', ');
+    } else {
+      html += names.slice(0, 2).join(', ') + ' + ' + (names.length - 2) + ' more';
+    }
+    html += ' studying now</span>';
+    el.innerHTML = html;
+  }).catch(function() {});
+}
+
+// =============================================
 // MEDICAL GLOSSARY / TOOLTIPS
 // =============================================
 
@@ -6570,6 +6649,63 @@ function setLanguage(lang) {
   if (lang && !App.glossary) {
     loadGlossary();
   }
+}
+
+var LANG_NAMES = {
+  fa: 'فارسی', ar: 'العربية', fr: 'Français', zh: '中文', hi: 'हिन्दी',
+  es: 'Español', pt: 'Português', ru: 'Русский', ko: '한국어', ja: '日本語',
+  de: 'Deutsch', tr: 'Türkçe', ur: 'اردو', tl: 'Filipino'
+};
+var RTL_LANGS = ['fa', 'ar', 'ur'];
+
+// Translation cache (in-memory for session)
+App.translationCache = App.translationCache || {};
+
+function buildTranslateBtn(contentType, contentId, text) {
+  var lang = App.glossaryLang;
+  if (!lang || lang === 'en') return '';
+  var cacheKey = contentType + '_' + contentId + '_' + lang;
+  // If already translated and showing, show the cached result
+  if (App.translationCache[cacheKey]) {
+    var dir = RTL_LANGS.indexOf(lang) !== -1 ? ' dir="rtl"' : '';
+    return '<div class="translate-result"' + dir + '><span class="tr-label">' + escapeHtml(LANG_NAMES[lang] || lang) + '</span>' + escapeHtml(App.translationCache[cacheKey]) + '</div>';
+  }
+  var escaped = escapeHtml(text).replace(/'/g, '&#39;');
+  return '<button class="translate-btn" onclick="doTranslate(\'' + contentType + '\',\'' + contentId + '\',this)" data-text="' + escaped + '">&#x1F310; Translate to ' + (LANG_NAMES[lang] || lang) + '</button>' +
+    '<div id="tr-result-' + cacheKey.replace(/[^a-zA-Z0-9]/g, '_') + '"></div>';
+}
+
+function doTranslate(contentType, contentId, btn) {
+  var lang = App.glossaryLang;
+  if (!lang || lang === 'en') return;
+  var text = btn.getAttribute('data-text');
+  // Decode HTML entities back
+  var tmp = document.createElement('textarea');
+  tmp.innerHTML = text;
+  text = tmp.value;
+
+  btn.classList.add('loading');
+  btn.innerHTML = '&#x23F3; Translating...';
+
+  serverCall('translateContent', contentType, contentId, text, lang).then(function(result) {
+    if (result && result.translation) {
+      var cacheKey = contentType + '_' + contentId + '_' + lang;
+      App.translationCache[cacheKey] = result.translation;
+      var dir = RTL_LANGS.indexOf(lang) !== -1 ? ' dir="rtl"' : '';
+      var safeKey = cacheKey.replace(/[^a-zA-Z0-9]/g, '_');
+      var el = document.getElementById('tr-result-' + safeKey);
+      if (el) {
+        el.innerHTML = '<div class="translate-result"' + dir + '><span class="tr-label">' + escapeHtml(LANG_NAMES[lang] || lang) + (result.cached ? ' (cached)' : '') + '</span>' + escapeHtml(result.translation) + '</div>';
+      }
+      btn.style.display = 'none';
+    } else {
+      btn.classList.remove('loading');
+      btn.innerHTML = '&#x274C; Translation failed - try again';
+    }
+  }).catch(function() {
+    btn.classList.remove('loading');
+    btn.innerHTML = '&#x274C; Error - try again';
+  });
 }
 
 function loadGlossary() {
@@ -6682,9 +6818,17 @@ function closeBook() {
   document.getElementById('library-iframe').src = '';
 }
 
+function safeStr(v) {
+  if (!v) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'object' && v.text) return String(v.text);
+  if (typeof v === 'object' && v.content) return String(v.content);
+  if (typeof v === 'object' && v.feedback) return String(v.feedback);
+  return String(v);
+}
 function escapeHtml(text) {
   if (!text) return '';
-  return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return safeStr(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 // Escape + highlight medical terms (use instead of escapeHtml for study content)

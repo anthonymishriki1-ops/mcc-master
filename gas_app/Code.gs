@@ -27,7 +27,7 @@ function doGet(e) {
       var args = payload.args || [];
       var profile = payload.profile || '';
       // Functions that accept guestId as their last parameter
-      var needsGuestId = ['saveQuizResult','saveProgress','analyzeQuizResults','saveCardRating','getUserStats','getUserQuizHistory','getLeaderboard','getDailyChallenge','getWeakCards_','getPBCaseLibrary'];
+      var needsGuestId = ['saveQuizResult','saveProgress','analyzeQuizResults','saveCardRating','getUserStats','getUserQuizHistory','getLeaderboard','getDailyChallenge','getWeakCards_','getPBCaseLibrary','sendHeartbeat'];
       if (profile && needsGuestId.indexOf(fn) !== -1) {
         args.push(profile);
       }
@@ -56,7 +56,10 @@ function doGet(e) {
         'getLeaderboard': getLeaderboard,
         'getDailyChallenge': getDailyChallenge,
         'getGlossaryStatus': getGlossaryStatus,
-        'getDevStats': getDevStats
+        'getDevStats': getDevStats,
+        'translateContent': translateContent,
+        'sendHeartbeat': sendHeartbeat,
+        'getOnlineUsers': getOnlineUsers
       };
       if (!allowed[fn]) {
         return ContentService.createTextOutput(JSON.stringify({ error: 'Function not allowed: ' + fn }))
@@ -165,7 +168,10 @@ function doPost(e) {
       'getLeaderboard': getLeaderboard,
       'getDailyChallenge': getDailyChallenge,
       'getGlossaryStatus': getGlossaryStatus,
-      'getDevStats': getDevStats
+      'getDevStats': getDevStats,
+      'translateContent': translateContent,
+      'sendHeartbeat': sendHeartbeat,
+      'getOnlineUsers': getOnlineUsers
     };
 
     if (!allowed[fn]) {
@@ -204,6 +210,44 @@ function getUserId_(guestId) {
   if (email) return email.toLowerCase();
   // For anonymous users, use the guestId passed from client-side localStorage
   return guestId ? ('guest_' + guestId) : 'guest_anonymous';
+}
+
+// --- Online Presence ---
+function sendHeartbeat(guestId) {
+  var userId = getUserId_(guestId);
+  var cache = CacheService.getScriptCache();
+  var key = 'online_' + userId;
+  var displayName = userId.replace('guest_', '');
+  cache.put(key, displayName, 300); // 5-minute TTL
+
+  // Maintain list of active user keys
+  var activeList = cache.get('online_users_list');
+  var users = activeList ? JSON.parse(activeList) : [];
+  if (users.indexOf(userId) === -1) users.push(userId);
+  cache.put('online_users_list', JSON.stringify(users), 600);
+
+  return { ok: true };
+}
+
+function getOnlineUsers() {
+  var cache = CacheService.getScriptCache();
+  var activeList = cache.get('online_users_list');
+  if (!activeList) return [];
+  var userKeys = JSON.parse(activeList);
+  var online = [];
+  var stillActive = [];
+  for (var i = 0; i < userKeys.length; i++) {
+    var name = cache.get('online_' + userKeys[i]);
+    if (name) {
+      online.push(name);
+      stillActive.push(userKeys[i]);
+    }
+  }
+  // Clean up expired entries
+  if (stillActive.length !== userKeys.length) {
+    cache.put('online_users_list', JSON.stringify(stillActive), 600);
+  }
+  return online;
 }
 
 // --- Dev Panel: get all user activity ---
@@ -2462,6 +2506,85 @@ function callAnthropic_(systemPrompt, messages, model) {
   } catch (e) {
     return 'Connection error: ' + e.message;
   }
+}
+
+// =============================================
+// TRANSLATION SERVICE
+// =============================================
+
+function translateContent(contentType, contentId, text, targetLang) {
+  if (!text || !targetLang || targetLang === 'en') return { error: 'No translation needed' };
+
+  var langNames = {
+    fa: 'Persian (Farsi)', ar: 'Arabic', fr: 'French', zh: 'Chinese (Simplified)',
+    hi: 'Hindi', es: 'Spanish', pt: 'Portuguese', ru: 'Russian',
+    ko: 'Korean', ja: 'Japanese', de: 'German', tr: 'Turkish', ur: 'Urdu', tl: 'Filipino (Tagalog)'
+  };
+  var langName = langNames[targetLang] || targetLang;
+
+  // Check cache first
+  var cached = getCachedTranslation_(contentType, contentId, targetLang);
+  if (cached) return { translation: cached, cached: true };
+
+  // Translate with Opus
+  var sysPrompt = 'You are a medical translator. Translate the following medical education content to ' + langName + '. ' +
+    'Preserve all medical terminology accuracy. Keep formatting (line breaks, bullet points). ' +
+    'Return ONLY the translation, nothing else. Do not add explanations or notes.';
+  var opusTranslation = callAnthropic_(sysPrompt, [{ role: 'user', content: text }], 'claude-opus-4-20250514');
+  if (opusTranslation.indexOf('API Error') === 0 || opusTranslation.indexOf('Connection error') === 0) {
+    return { error: opusTranslation };
+  }
+
+  // Verify with Haiku
+  var verifySysPrompt = 'You are a medical translation quality checker. You will receive an original English medical text and its ' + langName + ' translation. ' +
+    'If the translation is accurate and complete, return it as-is. If there are errors, return a corrected version. ' +
+    'Return ONLY the final translation text, nothing else.';
+  var verifyMsg = 'Original English:\n' + text + '\n\nTranslation to ' + langName + ':\n' + opusTranslation;
+  var verified = callAnthropic_(verifySysPrompt, [{ role: 'user', content: verifyMsg }], 'claude-haiku-4-5-20251001');
+  if (verified.indexOf('API Error') === 0 || verified.indexOf('Connection error') === 0) {
+    // Haiku failed, use Opus translation
+    verified = opusTranslation;
+  }
+
+  // Cache the translation
+  saveCachedTranslation_(contentType, contentId, targetLang, verified);
+  return { translation: verified, cached: false };
+}
+
+function getCachedTranslation_(contentType, contentId, lang) {
+  var ss = SpreadsheetApp.openById('1dqlfIfqzRA4pgLa1NocrlT2iyiJuQBN9Tauy1xLVsvo');
+  var sheet = ss.getSheetByName('Translations');
+  if (!sheet) return null;
+
+  var cache = CacheService.getScriptCache();
+  var cacheKey = 'tr_' + contentType + '_' + contentId + '_' + lang;
+  var cached = cache.get(cacheKey);
+  if (cached) return cached;
+
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] === contentType && String(data[i][1]) === String(contentId) && data[i][2] === lang) {
+      var translation = data[i][3];
+      try { cache.put(cacheKey, translation, 21600); } catch(e) {}
+      return translation;
+    }
+  }
+  return null;
+}
+
+function saveCachedTranslation_(contentType, contentId, lang, translation) {
+  var ss = SpreadsheetApp.openById('1dqlfIfqzRA4pgLa1NocrlT2iyiJuQBN9Tauy1xLVsvo');
+  var sheet = ss.getSheetByName('Translations');
+  if (!sheet) {
+    sheet = ss.insertSheet('Translations');
+    sheet.appendRow(['ContentType', 'ContentId', 'Language', 'Translation', 'Timestamp']);
+    sheet.getRange(1, 1, 1, 5).setFontWeight('bold');
+  }
+  sheet.appendRow([contentType, String(contentId), lang, translation, new Date().toISOString()]);
+
+  var cache = CacheService.getScriptCache();
+  var cacheKey = 'tr_' + contentType + '_' + contentId + '_' + lang;
+  try { cache.put(cacheKey, translation, 21600); } catch(e) {}
 }
 
 // =============================================
