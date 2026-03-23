@@ -1144,6 +1144,7 @@ function getUserStats(guestId) {
 
   var latestSettings = null;
   var latestSettingsTs = null;
+  var fcProgress = {};
   for (var i = 1; i < data.length; i++) {
     if (data[i][0].toString().toLowerCase() !== email) continue;
     var type = data[i][1];
@@ -1166,10 +1167,15 @@ function getUserStats(guestId) {
         totalPoints += (parsed.points || 0);
       } else if (type === 'user_settings') {
         if (!latestSettingsTs || ts > latestSettingsTs) { latestSettings = parsed; latestSettingsTs = ts; }
+      } else if (type === 'flashcard_progress') {
+        var spec = parsed.specialty || 'All';
+        if (!fcProgress[spec] || ts > fcProgress[spec].ts) { fcProgress[spec] = { data: parsed, ts: ts }; }
       }
       if (!lastActive || ts > lastActive) lastActive = ts;
     } catch(e) {}
   }
+  var savedFcProgress = {};
+  Object.keys(fcProgress).forEach(function(k) { savedFcProgress[k] = fcProgress[k].data; });
 
   // Quiz stats
   var totalQuizzes = quizResults.length;
@@ -1248,7 +1254,8 @@ function getUserStats(guestId) {
     pbTotal: pbTotal,
     totalCardsReviewed: totalCardsReviewed,
     dailyChallengesCompleted: dailyResults.length,
-    savedSettings: latestSettings
+    savedSettings: latestSettings,
+    savedFcProgress: savedFcProgress
   };
 }
 

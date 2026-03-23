@@ -2384,7 +2384,7 @@ label {
   </nav>
 
   <!-- Zoom Controls -->
-  <div id="zoom-controls" style="position:fixed;top:8px;right:12px;z-index:999;display:flex;align-items:center;gap:4px;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:3px 8px;box-shadow:0 1px 4px rgba(0,0,0,0.1);font-size:13px;opacity:0.7;transition:opacity 0.2s" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.7'">
+  <div id="zoom-controls" style="position:fixed;top:8px;right:120px;z-index:999;display:flex;align-items:center;gap:4px;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:3px 8px;box-shadow:0 1px 4px rgba(0,0,0,0.1);font-size:13px;opacity:0.7;transition:opacity 0.2s" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.7'">
     <button onclick="adjustZoom(-10)" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 6px;color:var(--text);font-weight:700" title="Zoom out">-</button>
     <span id="zoom-level" style="min-width:36px;text-align:center;font-size:11px;color:var(--text-light);cursor:pointer" onclick="resetZoom()" title="Click to reset">100%</span>
     <button onclick="adjustZoom(10)" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 6px;color:var(--text);font-weight:700" title="Zoom in">+</button>
@@ -3045,6 +3045,17 @@ function restoreSettings_(saved) {
   }
 }
 
+function restoreFcProgress_(savedFcProgress) {
+  if (!savedFcProgress) return;
+  var profile = sessionStorage.getItem('mcc_profile') || '';
+  Object.keys(savedFcProgress).forEach(function(spec) {
+    var key = 'mcc_fc_progress_' + profile + '_' + spec;
+    if (!localStorage.getItem(key)) {
+      localStorage.setItem(key, JSON.stringify(savedFcProgress[spec]));
+    }
+  });
+}
+
 // Client-side patches — no Apps Script redeploy needed
 function patchApiResult_(fn, result) {
   if (fn === 'getMCQQuiz' && Array.isArray(result)) {
@@ -3479,6 +3490,7 @@ function loadDashboard() {
     App.stats = stats;
     // Restore user settings from GAS backup (only fills in missing localStorage values)
     try { if (stats.savedSettings) restoreSettings_(stats.savedSettings); } catch(e) { console.warn('restoreSettings_ failed:', e); }
+    try { if (stats.savedFcProgress) restoreFcProgress_(stats.savedFcProgress); } catch(e) { console.warn('restoreFcProgress_ failed:', e); }
     try {
       renderDashboard(stats);
       updateSidebarLevel(stats.level);
@@ -4320,9 +4332,12 @@ function saveFlashcardProgress_() {
     gotIt: App.flashcardGotIt || 0,
     review: App.flashcardReview || 0,
     total: App.flashcards.length,
+    specialty: App.flashcardSpecialty || 'All',
     timestamp: Date.now()
   };
   localStorage.setItem(key, JSON.stringify(progress));
+  // Save to backend on every turn so progress syncs across devices
+  serverCall('saveProgress', 'flashcard_progress', progress).catch(function() {});
 }
 
 function loadFlashcardProgress_() {
