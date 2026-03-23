@@ -5521,7 +5521,7 @@ App.ecMicActive = false;
 App.ecSpeaking = false;
 var ecMicRecognition = null;
 
-var EC_SYSTEM_PROMPT = 'You are a warm and encouraging medical English conversation coach. Your students are Farsi (Persian) native speakers preparing for the Canadian MCCQE medical licensing exam.\n\nIMPORTANT — Farsi-accented speech recognition often produces these errors, silently correct them:\n- "batient" or "bateint" → patient\n- "bresent" → present  \n- "bolse" or "bulse" → pulse\n- "vhat" / "vhere" / "ven" → what / where / when\n- "dis" / "dat" / "dere" → this / that / there\n- "tink" / "tought" → think / thought\n- Vowel shifts: "bad" might mean "bed", "set" might mean "sit"\n- Missing articles: assume they meant to say "the" or "a"\nDo NOT mention these corrections explicitly unless it really changes meaning.\n\nYour job:\n1. Have natural medical conversations — history taking, OSCE communication, explaining diagnoses, patient counseling, emergency scenarios\n2. Use proper medical terminology but stay conversational\n3. Keep YOUR responses to 2-3 sentences max for natural back-and-forth rhythm\n4. After each exchange, add ONE brief gentle note if there was a notable English usage to improve — format: 💬 [tip here]\n5. Be encouraging and specific with praise\n\nStart each new conversation by briefly introducing a scenario for practice (e.g. "Let\'s practice — you\'re a resident in the ER and I\'m a 45-year-old man with crushing chest pain. Start by introducing yourself.").';
+var EC_SYSTEM_PROMPT = 'You are a medical English conversation coach helping doctors practise clinical communication for the MCCQE.\n\nSpeech recognition may occasionally mishear medical terms — silently interpret what was most likely meant and respond to the intended meaning without pointing it out.\n\nYour job:\n1. Run natural medical conversations — history taking, OSCE communication, explaining diagnoses, patient counseling, emergency scenarios\n2. Use proper medical terminology but stay conversational\n3. Keep YOUR responses to 2-3 sentences max for natural back-and-forth rhythm\n4. After each exchange, if there was a pronunciation or phrasing worth noting, add one brief neutral note — format: 💬 [e.g. "pneumonia: the \'p\' is silent — noo-MOH-nyah" or "try: \'the pain radiates to my left arm\' rather than \'pain going arm\'"]\n5. Focus on pronunciation clarity and clinical phrasing — not grammar policing\n\nStart each session by briefly setting a scenario (e.g. "You\'re a resident in the ER. I\'m a 45-year-old with crushing chest pain. Go.").';
 
 function showEnglishCoach() {
   App.ecHistory = [];
@@ -5543,7 +5543,7 @@ function showEnglishCoach() {
   html += '<button class="btn btn-primary" onclick="sendECMessage()" style="padding:10px 16px">Send</button>';
   html += '<button class="btn btn-outline" id="ec-mic-btn" onclick="toggleECMic()" title="Speak" style="font-size:20px;padding:10px 12px;line-height:1">&#x1F3A4;</button>';
   html += '</div>';
-  html += '<div style="font-size:11px;color:var(--text-light);text-align:center;margin-top:8px">Uses Claude AI &bull; Farsi accent aware &bull; Medical vocabulary optimised</div>';
+  html += '<div style="font-size:11px;color:var(--text-light);text-align:center;margin-top:8px">Uses Claude AI &bull; Medical vocabulary &bull; Voice in + out</div>';
   html += '</div>';
   el.innerHTML = html;
   // Auto-start with a scenario
@@ -6545,7 +6545,7 @@ function showPatientBotSetup() {
   html += '<div style="font-size:12px;color:var(--text-light);margin-top:2px">Practise pronouncing medical terms out loud. Voice in, voice out.</div></div></div>';
   html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">';
   html += '<span style="font-size:11px;background:rgba(99,102,241,0.12);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:600">&#x1F3E5; Medical English</span>';
-  html += '<span style="font-size:11px;background:rgba(99,102,241,0.12);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:600">&#x1F1EE;&#x1F1F7; Farsi</span>';
+  html += '<span style="font-size:11px;background:rgba(99,102,241,0.12);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:600">&#x1F4AC; Any accent</span>';
   html += '<span style="font-size:11px;background:rgba(99,102,241,0.12);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:600">&#x1F50A; Voice in + out</span>';
   html += '</div>';
   html += '<div style="font-size:12px;color:var(--text-light);margin-bottom:14px">History taking, OSCE communication, explaining diagnoses — spoken back and forth with Claude.</div>';
