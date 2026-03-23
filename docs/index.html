@@ -2754,7 +2754,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '2.2';
+var APP_VERSION = '2.3';
 var APP_CHANGELOG = [
   { version: '2.2', date: 'Mar 23 2026', label: 'Bug Fixes & Transparency', items: [
     'FLAG SYSTEM: Users can now flag incorrect, unclear, or outdated content on flashcards, quiz, notes, and PatientBot — flags are logged for review',
@@ -3039,6 +3039,10 @@ function patchApiResult_(fn, result) {
 var ALLOWED_NAMES = ['tony','roxanna','soroosh','amin','noha','said','sarah'];
 var DEV_USERS = ['tony'];
 
+// ---- API / Notification Config ----
+var CLAUDE_API_KEY = 'YOUR_CLAUDE_API_KEY_HERE'; // paste your sk-ant-... key
+var NTFY_TOPIC = 'mcc-access-alerts'; // change to a private topic name (others can't guess it)
+
 function getGuestId() {
   var profile = sessionStorage.getItem('mcc_profile');
   if (profile) return 'profile_' + profile;
@@ -3124,7 +3128,19 @@ function confirmNameEntry() {
   if (!input) return;
   var name = input.value.trim().toLowerCase();
   if (!name) { input.style.borderColor = 'var(--error)'; errorEl.textContent = 'Please enter your name'; return; }
-  // Anyone can log in with just their first name
+  if (ALLOWED_NAMES.indexOf(name) === -1) {
+    input.style.borderColor = 'var(--error)';
+    errorEl.innerHTML = '&#x1F512; Access restricted. Your request has been noted.';
+    // Fire ntfy notification to Tony
+    if (NTFY_TOPIC) {
+      fetch('https://ntfy.sh/' + NTFY_TOPIC, {
+        method: 'POST',
+        body: '\uD83D\uDEA8 Access attempt: "' + name + '" tried to log in at ' + new Date().toLocaleString(),
+        headers: { 'Title': 'MCC Master: Unknown Access Attempt', 'Priority': 'high', 'Tags': 'warning,lock' }
+      }).catch(function(){});
+    }
+    return;
+  }
   loginAsProfile(name);
 }
 
@@ -4828,6 +4844,242 @@ function selectQuizAnswer(opt) { App.quizAnswers[App.quizCurrentIndex] = opt; sa
 function prevQuizQuestion() { if (App.quizCurrentIndex > 0) { App.quizCurrentIndex--; renderQuizQuestion(); } }
 function nextQuizQuestion() { if (App.quizCurrentIndex < App.quizQuestions.length - 1) { App.quizCurrentIndex++; renderQuizQuestion(); } }
 
+// ---- PatientBot Voice Mode ----
+App.pbTTS = false;
+App.pbMicActive = false;
+var pbMicRecognition = null;
+
+function togglePBMic() {
+  var btn = document.getElementById('pb-mic-btn');
+  if (App.pbMicActive) {
+    App.pbMicActive = false;
+    if (pbMicRecognition) { try { pbMicRecognition.stop(); } catch(e){} }
+    if (btn) { btn.textContent = '\uD83C\uDFA4'; btn.style.background = ''; btn.style.color = ''; }
+    return;
+  }
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { showToast('Voice input not supported in this browser (use Chrome)'); return; }
+  pbMicRecognition = new SR();
+  pbMicRecognition.lang = 'en-US';
+  pbMicRecognition.continuous = false;
+  pbMicRecognition.interimResults = false;
+  pbMicRecognition.maxAlternatives = 3;
+  App.pbMicActive = true;
+  if (btn) { btn.innerHTML = '&#x1F534; Listening...'; btn.style.background = 'var(--error)'; btn.style.color = '#fff'; }
+  pbMicRecognition.onresult = function(e) {
+    // Pick the alternative that looks most like medical English
+    var best = e.results[0][0].transcript;
+    for (var i = 1; i < e.results[0].length; i++) {
+      var alt = e.results[0][i].transcript;
+      if (scoreMedicalPhrase_(alt) > scoreMedicalPhrase_(best)) best = alt;
+    }
+    var input = document.getElementById('pb-input');
+    if (input) { input.value = best; sendPBMessage(); }
+    App.pbMicActive = false;
+    if (btn) { btn.textContent = '\uD83C\uDFA4'; btn.style.background = ''; btn.style.color = ''; }
+  };
+  pbMicRecognition.onerror = function() {
+    App.pbMicActive = false;
+    if (btn) { btn.textContent = '\uD83C\uDFA4'; btn.style.background = ''; btn.style.color = ''; }
+  };
+  pbMicRecognition.onend = function() {
+    App.pbMicActive = false;
+    if (btn) { btn.textContent = '\uD83C\uDFA4'; btn.style.background = ''; btn.style.color = ''; }
+  };
+  pbMicRecognition.start();
+}
+
+function togglePBTTS() {
+  App.pbTTS = !App.pbTTS;
+  var btn = document.getElementById('pb-tts-btn');
+  if (btn) btn.innerHTML = App.pbTTS ? '&#x1F50A;' : '&#x1F507;';
+  showToast('Voice responses ' + (App.pbTTS ? 'ON' : 'OFF'));
+}
+
+function speakText_(text) {
+  if (!App.pbTTS || !text) return;
+  window.speechSynthesis.cancel();
+  var utt = new SpeechSynthesisUtterance(text.replace(/\*+/g,'').replace(/\[.*?\]/g,'').trim());
+  utt.lang = 'en-US'; utt.rate = 0.92; utt.pitch = 1;
+  // Prefer a clearer voice if available
+  var voices = window.speechSynthesis.getVoices();
+  var pref = voices.find(function(v){ return /Google US English|Samantha|Daniel|Karen/i.test(v.name); });
+  if (pref) utt.voice = pref;
+  window.speechSynthesis.speak(utt);
+}
+
+// Score how medically-likely a phrase is (for picking best STT alternative)
+function scoreMedicalPhrase_(text) {
+  var medTerms = /patient|symptom|history|diagnosis|treatment|medication|pain|fever|shortness|breath|chest|abdomen|nausea|vomit|blood|pressure|heart|lung|kidney|liver|bowel|urine|stool|cough|dyspnea|palpitation|syncope|headache|dizziness|weakness|fatigue|allerg|surgery|hospital|emergency|clinic|doctor|nurse|prescri|dose|mg|tablet|inject|IV|ICU/i;
+  return (text.match(medTerms) || []).length;
+}
+
+// Called after PatientBot renders a new assistant message — speak it if TTS on
+function pbSpeakLastMessage_() {
+  if (!App.pbTTS) return;
+  var last = App.pbHistory[App.pbHistory.length - 1];
+  if (last && last.role === 'assistant') speakText_(last.content);
+}
+
+// ---- English Coach Mode (direct Claude API) ----
+App.ecHistory = [];
+App.ecMicActive = false;
+App.ecSpeaking = false;
+var ecMicRecognition = null;
+
+var EC_SYSTEM_PROMPT = 'You are a warm and encouraging medical English conversation coach. Your students are Farsi (Persian) native speakers preparing for the Canadian MCCQE medical licensing exam.\n\nIMPORTANT — Farsi-accented speech recognition often produces these errors, silently correct them:\n- "batient" or "bateint" → patient\n- "bresent" → present  \n- "bolse" or "bulse" → pulse\n- "vhat" / "vhere" / "ven" → what / where / when\n- "dis" / "dat" / "dere" → this / that / there\n- "tink" / "tought" → think / thought\n- Vowel shifts: "bad" might mean "bed", "set" might mean "sit"\n- Missing articles: assume they meant to say "the" or "a"\nDo NOT mention these corrections explicitly unless it really changes meaning.\n\nYour job:\n1. Have natural medical conversations — history taking, OSCE communication, explaining diagnoses, patient counseling, emergency scenarios\n2. Use proper medical terminology but stay conversational\n3. Keep YOUR responses to 2-3 sentences max for natural back-and-forth rhythm\n4. After each exchange, add ONE brief gentle note if there was a notable English usage to improve — format: 💬 [tip here]\n5. Be encouraging and specific with praise\n\nStart each new conversation by briefly introducing a scenario for practice (e.g. "Let\'s practice — you\'re a resident in the ER and I\'m a 45-year-old man with crushing chest pain. Start by introducing yourself.").';
+
+function showEnglishCoach() {
+  App.ecHistory = [];
+  App.ecSpeaking = false;
+  var el = document.getElementById('patientbot-content');
+  var html = '<div style="max-width:700px;margin:0 auto;padding:16px">';
+  html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">';
+  html += '<button class="btn btn-outline btn-sm" onclick="showPatientBotSetup()">&#x2190; Back</button>';
+  html += '<div style="flex:1;text-align:center"><strong style="font-size:17px">&#x1F3A4; English Coach</strong></div>';
+  html += '<button class="btn btn-outline btn-sm" id="ec-tts-btn" onclick="toggleECTTS()" title="Read responses aloud">&#x1F50A;</button>';
+  html += '</div>';
+  // Chat area
+  html += '<div id="ec-messages" style="min-height:300px;max-height:55vh;overflow-y:auto;border:1px solid var(--border);border-radius:14px;padding:16px;background:var(--bg);margin-bottom:12px;display:flex;flex-direction:column;gap:12px">';
+  html += '<div style="text-align:center;color:var(--text-light);font-size:13px;padding:24px 0">Tap the mic or type to begin your English practice session.</div>';
+  html += '</div>';
+  // Input row
+  html += '<div style="display:flex;gap:8px;align-items:flex-end">';
+  html += '<textarea id="ec-input" placeholder="Type or tap mic to speak..." rows="2" style="flex:1;padding:10px 14px;border-radius:12px;border:1.5px solid var(--border);background:var(--card);color:var(--text);font-size:15px;font-family:inherit;resize:none;outline:none" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendECMessage()}"></textarea>';
+  html += '<button class="btn btn-primary" onclick="sendECMessage()" style="padding:10px 16px">Send</button>';
+  html += '<button class="btn btn-outline" id="ec-mic-btn" onclick="toggleECMic()" title="Speak" style="font-size:20px;padding:10px 12px;line-height:1">&#x1F3A4;</button>';
+  html += '</div>';
+  html += '<div style="font-size:11px;color:var(--text-light);text-align:center;margin-top:8px">Uses Claude AI &bull; Farsi accent aware &bull; Medical vocabulary optimised</div>';
+  html += '</div>';
+  el.innerHTML = html;
+  // Auto-start with a scenario
+  setTimeout(ecStartSession_, 400);
+}
+
+function ecStartSession_() {
+  ecCallClaude_([{ role: 'user', content: 'Start our session with a scenario for me to practice.' }], function(reply) {
+    App.ecHistory.push({ role: 'assistant', content: reply });
+    renderECMessages_();
+    if (App.ecTTS !== false) speakText_(reply);
+  });
+}
+
+function toggleECTTS() {
+  App.ecTTS = App.ecTTS === false ? true : false;
+  var btn = document.getElementById('ec-tts-btn');
+  if (btn) btn.innerHTML = App.ecTTS === false ? '&#x1F507;' : '&#x1F50A;';
+}
+
+function toggleECMic() {
+  var btn = document.getElementById('ec-mic-btn');
+  if (App.ecMicActive) {
+    App.ecMicActive = false;
+    if (ecMicRecognition) { try { ecMicRecognition.stop(); } catch(e){} }
+    if (btn) { btn.innerHTML = '&#x1F3A4;'; btn.style.background = ''; btn.style.color = ''; }
+    return;
+  }
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { showToast('Voice input not supported (use Chrome)'); return; }
+  ecMicRecognition = new SR();
+  ecMicRecognition.lang = 'en-US';
+  ecMicRecognition.continuous = false;
+  ecMicRecognition.interimResults = false;
+  ecMicRecognition.maxAlternatives = 3;
+  App.ecMicActive = true;
+  if (btn) { btn.innerHTML = '&#x1F534;'; btn.style.background = 'var(--error)'; btn.style.color = '#fff'; }
+  ecMicRecognition.onresult = function(e) {
+    var best = e.results[0][0].transcript;
+    for (var i = 1; i < e.results[0].length; i++) {
+      var alt = e.results[0][i].transcript;
+      if (scoreMedicalPhrase_(alt) > scoreMedicalPhrase_(best)) best = alt;
+    }
+    var inp = document.getElementById('ec-input');
+    if (inp) { inp.value = best; }
+    App.ecMicActive = false;
+    if (btn) { btn.innerHTML = '&#x1F3A4;'; btn.style.background = ''; btn.style.color = ''; }
+    sendECMessage();
+  };
+  ecMicRecognition.onerror = ecMicRecognition.onend = function() {
+    App.ecMicActive = false;
+    if (btn) { btn.innerHTML = '&#x1F3A4;'; btn.style.background = ''; btn.style.color = ''; }
+  };
+  ecMicRecognition.start();
+}
+
+function sendECMessage() {
+  var inp = document.getElementById('ec-input');
+  if (!inp) return;
+  var text = inp.value.trim();
+  if (!text) return;
+  inp.value = '';
+  App.ecHistory.push({ role: 'user', content: text });
+  renderECMessages_();
+  // Show typing indicator
+  var msgs = document.getElementById('ec-messages');
+  if (msgs) {
+    var typing = document.createElement('div');
+    typing.id = 'ec-typing';
+    typing.style.cssText = 'font-style:italic;color:var(--text-light);font-size:13px;padding:4px 0';
+    typing.textContent = 'Claude is thinking...';
+    msgs.appendChild(typing);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+  var messages = [{ role: 'user', content: 'Start our session with a scenario for me to practice.' }];
+  for (var i = 0; i < App.ecHistory.length; i++) messages.push(App.ecHistory[i]);
+  ecCallClaude_(messages, function(reply) {
+    var t = document.getElementById('ec-typing');
+    if (t) t.remove();
+    App.ecHistory.push({ role: 'assistant', content: reply });
+    renderECMessages_();
+    if (App.ecTTS !== false) speakText_(reply);
+  });
+}
+
+function ecCallClaude_(messages, callback) {
+  if (!CLAUDE_API_KEY || CLAUDE_API_KEY === 'YOUR_CLAUDE_API_KEY_HERE') {
+    callback('[Claude API key not set. Add your key to CLAUDE_API_KEY in the config at the top of the script.]');
+    return;
+  }
+  fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': CLAUDE_API_KEY,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-3-5-haiku-20241022',
+      max_tokens: 300,
+      system: EC_SYSTEM_PROMPT,
+      messages: messages
+    })
+  }).then(function(r){ return r.json(); }).then(function(d){
+    var text = d.content && d.content[0] ? d.content[0].text : 'Sorry, no response.';
+    callback(text);
+  }).catch(function(e){ callback('Error: ' + (e.message || String(e))); });
+}
+
+function renderECMessages_() {
+  var msgs = document.getElementById('ec-messages');
+  if (!msgs) return;
+  if (App.ecHistory.length === 0) return;
+  msgs.innerHTML = '';
+  for (var i = 0; i < App.ecHistory.length; i++) {
+    var m = App.ecHistory[i];
+    var div = document.createElement('div');
+    var isUser = m.role === 'user';
+    div.style.cssText = 'max-width:85%;padding:10px 14px;border-radius:14px;font-size:14px;line-height:1.5;' +
+      (isUser ? 'align-self:flex-end;background:var(--primary);color:#fff;border-bottom-right-radius:4px' :
+                 'align-self:flex-start;background:var(--card);border:1px solid var(--border);border-bottom-left-radius:4px');
+    // Highlight the 💬 English tip line
+    var content = escapeHtml(m.content).replace(/💬 \[(.+?)\]/g, '<div style="margin-top:8px;font-size:12px;padding:6px 10px;background:rgba(99,102,241,0.1);border-radius:8px;color:var(--primary)">💬 $1</div>');
+    div.innerHTML = content;
+    msgs.appendChild(div);
+  }
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
 // ---- Local card rating (for adaptive sorting without a server round-trip) ----
 function saveLocalCardRating_(front, rating) {
   if (!front) return;
@@ -5572,7 +5824,24 @@ function showPatientBotSetup() {
   html += '<div style="margin-top:8px;font-size:12px;color:var(--text-light)">All lab values, vital sign responses, and clinical findings are generated to be consistent with the underlying diagnosis \u2014 not random. Drug doses, reference ranges, and clinical consequences follow real pharmacology.</div>';
   html += '</div>';
 
-  html += '<button class="btn btn-success" style="width:100%;padding:14px;font-size:16px" onclick="startPBSession()">Start</button>';
+  html += '<button class="btn btn-success" style="width:100%;padding:14px;font-size:16px" onclick="startPBSession()">&#x1F3E5; Start Patient Simulation</button>';
+
+  // --- English Coach Mode Card ---
+  html += '<div style="margin-top:24px;border-top:1px solid var(--border);padding-top:20px">';
+  html += '<div style="background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(168,85,247,0.08));border:1px solid rgba(99,102,241,0.2);border-radius:16px;padding:20px 18px">';
+  html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">';
+  html += '<span style="font-size:32px">&#x1F3A4;</span>';
+  html += '<div><div style="font-weight:800;font-size:16px">English Coach Mode</div>';
+  html += '<div style="font-size:12px;color:var(--text-light);margin-top:2px">Speak aloud — Claude listens and responds. Medical vocabulary + Farsi accent aware.</div></div></div>';
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">';
+  html += '<span style="font-size:11px;background:rgba(99,102,241,0.12);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:600">&#x1F3E5; Medical English</span>';
+  html += '<span style="font-size:11px;background:rgba(99,102,241,0.12);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:600">&#x1F1EE;&#x1F1F7; Farsi accent aware</span>';
+  html += '<span style="font-size:11px;background:rgba(99,102,241,0.12);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:600">&#x1F50A; Voice in + out</span>';
+  html += '</div>';
+  html += '<div style="font-size:12px;color:var(--text-light);margin-bottom:14px">Practise explaining symptoms, taking history, discussing diagnoses. Claude gently corrects English and understands medical terms.</div>';
+  html += '<button class="btn btn-primary" style="width:100%;padding:13px;font-weight:700" onclick="showEnglishCoach()">&#x1F3A4; Open English Coach</button>';
+  html += '</div></div>';
+
   html += '</div>';
   el.innerHTML = html;
 }
@@ -6068,6 +6337,8 @@ function renderPBChat() {
   if (App.pbDiagnosing) { var dinput = document.getElementById('pb-diag-input'); if (dinput) dinput.focus(); }
   // Start live ECG animation
   startPBMonitorAnimation();
+  // Speak last patient message if TTS is on
+  pbSpeakLastMessage_();
 }
 
 // Live ECG + pleth waveform animation
@@ -6488,8 +6759,10 @@ function renderPBChatInner() {
     html += '</div>';
 
     html += '<div class="chat-input-area">';
-    html += '<textarea id="pb-input" placeholder="Talk to the patient..." rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendPBMessage()}"></textarea>';
+    html += '<textarea id="pb-input" placeholder="Talk to the patient... or tap 🎤" rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendPBMessage()}"></textarea>';
     html += '<button class="btn btn-primary" onclick="sendPBMessage()">Send</button>';
+    html += '<button class="btn btn-outline" id="pb-mic-btn" onclick="togglePBMic()" title="Voice input" style="font-size:18px;padding:0 10px">&#x1F3A4;</button>';
+    html += '<button class="btn btn-outline" id="pb-tts-btn" onclick="togglePBTTS()" title="Read responses aloud" style="font-size:16px;padding:0 10px">' + (App.pbTTS ? '&#x1F50A;' : '&#x1F507;') + '</button>';
     html += '<button class="btn btn-warning pb-diagnose-btn" onclick="showDiagnoseModal()">Diagnose</button>';
     html += buildFlagButton({ type: 'patientbot', id: App.pbCaseIndex || 0, specialty: App.pbSpecialty || '', content: 'Case: ' + (App.pbSpecialty || 'Unknown') });
     html += '</div>';
@@ -6681,19 +6954,91 @@ function pickLang_(lang) {
   if (overlay) overlay.remove();
 }
 
+var FALLBACK_GLOSSARY = [
+  {Term:'hypertension',Category:'Cardiology',Definition:'Persistently elevated blood pressure ≥130/80 mmHg',fa:'فشار خون بالا',ar:'ارتفاع ضغط الدم',fr:'hypertension artérielle'},
+  {Term:'myocardial infarction',Category:'Cardiology',Definition:'Death of heart muscle from blocked coronary artery',fa:'حمله قلبی / سکته قلبی',ar:'احتشاء عضلة القلب',fr:'infarctus du myocarde'},
+  {Term:'angina',Category:'Cardiology',Definition:'Chest pain from reduced blood flow to the heart',fa:'آنژین / درد قفسه سینه',ar:'ذبحة صدرية',fr:'angine de poitrine'},
+  {Term:'atrial fibrillation',Category:'Cardiology',Definition:'Irregular rapid heart rhythm originating in the atria',fa:'فیبریلاسیون دهلیزی',ar:'رجفان أذيني',fr:'fibrillation auriculaire'},
+  {Term:'heart failure',Category:'Cardiology',Definition:'Heart cannot pump enough blood to meet body needs',fa:'نارسایی قلبی',ar:'فشل القلب',fr:'insuffisance cardiaque'},
+  {Term:'tachycardia',Category:'Cardiology',Definition:'Heart rate >100 bpm',fa:'تاکیکاردی — ضربان قلب سریع',ar:'تسارع القلب',fr:'tachycardie'},
+  {Term:'bradycardia',Category:'Cardiology',Definition:'Heart rate <60 bpm',fa:'برادیکاردی — ضربان قلب کند',ar:'بطء القلب',fr:'bradycardie'},
+  {Term:'syncope',Category:'Neurology',Definition:'Transient loss of consciousness due to reduced brain blood flow',fa:'غش / از حال رفتن',ar:'إغماء',fr:'syncope'},
+  {Term:'dyspnea',Category:'Respirology',Definition:'Subjective sensation of difficulty breathing',fa:'تنگی نفس',ar:'ضيق التنفس',fr:'dyspnée'},
+  {Term:'hemoptysis',Category:'Respirology',Definition:'Coughing up blood from the respiratory tract',fa:'خون‌ریزی از راه سرفه',ar:'نفث الدم',fr:'hémoptysie'},
+  {Term:'pneumonia',Category:'Respirology',Definition:'Infection causing inflammation of the lung alveoli',fa:'ذات‌الریه',ar:'التهاب رئوي',fr:'pneumonie'},
+  {Term:'asthma',Category:'Respirology',Definition:'Chronic inflammatory airway disease with reversible obstruction',fa:'آسم',ar:'ربو',fr:'asthme'},
+  {Term:'pulmonary embolism',Category:'Respirology',Definition:'Blood clot blocking a pulmonary artery',fa:'آمبولی ریه',ar:'انصمام رئوي',fr:'embolie pulmonaire'},
+  {Term:'stroke',Category:'Neurology',Definition:'Sudden neurological deficit from brain ischemia or hemorrhage',fa:'سکته مغزی',ar:'سكتة دماغية',fr:'accident vasculaire cérébral'},
+  {Term:'vertigo',Category:'Neurology',Definition:'Sensation of spinning or movement when stationary',fa:'سرگیجه',ar:'دوار',fr:'vertige'},
+  {Term:'seizure',Category:'Neurology',Definition:'Abnormal electrical activity in the brain causing involuntary movements',fa:'تشنج',ar:'نوبة صرعية',fr:'crise épileptique'},
+  {Term:'diabetes',Category:'Endocrinology',Definition:'Metabolic disorder of impaired glucose regulation',fa:'دیابت / بیماری قند',ar:'السكري',fr:'diabète'},
+  {Term:'hypothyroidism',Category:'Endocrinology',Definition:'Underactive thyroid producing insufficient thyroid hormone',fa:'کم‌کاری تیروئید',ar:'قصور الغدة الدرقية',fr:'hypothyroïdie'},
+  {Term:'hyperthyroidism',Category:'Endocrinology',Definition:'Overactive thyroid producing excess thyroid hormone',fa:'پرکاری تیروئید',ar:'فرط نشاط الغدة الدرقية',fr:'hyperthyroïdie'},
+  {Term:'anemia',Category:'Hematology',Definition:'Reduced hemoglobin or red blood cell count',fa:'کم‌خونی',ar:'فقر الدم',fr:'anémie'},
+  {Term:'deep vein thrombosis',Category:'Hematology',Definition:'Blood clot in a deep vein, usually the leg',fa:'ترومبوز ورید عمقی',ar:'تجلط الأوردة العميقة',fr:'thrombose veineuse profonde'},
+  {Term:'sepsis',Category:'Infectious Disease',Definition:'Life-threatening organ dysfunction from infection',fa:'سپسیس / عفونت خون',ar:'الإنتان',fr:'sepsis'},
+  {Term:'urinary tract infection',Category:'Nephrology',Definition:'Bacterial infection of any part of the urinary system',fa:'عفونت مجاری ادراری',ar:'التهاب المسالك البولية',fr:'infection urinaire'},
+  {Term:'renal failure',Category:'Nephrology',Definition:'Loss of kidney function to filter waste from blood',fa:'نارسایی کلیوی',ar:'الفشل الكلوي',fr:'insuffisance rénale'},
+  {Term:'hematuria',Category:'Nephrology',Definition:'Blood in the urine',fa:'خون در ادرار',ar:'بيلة دموية',fr:'hématurie'},
+  {Term:'jaundice',Category:'Gastroenterology',Definition:'Yellow discolouration of skin and eyes from elevated bilirubin',fa:'یرقان / زردی',ar:'اليرقان',fr:'ictère'},
+  {Term:'appendicitis',Category:'Surgery',Definition:'Inflammation of the appendix',fa:'آپاندیسیت',ar:'التهاب الزائدة الدودية',fr:'appendicite'},
+  {Term:'cholecystitis',Category:'Surgery',Definition:'Inflammation of the gallbladder',fa:'کوله‌سیستیت / التهاب کیسه صفرا',ar:'التهاب المرارة',fr:'cholécystite'},
+  {Term:'pancreatitis',Category:'Gastroenterology',Definition:'Inflammation of the pancreas',fa:'پانکراتیت / التهاب لوزالمعده',ar:'التهاب البنكرياس',fr:'pancréatite'},
+  {Term:'edema',Category:'General',Definition:'Abnormal accumulation of fluid in body tissues',fa:'ادم / تورم',ar:'وذمة',fr:'œdème'},
+  {Term:'cyanosis',Category:'General',Definition:'Bluish discolouration of skin from low blood oxygen',fa:'سیانوز / کبودی پوست',ar:'زراق',fr:'cyanose'},
+  {Term:'nausea',Category:'General',Definition:'Unpleasant sensation of urge to vomit',fa:'تهوع',ar:'غثيان',fr:'nausée'},
+  {Term:'dysphagia',Category:'General',Definition:'Difficulty swallowing',fa:'اشکال در بلع',ar:'عسر البلع',fr:'dysphagie'},
+  {Term:'pruritus',Category:'Dermatology',Definition:'Intense sensation of itching',fa:'خارش',ar:'حكة',fr:'prurit'},
+  {Term:'pallor',Category:'General',Definition:'Abnormal paleness of skin',fa:'رنگ‌پریدگی',ar:'شحوب',fr:'pâleur'},
+  {Term:'diaphoresis',Category:'General',Definition:'Excessive sweating',fa:'تعریق زیاد',ar:'تعرق مفرط',fr:'diaphorèse'},
+  {Term:'epistaxis',Category:'ENT',Definition:'Bleeding from the nose',fa:'خون‌ریزی از بینی',ar:'رعاف',fr:'épistaxis'},
+  {Term:'tinnitus',Category:'ENT',Definition:'Perception of ringing or noise in the ears',fa:'وزوز گوش',ar:'طنين الأذن',fr:'acouphènes'},
+  {Term:'melena',Category:'Gastroenterology',Definition:'Black tarry stool from upper GI bleeding',fa:'مدفوع سیاه / خون در مدفوع',ar:'براز قطراني أسود',fr:'méléna'},
+  {Term:'hematemesis',Category:'Gastroenterology',Definition:'Vomiting of blood',fa:'خون‌ریزی از دهان هنگام استفراغ',ar:'قيء الدم',fr:'hématémèse'},
+  {Term:'constipation',Category:'Gastroenterology',Definition:'Infrequent or difficult passage of stools',fa:'یبوست',ar:'إمساك',fr:'constipation'},
+  {Term:'diarrhea',Category:'Gastroenterology',Definition:'Frequent loose or watery stools',fa:'اسهال',ar:'إسهال',fr:'diarrhée'},
+  {Term:'hyponatremia',Category:'Endocrinology',Definition:'Serum sodium <135 mEq/L',fa:'هیپوناترمی / کمبود سدیم',ar:'نقص صوديوم الدم',fr:'hyponatrémie'},
+  {Term:'hyperkalemia',Category:'Endocrinology',Definition:'Serum potassium >5.5 mEq/L',fa:'هیپرکالمی / پتاسیم بالا',ar:'فرط بوتاسيوم الدم',fr:'hyperkaliémie'},
+  {Term:'hypokalemia',Category:'Endocrinology',Definition:'Serum potassium <3.5 mEq/L',fa:'هیپوکالمی / کمبود پتاسیم',ar:'نقص بوتاسيوم الدم',fr:'hypokaliémie'},
+  {Term:'acidosis',Category:'Endocrinology',Definition:'Blood pH <7.35',fa:'اسیدوز / اسیدی شدن خون',ar:'الحماض',fr:'acidose'},
+  {Term:'alkalosis',Category:'Endocrinology',Definition:'Blood pH >7.45',fa:'آلکالوز / قلیایی شدن خون',ar:'القلاء',fr:'alcalose'},
+  {Term:'diagnosis',Category:'General',Definition:'Identification of a disease or condition',fa:'تشخیص',ar:'تشخيص',fr:'diagnostic'},
+  {Term:'prognosis',Category:'General',Definition:'Predicted course and outcome of a disease',fa:'پیش‌آگهی',ar:'توقعات المرض',fr:'pronostic'},
+  {Term:'biopsy',Category:'Pathology',Definition:'Removal of tissue for microscopic examination',fa:'بیوپسی / نمونه‌برداری',ar:'خزعة',fr:'biopsie'},
+  {Term:'echocardiogram',Category:'Cardiology',Definition:'Ultrasound imaging of the heart',fa:'اکوکاردیوگرام / سونوگرافی قلب',ar:'صدى صوت القلب',fr:'échocardiogramme'},
+  {Term:'electrocardiogram',Category:'Cardiology',Definition:'Recording of heart electrical activity',fa:'نوار قلب',ar:'تخطيط القلب',fr:'électrocardiogramme'},
+  {Term:'hypertension',Category:'Cardiology',Definition:'Persistently elevated blood pressure ≥130/80 mmHg',fa:'فشار خون بالا',ar:'ارتفاع ضغط الدم',fr:'hypertension artérielle'}
+];
+
+function buildGlossaryIndex_(data) {
+  App.glossary = {};
+  for (var i = 0; i < data.length; i++) {
+    var term = data[i].Term || data[i].term;
+    if (term) App.glossary[term.toLowerCase()] = data[i];
+  }
+  var terms = Object.keys(App.glossary).sort(function(a, b) { return b.length - a.length; });
+  var escaped = terms.map(function(t) { return t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); });
+  App.glossaryRegex = new RegExp('\\b(' + escaped.join('|') + ')\\b', 'gi');
+}
+
 function loadGlossary() {
+  // Always apply the fallback glossary immediately so terms highlight right away
+  buildGlossaryIndex_(FALLBACK_GLOSSARY);
+  // Then try to enhance with server glossary (may have more terms/languages)
   serverCall('getGlossary').then(function(data) {
-    if (!data || data.length === 0) return;
-    App.glossary = {};
-    for (var i = 0; i < data.length; i++) {
-      var term = data[i].Term || data[i].term;
-      if (term) App.glossary[term.toLowerCase()] = data[i];
+    if (!data || data.length === 0) return; // fallback already active, that's fine
+    // Merge: server data wins for matching terms, fallback fills gaps
+    var merged = FALLBACK_GLOSSARY.slice();
+    var fallbackKeys = {};
+    for (var i = 0; i < FALLBACK_GLOSSARY.length; i++) {
+      fallbackKeys[(FALLBACK_GLOSSARY[i].Term || '').toLowerCase()] = true;
     }
-    // Build regex from terms (longest first to match multi-word terms first)
-    var terms = Object.keys(App.glossary).sort(function(a, b) { return b.length - a.length; });
-    var escaped = terms.map(function(t) { return t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); });
-    App.glossaryRegex = new RegExp('\\b(' + escaped.join('|') + ')\\b', 'gi');
-  }).catch(function() {});
+    for (var j = 0; j < data.length; j++) {
+      var t = (data[j].Term || data[j].term || '').toLowerCase();
+      if (!fallbackKeys[t]) merged.push(data[j]);
+    }
+    buildGlossaryIndex_(merged);
+  }).catch(function() {}); // fallback already applied, nothing to do
 }
 
 function highlightMedTerms(html) {
