@@ -2988,6 +2988,14 @@ function patchApiResult_(fn, result) {
       if (!/\d{1,3}[- ]year|patient|woman|man|girl|boy|infant|child|presents|complains/i.test(q.question)) return false;
       return true;
     });
+    // Apply difficulty filter (set by quiz setup)
+    if (App.quizDifficulty === 'easy') {
+      var easy = result.filter(function(q) { return q.question.length < 350; });
+      if (easy.length >= 5) result = easy;
+    } else if (App.quizDifficulty === 'hard') {
+      var hard = result.filter(function(q) { return q.question.length > 600; });
+      if (hard.length >= 5) result = hard;
+    }
     result.forEach(function(q) {
       // Fix Q3: CKD/naproxen — relabel to Nephrology, fix answer to acetaminophen-first
       if (/naproxen/i.test(q.question) && /ckd|chronic kidney/i.test(q.question)) {
@@ -3755,7 +3763,7 @@ function rateDailyCard(rating) {
   App.dailyCardRatings.push(rating);
   // Save for spaced repetition (fire-and-forget)
   var card = App.dailyData.flashcards[App.dailyCardIndex];
-  if (card) serverCall('saveCardRating', card.front, rating, 'daily').catch(function(){});
+  if (card) { serverCall('saveCardRating', card.front, rating, 'daily').catch(function(){}); saveLocalCardRating_(card.front, rating); }
   App.dailyCardIndex++;
   App.dailyCardFlipped = false;
   renderDailyCard();
@@ -4282,6 +4290,8 @@ function loadFlashcards(specialty) {
   var preloaded = (specialty === 'All' && App.preloadedFlashcards) ? Promise.resolve(App.preloadedFlashcards) : serverCall('getFlashcards', specialty);
   preloaded.then(function(data) {
     App.preloadedFlashcards = null; // free memory after first use
+    // Adaptive sort: put weak cards (locally rated missed/shaky) at the front
+    data = sortWeakCardsFirst_(data);
     App.flashcardsAll = data; App.flashcards = data;
     if (document.getElementById('flashcard-hy-only').checked) App.flashcards = data.filter(function(c) { return c.hyFlag; });
 
@@ -4503,9 +4513,11 @@ function rateFlashcard(gotIt) {
     App.flashcardReviewCards.push(card);
   }
 
-  // Save card rating server-side for spaced repetition
+  // Save card rating server-side + locally for adaptive sorting
   if (card) {
-    serverCall('saveCardRating', card.front, gotIt ? 'knew' : 'missed', 'flashcard', App.guestId).catch(function(){});
+    var rating = gotIt ? 'knew' : 'missed';
+    serverCall('saveCardRating', card.front, rating, 'flashcard', App.guestId).catch(function(){});
+    saveLocalCardRating_(card.front, rating);
   }
 
   incrementDailyCardCount_();
@@ -4643,9 +4655,25 @@ function showQuizSetup() {
   var html = '<div class="quiz-setup card">';
   html += '<h3 style="margin-bottom:20px;text-align:center">Quiz Setup</h3>';
 
+  // Weak areas banner — show if user has history
+  var weakAreas = App.stats && App.stats.weakAreas && App.stats.weakAreas.length > 0 ? App.stats.weakAreas : [];
+  var defaultSpec = 'All';
+  if (weakAreas.length > 0) {
+    defaultSpec = weakAreas[0].specialty;
+    html += '<div style="background:rgba(244,67,54,0.08);border:1px solid rgba(244,67,54,0.25);border-radius:12px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px">';
+    html += '<span style="font-size:20px">&#x1F3AF;</span>';
+    html += '<div><div style="font-size:13px;font-weight:700;color:var(--error)">Weak Areas Detected</div>';
+    html += '<div style="font-size:12px;color:var(--text-light);margin-top:2px">Defaulting to your weakest: <strong>' + escapeHtml(weakAreas[0].specialty) + '</strong> (' + weakAreas[0].avgScore + '% avg)</div></div>';
+    html += '<button onclick="document.getElementById(\'quiz-specialty\').value=\'All\'" style="margin-left:auto;background:none;border:none;font-size:11px;color:var(--text-light);cursor:pointer;white-space:nowrap">Use All</button>';
+    html += '</div>';
+  }
+
   html += '<div class="form-group"><label>Specialty</label>';
   html += '<select id="quiz-specialty" style="width:100%"><option value="All">All Specialties (Random Mix)</option>';
-  for (var i = 0; i < specs.length; i++) html += '<option value="' + escapeHtml(specs[i]) + '">' + escapeHtml(specs[i]) + '</option>';
+  for (var i = 0; i < specs.length; i++) {
+    var isWeak = weakAreas.length > 0 && weakAreas[0].specialty === specs[i];
+    html += '<option value="' + escapeHtml(specs[i]) + '"' + (specs[i] === defaultSpec ? ' selected' : '') + '>' + escapeHtml(specs[i]) + (isWeak ? ' ⚠️' : '') + '</option>';
+  }
   html += '</select></div>';
 
   html += '<div class="form-group"><label>Version</label>';
@@ -4653,11 +4681,11 @@ function showQuizSetup() {
   html += '<option value="Random">Random Mix</option><option value="A">Version A (Official MCC)</option><option value="B">Version B</option><option value="C">Version C</option><option value="D">Version D</option>';
   html += '</select></div>';
 
-  html += '<div class="form-group"><label>Difficulty</label>';
+  html += '<div class="form-group"><label>Difficulty <span style="font-size:11px;color:var(--text-light);font-weight:400">(filters question complexity by vignette length)</span></label>';
   html += '<div class="quiz-count-btns">';
-  html += '<button class="quiz-count-btn" onclick="setQuizDiff(\'easy\',this)">Easy</button>';
-  html += '<button class="quiz-count-btn active" onclick="setQuizDiff(\'medium\',this)">MCCQE &#x2705;</button>';
-  html += '<button class="quiz-count-btn" onclick="setQuizDiff(\'hard\',this)">Hard</button>';
+  html += '<button class="quiz-count-btn" onclick="setQuizDiff(\'easy\',this)">Easy (&lt;350 chars)</button>';
+  html += '<button class="quiz-count-btn active" onclick="setQuizDiff(\'medium\',this)">MCCQE &#x2705; (all)</button>';
+  html += '<button class="quiz-count-btn" onclick="setQuizDiff(\'hard\',this)">Hard (&gt;600 chars)</button>';
   html += '</div></div>';
 
   html += '<div class="form-group"><label>Number of Questions</label>';
@@ -4799,6 +4827,35 @@ function renderQuizQuestion() {
 function selectQuizAnswer(opt) { App.quizAnswers[App.quizCurrentIndex] = opt; saveQuizState_(); renderQuizQuestion(); }
 function prevQuizQuestion() { if (App.quizCurrentIndex > 0) { App.quizCurrentIndex--; renderQuizQuestion(); } }
 function nextQuizQuestion() { if (App.quizCurrentIndex < App.quizQuestions.length - 1) { App.quizCurrentIndex++; renderQuizQuestion(); } }
+
+// ---- Local card rating (for adaptive sorting without a server round-trip) ----
+function saveLocalCardRating_(front, rating) {
+  if (!front) return;
+  try {
+    var key = 'mcc_card_ratings';
+    var ratings = JSON.parse(localStorage.getItem(key) || '{}');
+    if (!ratings[front]) ratings[front] = { missed: 0, shaky: 0, knew: 0 };
+    ratings[front][rating] = (ratings[front][rating] || 0) + 1;
+    // Trim to 2000 entries to avoid localStorage bloat
+    var keys = Object.keys(ratings);
+    if (keys.length > 2000) { delete ratings[keys[0]]; }
+    localStorage.setItem(key, JSON.stringify(ratings));
+  } catch(e) {}
+}
+
+function sortWeakCardsFirst_(cards) {
+  try {
+    var ratings = JSON.parse(localStorage.getItem('mcc_card_ratings') || '{}');
+    if (Object.keys(ratings).length === 0) return cards;
+    // Score: missed=3, shaky=1, knew=-2 (same as server)
+    return cards.slice().sort(function(a, b) {
+      var ra = ratings[a.front] || {}, rb = ratings[b.front] || {};
+      var sa = (ra.missed||0)*3 + (ra.shaky||0) - (ra.knew||0)*2;
+      var sb = (rb.missed||0)*3 + (rb.shaky||0) - (rb.knew||0)*2;
+      return sb - sa; // higher weakness score first
+    });
+  } catch(e) { return cards; }
+}
 
 function setQuizTimer(secs, btn) {
   App.quizSecondsPerQ = secs;
