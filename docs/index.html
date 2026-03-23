@@ -3653,6 +3653,7 @@ var VitalsEngine = {
     this._effects = [];
     this._bpReadings = [];
     this._bpMeasuring = false;
+    this._cumulativeDoses = {};  // cumulative drug doses (mcg) per drug, reset each case
     this.stop();
   },
 
@@ -3680,8 +3681,15 @@ var VitalsEngine = {
   applyEffect: function(key) {
     var eff = this.DRUG_EFFECTS[key];
     if (!eff) return;
-    // Naloxone in opioid code blue → dramatic reversal
+    // Naloxone in opioid code blue → dramatic reversal (blocked if massive/irreversible OD)
     if (key === 'naloxone' && App.pbCodeBlue && App.pbCodeBlue.category === 'opioid') {
+      if (!App.pbCodeBlue.reversible) {
+        // Massive overdose — naloxone cannot save the patient
+        App.pbHistory.push({ role: 'system-alert', content: '☠️ **Naloxone failed** — Overdose exceeds 5× lethal threshold. The dose is too high to reverse. Patient remains in cardiac arrest.' });
+        var renderFnNx = (typeof renderDailyPBChat === 'function' && App.dailyPhase === 'pb') ? renderDailyPBChat : renderPBChat;
+        if (typeof renderFnNx === 'function') renderFnNx();
+        return;
+      }
       this._base.hr = 90; this._base.sbp = 110; this._base.dbp = 70;
       this._base.rr = 14; this._base.spo2 = 94;
       this._effects = [];
@@ -3730,7 +3738,7 @@ var VitalsEngine = {
     return num; // already mcg
   },
 
-  // Check if the administered dose is lethal; returns lethal entry or null
+  // Check if the administered dose is lethal (including cumulative); returns lethal entry or null
   checkLethalDose: function(msg) {
     var self = this;
     // Special-case: skip if this is a drip/infusion (lethal thresholds are for bolus)
@@ -3752,8 +3760,15 @@ var VitalsEngine = {
       if (drugPatterns[drug].test(msg)) {
         var doseMcg = self._parseDoseMcg(msg);
         var threshold = self.LETHAL_DOSES[drug];
-        if (doseMcg !== null && threshold && doseMcg > threshold.lethal) {
-          return { drug: drug, doseMcg: doseMcg, threshold: threshold };
+        if (doseMcg !== null && threshold) {
+          // Accumulate cumulative dose for this drug across the case
+          if (!self._cumulativeDoses[drug]) self._cumulativeDoses[drug] = 0;
+          self._cumulativeDoses[drug] += doseMcg;
+          var cumDoseMcg = self._cumulativeDoses[drug];
+          if (cumDoseMcg > threshold.lethal) {
+            var ratio = cumDoseMcg / threshold.lethal;
+            return { drug: drug, doseMcg: doseMcg, cumDoseMcg: cumDoseMcg, threshold: threshold, ratio: ratio };
+          }
         }
       }
     }
@@ -3777,50 +3792,72 @@ var VitalsEngine = {
     }
   },
 
-  // Trigger a code blue event — collapses vitals and injects a critical event message
+  // Trigger a code blue / death event — collapses vitals, injects alert, ends case
   _triggerCodeBlue: function(lethalInfo) {
     var t = lethalInfo.threshold;
     var category = t.category;
-    // Immediately collapse vitals based on mechanism
-    if (category === 'opioid') {
-      // Opioid OD: respiratory arrest → hypoxia → cardiac arrest
-      this._base.rr   = 0;
-      this._base.spo2 = 50;
-      this._base.hr   = 20;
-      this._base.sbp  = 60;
-      this._base.dbp  = 30;
-      App.pbCodeBlue = { cause: lethalInfo.drug, category: 'opioid', reversible: true };
-      setTimeout(function() {
-        VitalsEngine._base.hr = 0; VitalsEngine._base.sbp = 0; VitalsEngine._base.dbp = 0;
-        VitalsEngine._base.spo2 = 0; VitalsEngine._base.rr = 0;
-      }, 8000);
-    } else if (category === 'cardiac') {
-      // Cardiac arrest: immediate
-      this._base.hr = 0; this._base.sbp = 0; this._base.dbp = 0;
-      this._base.spo2 = 0; this._base.rr = 0;
-      App.pbCodeBlue = { cause: lethalInfo.drug, category: 'cardiac', reversible: false };
-    } else {
-      // Neuro/apnea: respiratory arrest
-      this._base.rr = 0; this._base.spo2 = 40; this._base.hr = 30;
-      this._base.sbp = 50; this._base.dbp = 25;
-      App.pbCodeBlue = { cause: lethalInfo.drug, category: 'neuro', reversible: false };
-      setTimeout(function() {
-        VitalsEngine._base.hr = 0; VitalsEngine._base.sbp = 0; VitalsEngine._base.dbp = 0;
-        VitalsEngine._base.spo2 = 0; VitalsEngine._base.rr = 0;
-      }, 10000);
-    }
+    var ratio = lethalInfo.ratio || 1;
+    // Massive overdose (≥5× lethal) is always irreversible regardless of drug class
+    var massive = (ratio >= 5);
+    // Borderline (1–2× lethal) opioid OD can potentially be reversed with naloxone
+    var reversible = (!massive && category === 'opioid');
+
+    // Immediately collapse all vitals — patient is dead
+    this._base.hr = 0; this._base.sbp = 0; this._base.dbp = 0;
+    this._base.spo2 = 0; this._base.rr = 0;
     this._effects = []; // clear any pending effects
-    // Inject a code blue event into the chat
-    var reversibleNote = (category === 'opioid')
-      ? ' Naloxone may reverse this if given immediately.' : '';
-    var eventMsg = '⚠️ **CRITICAL EVENT — CODE BLUE**\n\n' +
-      'Patient has gone into ' + (category === 'opioid' ? 'respiratory arrest following opioid overdose' :
-        category === 'cardiac' ? 'cardiac arrest' : 'respiratory arrest') + '.\n\n' +
-      '**Drug:** ' + t.label + '\n' +
-      '**Cause:** ' + t.note + reversibleNote + '\n\n' +
-      'Vitals: HR 0, BP 0/0, RR 0, SpO₂ 0%.\n' +
-      'Initiate CPR. Call code blue. Assign team roles.';
-    App.pbHistory.push({ role: 'system-alert', content: eventMsg });
+
+    App.pbCodeBlue = { cause: lethalInfo.drug, category: category, reversible: reversible };
+
+    // Build dose description (cumulative if multi-dose)
+    var cumDesc = '';
+    if (lethalInfo.cumDoseMcg && lethalInfo.cumDoseMcg !== lethalInfo.doseMcg) {
+      var cumMg = (lethalInfo.cumDoseMcg / 1000).toFixed(2).replace(/\.?0+$/, '');
+      var thisMg = (lethalInfo.doseMcg / 1000).toFixed(2).replace(/\.?0+$/, '');
+      cumDesc = ' (this dose: ' + thisMg + ' mg; **cumulative total: ' + cumMg + ' mg** — ' + ratio.toFixed(1) + '× lethal threshold)';
+    } else {
+      var singMg = (lethalInfo.doseMcg / 1000).toFixed(2).replace(/\.?0+$/, '');
+      cumDesc = ' (' + singMg + ' mg — ' + ratio.toFixed(1) + '× lethal threshold)';
+    }
+
+    // Determine message tone based on severity
+    var alertMsg;
+    if (massive) {
+      alertMsg = '⚠️ **CRITICAL EVENT — LETHAL OVERDOSE**\n\n' +
+        '**Drug:** ' + t.label + cumDesc + '\n' +
+        '**Mechanism:** ' + t.note + '\n\n' +
+        'Vitals: HR 0, BP 0/0, RR 0, SpO₂ 0%.\n' +
+        'Dose exceeds 5× lethal threshold. Resuscitation is **not possible**. Initiate code blue protocol.';
+    } else if (reversible) {
+      alertMsg = '⚠️ **CRITICAL EVENT — CODE BLUE**\n\n' +
+        'Patient has gone into respiratory arrest following opioid overdose.\n\n' +
+        '**Drug:** ' + t.label + cumDesc + '\n' +
+        '**Cause:** ' + t.note + '\n\n' +
+        'Vitals: HR 0, BP 0/0, RR 0, SpO₂ 0%.\n' +
+        'Naloxone may reverse this if given **immediately**. Initiate CPR. Call code blue.';
+    } else {
+      alertMsg = '⚠️ **CRITICAL EVENT — CODE BLUE**\n\n' +
+        'Patient has gone into ' + (category === 'cardiac' ? 'cardiac arrest' : 'respiratory arrest') + '.\n\n' +
+        '**Drug:** ' + t.label + cumDesc + '\n' +
+        '**Cause:** ' + t.note + '\n\n' +
+        'Vitals: HR 0, BP 0/0, RR 0, SpO₂ 0%.\n' +
+        'Initiate CPR. Call code blue. Assign team roles.';
+    }
+    App.pbHistory.push({ role: 'system-alert', content: alertMsg });
+
+    // If massive overdose, immediately kill the patient — case over
+    if (massive) {
+      var deathMsg = '☠️ PATIENT DIED — ' + t.label + ' overdose (' + ratio.toFixed(1) + '× lethal dose). Resuscitation failed.';
+      App.pbHistory.push({ role: 'death', content: deathMsg });
+      App.pbDiagResolved = true;
+      App.pbCodeBlue = { cause: lethalInfo.drug, category: category, reversible: false };
+      App.pbCaseScores = App.pbCaseScores || [];
+      App.pbCaseScores.push({ specialty: App.pbSpecialty, caseNum: App.pbCurrentCase, correct: false, diagnosis: App.pbDiagnosis, fatal: true, causeOfDeath: deathMsg, points: 0 });
+      if (typeof serverCall === 'function') serverCall('saveProgress', 'pb_result', { correct: false, specialty: App.pbSpecialty, diagnosis: App.pbDiagnosis, fatal: true, causeOfDeath: deathMsg, points: 0 });
+      var inputEl = document.getElementById('pb-input');
+      if (inputEl) inputEl.disabled = true;
+    }
+
     var renderFn = (typeof renderDailyPBChat === 'function' && App.dailyPhase === 'pb') ? renderDailyPBChat : renderPBChat;
     if (typeof renderFn === 'function') renderFn();
   },
@@ -6774,6 +6811,19 @@ function startNextPBCase() {
   App.pbCurrentCase++;
   var el = document.getElementById('patientbot-content');
   el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div><p style="margin-top:16px;color:var(--text-light)">Generating case ' + App.pbCurrentCase + ' of ' + App.pbTotalCases + '...</p></div>';
+
+  // Enforce hard age bounds by specialty
+  if (!App.pbCustom) App.pbCustom = {};
+  var _spec = App.pbSetupSpecialty || '';
+  if (/pediatric/i.test(_spec)) {
+    // Pediatric specialty: age MUST be 0–17
+    App.pbCustom.ageMin = (App.pbCustom.ageMin != null && App.pbCustom.ageMin <= 17) ? App.pbCustom.ageMin : 0;
+    App.pbCustom.ageMax = (App.pbCustom.ageMax != null && App.pbCustom.ageMax <= 17) ? App.pbCustom.ageMax : 17;
+  } else if (_spec !== 'Random' && _spec !== '') {
+    // All non-pediatric specialties: age MUST be 18+
+    if (App.pbCustom.ageMin == null || App.pbCustom.ageMin < 18) App.pbCustom.ageMin = 18;
+    if (App.pbCustom.ageMax != null && App.pbCustom.ageMax < 18) App.pbCustom.ageMax = null;
+  }
 
   serverCall('startPatientBotCase', App.pbSetupSpecialty, App.pbCheatMode, App.pbDifficulty, App.pbCustom || {}).then(function(result) {
     App.pbCaseId = result.caseId; App.pbSpecialty = result.specialty; App.pbPresentation = result.presentation || '';
