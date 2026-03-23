@@ -417,12 +417,17 @@ function getFlashcards(specialty, mode) {
     data = data.filter(function(r) { return r.Specialty === specialty; });
   }
   var cards = data.map(function(r, i) {
+    var back = r.Back || '';
+    // Content fix: Nasal midline dermoid cyst — choristoma, not hamartoma
+    if (back.indexOf('hamartoma') !== -1 && (r.Front || '').toLowerCase().indexOf('dermoid') !== -1) {
+      back = back.replace(/hamartoma/gi, 'choristoma');
+    }
     return {
       id: i,
       specialty: r.Specialty || '',
       topic: r.Topic || '',
       front: r.Front || '',
-      back: r.Back || '',
+      back: back,
       hyFlag: (r.HY_Flag || '').toString().toLowerCase() === 'yes'
     };
   });
@@ -494,16 +499,84 @@ function getMCQQuiz(specialty, version, count) {
 
   return data.map(function(r, i) {
     var opts = { A: r.Option_A || '', B: r.Option_B || '', C: r.Option_C || '', D: r.Option_D || '', E: r.Option_E || '' };
-    // Remove N/A options
-    Object.keys(opts).forEach(function(k) { if (opts[k].trim().toLowerCase() === 'n/a' || !opts[k].trim()) delete opts[k]; });
+    var specialty = r.Specialty || '';
+    var question = r.Question || '';
+    var correct = r.Correct_Answer || '';
+    var rationale = r.Rationale || '';
+
+    // --- CONTENT PATCHES ---
+
+    // Fix Q3: CKD/naproxen pain question — relabel to Nephrology, fix answer
+    if (question.toLowerCase().indexOf('naproxen') !== -1 && question.toLowerCase().indexOf('ckd') !== -1) {
+      specialty = 'Nephrology';
+      // Fix: acetaminophen first, not opioids (Canadian pain guidelines, WHO ladder)
+      Object.keys(opts).forEach(function(k) {
+        if (opts[k].toLowerCase().indexOf('acetaminophen') !== -1 && opts[k].toLowerCase().indexOf('opioid') !== -1) {
+          opts[k] = 'Discontinue naproxen and initiate a low-dose opioid with acetaminophen';
+        }
+      });
+      // Ensure correct answer is acetaminophen-only
+      var hasAcetOnly = false;
+      Object.keys(opts).forEach(function(k) {
+        if (opts[k].toLowerCase().indexOf('acetaminophen') !== -1 && opts[k].toLowerCase().indexOf('opioid') === -1 && opts[k].toLowerCase().indexOf('naproxen') === -1) {
+          hasAcetOnly = true;
+        }
+      });
+      if (!hasAcetOnly) {
+        // Add correct answer if missing, use first empty slot or replace E
+        var slot = !opts.E || !opts.E.trim() ? 'E' : !opts.D || !opts.D.trim() ? 'D' : 'E';
+        opts[slot] = 'Discontinue naproxen and initiate regular acetaminophen';
+        correct = slot;
+      } else {
+        Object.keys(opts).forEach(function(k) {
+          if (opts[k].toLowerCase().indexOf('acetaminophen') !== -1 && opts[k].toLowerCase().indexOf('opioid') === -1 && opts[k].toLowerCase().indexOf('naproxen') === -1) {
+            correct = k;
+          }
+        });
+      }
+      rationale = 'In CKD, NSAIDs (including naproxen) are contraindicated due to nephrotoxicity and GI bleeding risk. Per Canadian pain guidelines and the WHO analgesic ladder, the first step is to optimize non-opioid analgesia — regular acetaminophen (up to 3g/day in CKD). Opioids should only be considered if non-opioid measures fail, and with caution in renal impairment due to active metabolite accumulation (especially morphine). Topical agents (capsaicin, lidocaine patches) are reasonable adjuncts before escalating to opioids.';
+    }
+
+    // Fix Q6: erythroplakia — convert recall to clinical reasoning
+    if (question.toLowerCase().indexOf('erythroplakia') !== -1 && question.toLowerCase().indexOf('percentage') !== -1) {
+      question = 'A 62-year-old man presents with a persistent, painless red patch on the floor of his mouth that has been present for 3 months. He has a 40-pack-year smoking history and drinks alcohol daily. On examination, there is a 2 cm velvety, erythematous lesion. Biopsy shows severe dysplasia with focal carcinoma in situ. What is the most appropriate next step in management?';
+      opts = {
+        A: 'Observation with repeat biopsy in 6 months',
+        B: 'Wide surgical excision with clear margins',
+        C: 'Topical antifungal therapy',
+        D: 'Laser ablation of the lesion',
+        E: 'Referral for radiation therapy'
+      };
+      correct = 'B';
+      rationale = 'Erythroplakia (red mucosal patches) carries a high malignant potential — 14–50% of lesions harbour carcinoma in situ or invasive carcinoma at the time of biopsy, far exceeding the risk of leukoplakia. With biopsy-confirmed severe dysplasia/CIS, wide surgical excision with clear margins is the standard of care. Observation risks progression to invasive SCC. Laser ablation may be considered for superficial lesions but does not provide margins for histopathological assessment. Smoking cessation and close follow-up are essential adjuncts.';
+    }
+
+    // Fix: ensure all questions have 5 options (add plausible 5th if missing)
+    if (!opts.E || !opts.E.trim() || opts.E.trim().toLowerCase() === 'n/a') {
+      // Only add if we have A-D
+      if (opts.A && opts.B && opts.C && opts.D) {
+        // Generic plausible 5th option based on specialty
+        if (question.toLowerCase().indexOf('investigation') !== -1 || question.toLowerCase().indexOf('diagnos') !== -1) {
+          opts.E = 'Serum alpha-fetoprotein level';
+        } else if (question.toLowerCase().indexOf('management') !== -1 || question.toLowerCase().indexOf('treatment') !== -1) {
+          opts.E = 'Watchful waiting with reassessment in 3 months';
+        } else {
+          opts.E = 'None of the above';
+        }
+      }
+    }
+
+    // Remove truly empty/N/A options
+    Object.keys(opts).forEach(function(k) { if (!opts[k] || !opts[k].trim() || opts[k].trim().toLowerCase() === 'n/a') delete opts[k]; });
+
     return {
       id: i,
-      specialty: r.Specialty || '',
+      specialty: specialty,
       version: r.Version || '',
-      question: r.Question || '',
+      question: question,
       options: opts,
-      correct: r.Correct_Answer || '',
-      rationale: r.Rationale || ''
+      correct: correct,
+      rationale: rationale
     };
   });
 }

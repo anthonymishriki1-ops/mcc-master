@@ -1178,22 +1178,22 @@ body {
 [data-theme="dark"] .pb-dm-appearance { color: #999880; }
 
 /* Bedside monitor */
-.pb-monitor { background: #0a0a0a; border-radius: 6px; margin-bottom: 8px; overflow: hidden; border: 1px solid #333; box-shadow: 0 1px 6px rgba(0,0,0,0.3); position: relative; max-width: 480px; }
-.pb-mon-header { display: flex; justify-content: space-between; align-items: center; padding: 4px 12px; background: #1a1a1a; border-bottom: 1px solid #222; font-family: 'Courier New', Courier, monospace; font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 1px; }
+.pb-monitor { background: #0a0a0a; border-radius: 6px; margin-bottom: 8px; overflow: hidden; border: 1px solid #333; box-shadow: 0 1px 6px rgba(0,0,0,0.3); position: relative; max-width: 340px; }
+.pb-mon-header { display: flex; justify-content: space-between; align-items: center; padding: 3px 8px; background: #1a1a1a; border-bottom: 1px solid #222; font-family: 'Courier New', Courier, monospace; font-size: 9px; color: #555; text-transform: uppercase; letter-spacing: 0.8px; }
 .pb-mon-header .pb-mon-live { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #00ff41; margin-right: 6px; animation: livePulse 1.5s ease-in-out infinite; }
 @keyframes livePulse { 0%,100% { opacity: 1; box-shadow: 0 0 4px #00ff41; } 50% { opacity: 0.3; box-shadow: none; } }
 .pb-mon-title { color: #666; }
 .pb-mon-id { color: #444; }
-.pb-mon-ecg { padding: 2px 6px 0; height: 32px; overflow: hidden; border-bottom: 1px solid #1a1a1a; position: relative; }
+.pb-mon-ecg { padding: 1px 4px 0; height: 26px; overflow: hidden; border-bottom: 1px solid #1a1a1a; position: relative; }
 .pb-ecg-canvas { width: 100%; height: 100%; display: block; }
 .pb-ecg-svg { width: 100%; height: 100%; }
 .pb-ecg-line { fill: none; stroke: #00ff41; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 3px rgba(0,255,65,0.5)); animation: ecgScroll 2.5s linear infinite; }
 @keyframes ecgScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-70px); } }
 .pb-mon-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; padding: 1px; background: #1a1a1a; }
-.pb-mon-cell { padding: 4px 4px; text-align: center; font-family: 'Courier New', Courier, monospace; position: relative; }
-.pb-mon-cell-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 2px; opacity: 0.8; }
-.pb-mon-unit { opacity: 0.5; font-size: 8px; }
-.pb-mon-cell-value { font-size: 16px; font-weight: 700; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+.pb-mon-cell { padding: 3px 2px; text-align: center; font-family: 'Courier New', Courier, monospace; position: relative; }
+.pb-mon-cell-label { font-size: 8px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1px; opacity: 0.8; }
+.pb-mon-unit { opacity: 0.5; font-size: 7px; }
+.pb-mon-cell-value { font-size: 13px; font-weight: 700; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
 .pb-mon-hr { background: #0a0a0a; color: #00ff41; }
 .pb-mon-hr .pb-mon-cell-label { color: #00cc33; }
 .pb-mon-bp { background: #0a0a0a; color: #ff3333; }
@@ -2156,6 +2156,56 @@ label {
   .skill-node-pct {
     font-size: 13px;
   }
+}
+
+/* ===== CLOCK WIDGET (desktop only) ===== */
+.clock-widget {
+  position: fixed; top: 12px; right: 16px; z-index: 900;
+  background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+  padding: 6px 14px; font-size: 14px; font-weight: 700; color: var(--text);
+  cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.08); user-select: none;
+  transition: all 0.2s;
+}
+.clock-widget:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.14); }
+.clock-expanded {
+  position: fixed; top: 12px; right: 16px; z-index: 901;
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  padding: 20px; width: 260px; box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+}
+.clock-expanded .clock-time { font-size: 36px; font-weight: 900; text-align: center; margin-bottom: 4px; }
+.clock-expanded .clock-date { font-size: 13px; color: var(--text-light); text-align: center; margin-bottom: 16px; }
+.clock-alarm-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.clock-alarm-row input { flex: 1; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 15px; font-weight: 600; }
+.clock-alarm-row button { padding: 8px 14px; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer; border: none; }
+.alarm-active-pill { display: inline-block; background: var(--primary); color: white; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+
+/* ===== DAILY QUOTE ===== */
+.daily-quote {
+  padding: 14px 18px; margin-bottom: 18px; border-radius: 12px;
+  background: linear-gradient(135deg, var(--card), var(--bg));
+  border-left: 4px solid var(--primary); font-size: 14px; line-height: 1.6;
+  color: var(--text); font-style: italic;
+}
+.daily-quote .quote-attr { font-style: normal; font-size: 12px; color: var(--text-light); margin-top: 6px; font-weight: 600; }
+
+/* ===== LATE NIGHT NUDGE ===== */
+.night-nudge {
+  position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); z-index: 9999;
+  background: linear-gradient(135deg, #1a1a2e, #16213e); color: #e0e0e0;
+  border-radius: 16px; padding: 20px 24px; max-width: 380px; width: 90%;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.4); animation: nudgeSlide 0.4s ease;
+}
+.night-nudge h4 { margin: 0 0 8px; color: #bb86fc; font-size: 15px; }
+.night-nudge p { margin: 0 0 12px; font-size: 14px; line-height: 1.6; }
+.night-nudge button { background: #bb86fc; color: #1a1a2e; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; font-size: 13px; cursor: pointer; }
+@keyframes nudgeSlide { from { opacity: 0; transform: translateX(-50%) translateY(20px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+@media (max-width: 768px) {
+  .clock-widget, .clock-expanded { display: none !important; }
+  .pb-monitor { max-width: 100%; }
+  .pb-mon-cell-value { font-size: 12px; }
+  .pb-mon-cell-label { font-size: 7px; }
+  .pb-mon-ecg { height: 22px; }
 }
 </style>
 
@@ -4249,7 +4299,7 @@ function renderBulletNotes(filterText) {
     html += '</div>';
 
     // Topics within specialty
-    html += '<div class="notes-list" style="display:none;padding:0 20px 16px;border-top:1px solid var(--border)">';
+    html += '<div class="notes-list" style="padding:0 20px 16px;border-top:1px solid var(--border)">';
     for (var ti = 0; ti < topicKeys.length; ti++) {
       var topic = topicKeys[ti];
       var items = topics[topic];
@@ -4468,6 +4518,7 @@ function showQuizResults(score, total, percentage, points) {
   html += '<div class="score-big" style="color:' + color + '">' + percentage + '%</div>';
   html += '<p style="font-size:18px;color:var(--text-light)">' + score + ' correct out of ' + total + '</p>';
   html += '<p style="margin-top:4px;font-weight:700;color:' + passColor + '">' + passText + ' (pass: 73%)</p>';
+  html += '<p style="font-size:11px;color:var(--text-light);margin-top:2px">Pass threshold set above the estimated ~70% MCCQE cut score to push you harder.</p>';
   html += '<p style="color:var(--accent);font-weight:700;margin-top:8px">+' + points + ' XP</p>';
   html += '</div>';
 
@@ -6369,6 +6420,214 @@ document.addEventListener('keydown', function(e) {
     }
   }
 });
+
+// =============================================
+// DESKTOP CLOCK + ALARM (desktop only)
+// =============================================
+(function() {
+  if (window.innerWidth < 769) return; // mobile skip
+
+  var clockEl = document.createElement('div');
+  clockEl.className = 'clock-widget';
+  clockEl.id = 'clock-widget';
+  document.body.appendChild(clockEl);
+
+  var clockExpanded = false;
+  var alarmTime = null;
+  var alarmFired = false;
+  var alarmAudio = null;
+
+  function pad(n) { return n < 10 ? '0' + n : n; }
+
+  function updateClock() {
+    var now = new Date();
+    var h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    var h12 = h % 12 || 12;
+
+    if (!clockExpanded) {
+      clockEl.innerHTML = pad(h12) + ':' + pad(m) + ' ' + ampm;
+    } else {
+      var dateStr = now.toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' });
+      var html = '<div class="clock-time">' + pad(h12) + ':' + pad(m) + '<span style="font-size:16px;opacity:0.5">:' + pad(s) + ' ' + ampm + '</span></div>';
+      html += '<div class="clock-date">' + dateStr + '</div>';
+      html += '<div style="font-size:12px;font-weight:700;color:var(--text-light);margin-bottom:6px">SET ALARM</div>';
+      html += '<div class="clock-alarm-row">';
+      html += '<input type="time" id="alarm-time-input" value="' + (alarmTime || '') + '">';
+      html += '<button style="background:var(--primary);color:white" onclick="setClockAlarm()">Set</button>';
+      if (alarmTime) html += '<button style="background:var(--error);color:white" onclick="clearClockAlarm()">Clear</button>';
+      html += '</div>';
+      if (alarmTime) {
+        html += '<div style="margin-top:4px"><span class="alarm-active-pill">Alarm: ' + alarmTime + '</span></div>';
+      }
+      html += '<div style="text-align:right;margin-top:8px"><button onclick="collapseClockWidget()" style="background:none;border:none;color:var(--text-light);cursor:pointer;font-size:12px">Close</button></div>';
+      clockEl.innerHTML = html;
+      clockEl.className = 'clock-expanded';
+    }
+
+    // Check alarm
+    if (alarmTime && !alarmFired) {
+      var alarmStr = pad(h) + ':' + pad(m);
+      if (alarmStr === alarmTime) {
+        alarmFired = true;
+        fireAlarm_();
+      }
+    }
+  }
+
+  window.setClockAlarm = function() {
+    var input = document.getElementById('alarm-time-input');
+    if (input && input.value) {
+      alarmTime = input.value;
+      alarmFired = false;
+      localStorage.setItem('mcc_alarm', alarmTime);
+    }
+  };
+
+  window.clearClockAlarm = function() {
+    alarmTime = null;
+    alarmFired = false;
+    localStorage.removeItem('mcc_alarm');
+    if (alarmAudio) { alarmAudio.pause(); alarmAudio = null; }
+    var banner = document.getElementById('alarm-banner');
+    if (banner) banner.remove();
+  };
+
+  window.collapseClockWidget = function() {
+    clockExpanded = false;
+    clockEl.className = 'clock-widget';
+  };
+
+  function fireAlarm_() {
+    // Beep using Web Audio
+    try {
+      var ctx = new (window.AudioContext || window.webkitAudioContext)();
+      function beep() {
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.frequency.value = 880; osc.type = 'sine';
+        gain.gain.value = 0.3;
+        osc.start(); osc.stop(ctx.currentTime + 0.15);
+      }
+      beep(); setTimeout(beep, 300); setTimeout(beep, 600);
+    } catch(e) {}
+
+    var banner = document.createElement('div');
+    banner.id = 'alarm-banner';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:var(--primary);color:white;text-align:center;padding:14px;font-weight:700;font-size:15px;box-shadow:0 4px 16px rgba(0,0,0,0.2)';
+    banner.innerHTML = 'Alarm! Time to take a break or wrap up. <button onclick="clearClockAlarm()" style="background:white;color:var(--primary);border:none;padding:6px 16px;border-radius:8px;font-weight:700;margin-left:12px;cursor:pointer">Dismiss</button>';
+    document.body.appendChild(banner);
+  }
+
+  clockEl.addEventListener('click', function(e) {
+    if (!clockExpanded && e.target === clockEl) {
+      clockExpanded = true;
+      updateClock();
+    }
+  });
+
+  // Restore saved alarm
+  var savedAlarm = localStorage.getItem('mcc_alarm');
+  if (savedAlarm) { alarmTime = savedAlarm; alarmFired = false; }
+
+  setInterval(updateClock, 1000);
+  updateClock();
+})();
+
+// =============================================
+// LATE-NIGHT STUDY NUDGE (11pm - 4am, at 3h/4h/6h)
+// =============================================
+(function() {
+  var SESSION_KEY = 'mcc_session_start';
+  var NUDGE_KEY = 'mcc_nudge_shown';
+
+  // Record session start
+  if (!sessionStorage.getItem(SESSION_KEY)) {
+    sessionStorage.setItem(SESSION_KEY, Date.now().toString());
+    sessionStorage.setItem(NUDGE_KEY, '');
+  }
+
+  function isLateNight() {
+    var h = new Date().getHours();
+    return h >= 23 || h < 4;
+  }
+
+  function getSessionHours() {
+    var start = parseInt(sessionStorage.getItem(SESSION_KEY) || Date.now());
+    return (Date.now() - start) / (1000 * 60 * 60);
+  }
+
+  function nudgeAlreadyShown(tier) {
+    var shown = sessionStorage.getItem(NUDGE_KEY) || '';
+    return shown.indexOf(tier) !== -1;
+  }
+
+  function markNudgeShown(tier) {
+    var shown = sessionStorage.getItem(NUDGE_KEY) || '';
+    sessionStorage.setItem(NUDGE_KEY, shown + ',' + tier);
+  }
+
+  function showNudge(hours) {
+    var tier = String(hours);
+    if (nudgeAlreadyShown(tier)) return;
+    markNudgeShown(tier);
+
+    var msgs = {
+      3: { title: 'Three hours in...', fallback: 'You\'ve been at this for 3 hours straight. Your brain called — it wants a water break and maybe a snack. You\'ve earned it.' },
+      4: { title: 'Four hours. Really.', fallback: 'Okay champion, 4 hours deep at ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) + '. Your cortisol is writing you a strongly worded letter. Maybe call it a night?' },
+      6: { title: 'You absolute legend.', fallback: 'SIX HOURS. At this hour. Your future patients would not approve of this sleep hygiene. Save your progress, close the laptop, and go to bed. Doctor\'s orders (from your future self).' }
+    };
+    var msg = msgs[hours] || msgs[3];
+
+    // Try to get a witty AI summary of what they did
+    var profileId = localStorage.getItem('mcc_profile') || '';
+    serverCall('getUserStats').then(function(stats) {
+      var prompt = 'A medical student has been studying on MCC Master for ' + hours + ' hours straight and it\'s ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) + ' at night. ' +
+        'Today they did: ' + (stats.totalQuizzes || 0) + ' quizzes (avg ' + (stats.avgScore || 0) + '%), ' + (stats.totalCardsReviewed || 0) + ' flashcards, ' + (stats.pbTotal || 0) + ' patient cases. ' +
+        'Write a 2-3 sentence late-night nudge telling them to go to sleep. Be genuinely funny — think tired-resident humor, not corporate wellness. ' +
+        'Acknowledge what they accomplished today to make them feel good, then roast them lovingly for still being awake. Keep it under 60 words.';
+      return serverCall('askDrData', prompt, []);
+    }).then(function(result) {
+      if (result && result.response) {
+        renderNudge_(msg.title, result.response, hours);
+      } else {
+        renderNudge_(msg.title, msg.fallback, hours);
+      }
+    }).catch(function() {
+      renderNudge_(msg.title, msg.fallback, hours);
+    });
+  }
+
+  function renderNudge_(title, text, hours) {
+    var existing = document.getElementById('night-nudge');
+    if (existing) existing.remove();
+
+    var nudge = document.createElement('div');
+    nudge.id = 'night-nudge';
+    nudge.className = 'night-nudge';
+    var emoji = hours >= 6 ? '&#x1F634;' : hours >= 4 ? '&#x1F62B;' : '&#x1F319;';
+    nudge.innerHTML = '<h4>' + emoji + ' ' + title + '</h4>' +
+      '<p>' + escapeHtml(text) + '</p>' +
+      '<div style="display:flex;gap:8px">' +
+      '<button onclick="this.closest(\'.night-nudge\').remove()">5 more minutes...</button>' +
+      '<button onclick="this.closest(\'.night-nudge\').remove()" style="background:rgba(255,255,255,0.15);color:#e0e0e0">Got it, going to bed</button>' +
+      '</div>';
+    document.body.appendChild(nudge);
+
+    // Auto-dismiss after 30s
+    setTimeout(function() { if (nudge.parentNode) nudge.remove(); }, 30000);
+  }
+
+  // Check every 60 seconds
+  setInterval(function() {
+    if (!isLateNight()) return;
+    var hrs = getSessionHours();
+    if (hrs >= 6) showNudge(6);
+    else if (hrs >= 4) showNudge(4);
+    else if (hrs >= 3) showNudge(3);
+  }, 60000);
+})();
 
 // =============================================
 // INIT ON LOAD
