@@ -59,7 +59,11 @@ function doGet(e) {
         'getDevStats': getDevStats,
         'translateContent': translateContent,
         'sendHeartbeat': sendHeartbeat,
-        'getOnlineUsers': getOnlineUsers
+        'getOnlineUsers': getOnlineUsers,
+        'searchAll': searchAll,
+        'generateCaseDebrief': generateCaseDebrief,
+        'getLibraryBook': getLibraryBook,
+        'getPBCaseLibrary': getPBCaseLibrary
       };
       if (!allowed[fn]) {
         return ContentService.createTextOutput(JSON.stringify({ error: 'Function not allowed: ' + fn }))
@@ -1413,7 +1417,7 @@ function getLeaderboard() {
 // DAILY CHALLENGE
 // =============================================
 
-function getDailyChallenge() {
+function getDailyChallenge(guestId) {
   // Deterministic seed from today's date
   var today = new Date();
   var dateStr = today.toISOString().slice(0, 10);
@@ -1442,7 +1446,7 @@ function getDailyChallenge() {
   // Get weak cards for spaced repetition (up to 5 weak cards replace random ones)
   var weakCardFronts = {};
   try {
-    var weakList = getWeakCards_();
+    var weakList = getWeakCards_(guestId);
     for (var w = 0; w < Math.min(weakList.length, 5); w++) weakCardFronts[weakList[w].front] = true;
   } catch(e) {}
 

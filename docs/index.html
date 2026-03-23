@@ -3105,6 +3105,12 @@ function getGuestId() {
   return id;
 }
 
+function switchProfile() {
+  localStorage.removeItem('mcc_profile');
+  localStorage.removeItem('mcc_last_name');
+  showProfileSelect();
+}
+
 function showProfileSelect() {
   var content = document.getElementById('content');
   var sidebar = document.getElementById('sidebar');
