@@ -2751,7 +2751,7 @@ function toggleDarkMode() {
 function serverCall(funcName) {
   var args = Array.prototype.slice.call(arguments, 1);
   // Use GAS API directly (works from any host including GitHub Pages)
-  var GAS_API = 'https://script.google.com/macros/s/AKfycbyr4fykFUygDTJlJigbdtvms6NNTC0Ywxg48banF_buFbK9VEptCYvYRuF4Evw6nOH7/exec';
+  var GAS_API = 'https://script.google.com/macros/s/AKfycbwiWFvnhP4nEHzHnNXIJoap33tEs_RAJLWYn3RJwRcKGzQJG5kI3eBWk139V0sfhHT6/exec';
   var API_URL = GAS_API;
   var profile = localStorage.getItem('mcc_profile') || '';
   return fetch(API_URL, {
