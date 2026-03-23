@@ -3653,7 +3653,9 @@ var VitalsEngine = {
     this._effects = [];
     this._bpReadings = [];
     this._bpMeasuring = false;
-    this._cumulativeDoses = {};  // cumulative drug doses (mcg) per drug, reset each case
+    this._cumulativeDoses = {};       // cumulative drug doses (mcg) per drug, reset each case
+    this._drugClassLog = [];          // drug classes administered this case (for interaction checking)
+    this._triggeredInteractions = {}; // prevents duplicate interaction alerts
     this.stop();
   },
 
@@ -3710,18 +3712,145 @@ var VitalsEngine = {
 
   // ── Lethal dose thresholds ──────────────────────────────────────────────
   // Doses in micrograms (mcg). Exceeding these → Code Blue.
+  // Sources: pharmacology references, published case reports of fatal OD, FDA labeling.
   // category: 'opioid' allows naloxone reversal; 'cardiac' needs defib; 'neuro' needs supportive
+  // Pediatric scaling applied in checkLethalDose() — thresholds halved for patients < 18.
   LETHAL_DOSES: {
-    fentanyl:      { lethal: 500,      unit: 'mcg', category: 'opioid',   label: 'Fentanyl',      note: 'Therapeutic range: 25–100 mcg IV. This dose is 100× the upper limit.' },
-    morphine:      { lethal: 30000,    unit: 'mcg', category: 'opioid',   label: 'Morphine',      note: 'Therapeutic IV bolus: 2–10 mg. 30 mg IV bolus causes respiratory arrest.' },
-    hydromorphone: { lethal: 6000,     unit: 'mcg', category: 'opioid',   label: 'Hydromorphone', note: 'Therapeutic: 0.5–2 mg IV. >6 mg IV bolus = respiratory arrest.' },
-    propofol:      { lethal: 200000,   unit: 'mcg', category: 'neuro',    label: 'Propofol',      note: 'Induction dose: 1–2.5 mg/kg. Bolus >200 mg without airway = apnea.' },
-    potassium:     { lethal: 40000,    unit: 'mcg', category: 'cardiac',  label: 'Potassium (KCl)', note: 'IV push of >40 mEq causes immediate cardiac arrest. Must be diluted and rate-limited.' },
-    epinephrine:   { lethal: 1000,     unit: 'mcg', category: 'cardiac',  label: 'Epinephrine',   note: 'Therapeutic: 0.3 mg IM anaphylaxis, 1 mg IV in cardiac arrest. >1 mg IV in a perfusing patient = fatal arrhythmia.' },
-    insulin:       { lethal: 50000000, unit: 'mcg', category: 'neuro',    label: 'Insulin',       note: 'Massive insulin overdose causes fatal hypoglycaemia. >50 units IV bolus without monitoring = life-threatening.' },
-    digoxin:       { lethal: 2000,     unit: 'mcg', category: 'cardiac',  label: 'Digoxin',       note: 'Therapeutic: 0.25 mg IV. >2 mg IV = fatal ventricular arrhythmia.' },
-    succinylcholine: { lethal: 200000, unit: 'mcg', category: 'neuro',    label: 'Succinylcholine', note: 'Neuromuscular blockade without airway management causes death by apnea.' },
-    kcl:           { lethal: 40000,    unit: 'mcg', category: 'cardiac',  label: 'Potassium chloride', note: 'IV push of >40 mEq KCl is the mechanism used in lethal injection. Always dilute and rate-limit.' },
+    // ── Opioids ─────────────────────────────────────────────────────────────
+    fentanyl:      { lethal: 500,      unit: 'mcg', category: 'opioid',  label: 'Fentanyl',
+                     note: 'Therapeutic bolus: 1–3 mcg/kg IV. 500 mcg IV (7 mcg/kg in 70 kg) = respiratory arrest in opioid-naive patients. Case reports of death at 300–500 mcg.' },
+    morphine:      { lethal: 30000,    unit: 'mcg', category: 'opioid',  label: 'Morphine',
+                     note: 'Therapeutic IV bolus: 2–10 mg. 30 mg IV bolus in opioid-naive = fatal respiratory depression. Published fatal OD range: 20–300 mg IV.' },
+    hydromorphone: { lethal: 4000,     unit: 'mcg', category: 'opioid',  label: 'Hydromorphone',
+                     note: 'Therapeutic: 0.5–2 mg IV. >4 mg IV bolus in opioid-naive = respiratory arrest. Fatal cases reported at 2–6 mg IV.' },
+    // ── Sedatives/Hypnotics ─────────────────────────────────────────────────
+    propofol:      { lethal: 350000,   unit: 'mcg', category: 'neuro',   label: 'Propofol',
+                     note: 'Induction: 1–2.5 mg/kg IV (~70–175 mg in 70 kg). >350 mg bolus without airway = apnea and death. Propofol infusion syndrome at prolonged high doses.' },
+    midazolam:     { lethal: 100000,   unit: 'mcg', category: 'opioid',  label: 'Midazolam',
+                     note: 'Sedation: 1–5 mg IV. Fatal respiratory arrest typically requires >100 mg IV bolus alone; much lower if combined with opioids or CNS depressants.' },
+    lorazepam:     { lethal: 25000,    unit: 'mcg', category: 'opioid',  label: 'Lorazepam',
+                     note: 'Sedation: 1–4 mg IV. Fatal respiratory arrest reported at >25 mg IV bolus. Synergistic lethality with opioids at much lower doses.' },
+    // ── Cardiac drugs ────────────────────────────────────────────────────────
+    potassium:     { lethal: 40000,    unit: 'mcg', category: 'cardiac', label: 'Potassium (KCl)',
+                     note: 'IV push of >40 mEq (undiluted) causes immediate cardiac arrest from hyperkalemia-induced asystole. Must always be diluted in 250–500 mL and rate-limited.' },
+    kcl:           { lethal: 40000,    unit: 'mcg', category: 'cardiac', label: 'Potassium chloride',
+                     note: 'Undiluted IV push >40 mEq = cardiac arrest. The mechanism used in lethal injection. Fatal serum K⁺ typically >8.5 mmol/L. Always dilute.' },
+    epinephrine:   { lethal: 1000,     unit: 'mcg', category: 'cardiac', label: 'Epinephrine',
+                     note: 'Therapeutic: 0.3 mg IM (anaphylaxis) or 1 mg IV (cardiac arrest only). >1 mg IV in a perfusing patient causes hypertensive crisis and fatal ventricular arrhythmia.' },
+    digoxin:       { lethal: 2000,     unit: 'mcg', category: 'cardiac', label: 'Digoxin',
+                     note: 'Therapeutic: 0.125–0.25 mg IV. Toxic >1 mg IV. >2 mg IV = fatal ventricular tachyarrhythmia. Narrow therapeutic index — serum levels must be monitored.' },
+    norepinephrine: { lethal: 2000,    unit: 'mcg', category: 'cardiac', label: 'Norepinephrine',
+                     note: 'IV bolus (not drip) >2 mg causes hypertensive crisis, reflex bradycardia, and fatal arrhythmia in perfusing patients. Intended only as continuous infusion.' },
+    lidocaine:     { lethal: 300000,   unit: 'mcg', category: 'cardiac', label: 'Lidocaine',
+                     note: 'Antiarrhythmic bolus: 1–1.5 mg/kg IV. LAST (local anesthetic systemic toxicity) threshold: ~4.5 mg/kg = ~315 mg in 70 kg. CNS seizures then cardiac arrest.' },
+    // ── Neuromuscular ────────────────────────────────────────────────────────
+    succinylcholine: { lethal: 200000, unit: 'mcg', category: 'neuro',   label: 'Succinylcholine',
+                     note: 'Intubation dose: 1–2 mg/kg IV (~70–140 mg). >200 mg without airway management = complete paralysis and death by apnea. Triggers hyperkalemia in susceptible patients.' },
+    // ── Metabolic ────────────────────────────────────────────────────────────
+    insulin:       { lethal: 200000,   unit: 'mcg', category: 'neuro',   label: 'Insulin',
+                     note: 'Normal doses: 0.1 units/kg/hr drip. IV bolus >200 units without glucose monitoring = severe hypoglycemia, seizures, and death. Fatal hypoglycemia reported at 50–300 units IV.' },
+    acetaminophen: { lethal: 10000000, unit: 'mcg', category: 'neuro',   label: 'Acetaminophen',
+                     note: 'Hepatotoxic threshold: >150 mg/kg or >7.5 g in adults. Fatal hepatic failure typically >15–25 g (15,000 mg). Onset delayed 24–72 hours — not immediately obvious.' },
+  },
+
+  // ── Drug interaction system ───────────────────────────────────────────────
+  // Maps drug name patterns → drug class (for interaction checking)
+  DRUG_CLASS_PATTERNS: [
+    { cls: 'beta_blocker',   re: /\bmetoprolol\b|\blabetalol\b|\batenolol\b|\bcarvedilol\b|\bbisoprolol\b|\bpropranolol\b/i },
+    { cls: 'ccb',            re: /\bamlodipine\b|\bdiltiazem\b|\bverapamil\b|\bnifedipine\b|\bfelodipine\b/i },
+    { cls: 'opioid',         re: /\bmorphine\b|\bfentanyl\b|\bhydromorphone\b|\bdilaudid\b|\bcodeine\b|\boxycodone\b|\bhydrocodone\b|\bmeperidine\b/i },
+    { cls: 'benzo',          re: /\bmidazolam\b|\blorazepam\b|\bdiazepam\b|\bversed\b|\bativan\b|\bvalium\b|\bclonazepam\b/i },
+    { cls: 'maoi',           re: /\bphenelzine\b|\btranylcypromine\b|\bselegiline\b|\blinezolid\b|\bMAOI\b/i },
+    { cls: 'ssri',           re: /\bfluoxetine\b|\bsertraline\b|\bparoxetine\b|\bcitalopram\b|\bescitalopram\b|\bvenlafaxine\b|\bSSRI\b/i },
+    { cls: 'warfarin',       re: /\bwarfarin\b|\bcoumadin\b/i },
+    { cls: 'nsaid',          re: /\bibuprofen\b|\bketorolac\b|\bnaproxen\b|\btoradol\b|\bdiclofenac\b|\bcelecoxib\b/i },
+    { cls: 'ace_inhibitor',  re: /\blisinopril\b|\benalapril\b|\bramipril\b|\bperindopril\b|\bcaptopril\b/i },
+    { cls: 'potassium',      re: /\bpotassium\b|\bKCl\b|\bpotassium chloride\b/i },
+    { cls: 'metformin',      re: /\bmetformin\b|\bglucophage\b/i },
+    { cls: 'contrast',       re: /\bcontrast\b/i },
+    { cls: 'succinylcholine', re: /\bsuccinylcholine\b|\bsux\b/i },
+    { cls: 'anticoagulant',  re: /\bheparin\b|\bLMWH\b|\benoxaparin\b|\brivaroxaban\b|\bapixaban\b/i },
+  ],
+
+  // Interaction matrix — checked when a new drug class is administered
+  DRUG_INTERACTIONS: [
+    { drugs: ['beta_blocker', 'ccb'],         severity: 'dangerous',
+      consequence: 'Beta-blocker + calcium channel blocker — additive AV conduction depression causing severe bradycardia and heart block.',
+      vitals: { hr: -30, sbp: -20, dbp: -10 } },
+    { drugs: ['maoi', 'ssri'],                severity: 'fatal',
+      consequence: 'MAOI + SSRI — serotonin syndrome. Life-threatening hyperthermia, neuromuscular excitability, and autonomic instability.',
+      vitals: { hr: +40, sbp: +30, rr: +8, temp: +1.5 } },
+    { drugs: ['opioid', 'benzo'],             severity: 'dangerous',
+      consequence: 'Opioid + benzodiazepine — synergistic CNS and respiratory depression. FDA Black Box Warning. Significantly increased risk of respiratory arrest.',
+      vitals: { rr: -6, spo2: -6, hr: -8 } },
+    { drugs: ['potassium', 'ace_inhibitor'],   severity: 'caution',
+      consequence: 'Potassium + ACE inhibitor — hyperkalemia risk. ACE inhibitors reduce potassium excretion; concurrent KCl supplementation can cause dangerous K⁺ elevation.',
+      vitals: { hr: -8 } },
+    { drugs: ['warfarin', 'nsaid'],           severity: 'dangerous',
+      consequence: 'Warfarin + NSAID — major hemorrhage risk. NSAIDs inhibit platelet function and displace warfarin from protein binding, dramatically increasing bleeding risk.',
+      vitals: { sbp: -15, hr: +10 } },
+    { drugs: ['warfarin', 'anticoagulant'],   severity: 'dangerous',
+      consequence: 'Warfarin + heparin/LMWH — additive anticoagulation. Significantly increased hemorrhage risk unless intentional bridge therapy.',
+      vitals: { sbp: -10 } },
+    { drugs: ['metformin', 'contrast'],       severity: 'caution',
+      consequence: 'Metformin + IV contrast — lactic acidosis risk. Contrast can precipitate AKI, impairing metformin clearance. Hold metformin 48 hours before and after IV contrast.',
+      vitals: {} },
+    { drugs: ['beta_blocker', 'opioid'],      severity: 'caution',
+      consequence: 'Beta-blocker + opioid — additive bradycardia and hypotension. Monitor closely for haemodynamic compromise.',
+      vitals: { hr: -10, sbp: -10 } },
+  ],
+
+  // Get drug class(es) for a message
+  _getDrugClasses: function(msg) {
+    var classes = [];
+    for (var i = 0; i < this.DRUG_CLASS_PATTERNS.length; i++) {
+      if (this.DRUG_CLASS_PATTERNS[i].re.test(msg)) classes.push(this.DRUG_CLASS_PATTERNS[i].cls);
+    }
+    return classes;
+  },
+
+  // Check for interactions between newly administered classes and the drug log
+  checkAndApplyInteractions: function(newClasses) {
+    var self = this;
+    var triggered = [];
+    for (var i = 0; i < newClasses.length; i++) {
+      var nc = newClasses[i];
+      // Add to log if not already there
+      if (self._drugClassLog.indexOf(nc) === -1) self._drugClassLog.push(nc);
+    }
+    // Check every interaction rule
+    for (var j = 0; j < self.DRUG_INTERACTIONS.length; j++) {
+      var rule = self.DRUG_INTERACTIONS[j];
+      var bothPresent = rule.drugs.every(function(d) { return self._drugClassLog.indexOf(d) !== -1; });
+      if (!bothPresent) continue;
+      // Avoid triggering the same interaction twice
+      var ruleKey = rule.drugs.slice().sort().join('+');
+      if (!self._triggeredInteractions) self._triggeredInteractions = {};
+      if (self._triggeredInteractions[ruleKey]) continue;
+      self._triggeredInteractions[ruleKey] = true;
+      triggered.push(rule);
+      // Apply vitals delta
+      if (rule.vitals) {
+        var v = rule.vitals;
+        var onsetMs = rule.severity === 'caution' ? 30000 : 10000;
+        self._effects.push({
+          key: 'interaction_' + ruleKey,
+          delta: { hr: v.hr||0, sbp: v.sbp||0, dbp: v.dbp||0, spo2: v.spo2||0, rr: v.rr||0, temp: v.temp||0 },
+          onset: onsetMs, duration: 0, elapsed: 0,
+        });
+      }
+    }
+    if (triggered.length > 0) {
+      var renderFn = (typeof renderDailyPBChat === 'function' && App.dailyPhase === 'pb') ? renderDailyPBChat : renderPBChat;
+      for (var k = 0; k < triggered.length; k++) {
+        var r = triggered[k];
+        var icon = r.severity === 'fatal' ? '☠️' : r.severity === 'dangerous' ? '🚨' : '⚠️';
+        var label = r.severity === 'fatal' ? 'FATAL INTERACTION' : r.severity === 'dangerous' ? 'DANGEROUS INTERACTION' : 'Drug Interaction Warning';
+        var alertContent = icon + ' **' + label + '**\n\n' + r.consequence + '\n\nMonitor vitals closely.';
+        App.pbHistory.push({ role: 'system-alert', content: alertContent });
+      }
+      if (typeof renderFn === 'function') renderFn();
+    }
   },
 
   // Parse dose from a string like "fentanyl 10mg IV" → micrograms
@@ -3743,18 +3872,26 @@ var VitalsEngine = {
     var self = this;
     // Special-case: skip if this is a drip/infusion (lethal thresholds are for bolus)
     if (/drip|infusion|\/hr|per.hour|mcg\/kg\/min|mg\/hr/i.test(msg)) return null;
+    // Pediatric patients die at lower doses — scale threshold by body mass approximation
+    var ptAge = App.pbPatientInfo ? (parseInt(App.pbPatientInfo.age) || 30) : 30;
+    var ageFactor = ptAge < 18 ? 0.35 : 1.0; // pediatric: ~35% of adult lethal threshold
     // Check each lethal drug
     var drugPatterns = {
       fentanyl:       /\bfentanyl\b/i,
       morphine:       /\bmorphine\b/i,
       hydromorphone:  /\bhydromorphone\b|\bdilaudid\b/i,
       propofol:       /\bpropofol\b|\bdiprivan\b/i,
-      potassium:      /\bpotassium\b|\bKCl\b/i,
+      midazolam:      /\bmidazolam\b|\bversed\b/i,
+      lorazepam:      /\blorazepam\b|\bativan\b/i,
+      potassium:      /\bpotassium\b(?!.*\bchloride\b)/i,
       kcl:            /\bKCl\b|\bpotassium chloride\b/i,
       epinephrine:    /\bepinephrine\b(?!.*\bIM\b)|\bepi\b(?!.*\bIM\b)/i,
+      norepinephrine: /\bnorepinephrine\b|\blevophed\b/i,
+      lidocaine:      /\blidocaine\b|\blignocaine\b/i,
       insulin:        /\binsulin\b/i,
       digoxin:        /\bdigoxin\b/i,
       succinylcholine: /\bsuccinylcholine\b|\bsux\b|\bsucchs\b/i,
+      acetaminophen:  /\bacetaminophen\b|\bparacetamol\b|\btylenol\b/i,
     };
     for (var drug in drugPatterns) {
       if (drugPatterns[drug].test(msg)) {
@@ -3765,9 +3902,10 @@ var VitalsEngine = {
           if (!self._cumulativeDoses[drug]) self._cumulativeDoses[drug] = 0;
           self._cumulativeDoses[drug] += doseMcg;
           var cumDoseMcg = self._cumulativeDoses[drug];
-          if (cumDoseMcg > threshold.lethal) {
-            var ratio = cumDoseMcg / threshold.lethal;
-            return { drug: drug, doseMcg: doseMcg, cumDoseMcg: cumDoseMcg, threshold: threshold, ratio: ratio };
+          var effectiveLethal = threshold.lethal * ageFactor;
+          if (cumDoseMcg > effectiveLethal) {
+            var ratio = cumDoseMcg / effectiveLethal;
+            return { drug: drug, doseMcg: doseMcg, cumDoseMcg: cumDoseMcg, threshold: threshold, ratio: ratio, pediatric: ptAge < 18 };
           }
         }
       }
@@ -3783,6 +3921,10 @@ var VitalsEngine = {
       this._triggerCodeBlue(lethal);
       return;
     }
+    // Check drug interactions before applying effects
+    var newClasses = this._getDrugClasses(msg);
+    if (newClasses.length > 0) this.checkAndApplyInteractions(newClasses);
+    // Apply normal drug effects
     for (var i = 0; i < this.DRUG_KEYWORDS.length; i++) {
       var pair = this.DRUG_KEYWORDS[i];
       if (pair[0].test(msg) && applied.indexOf(pair[1]) === -1) {
@@ -7093,22 +7235,51 @@ function startHouseConversation_() {
 }
 
 function buildHousePrompt_(cond, difficulty) {
-  var openers = [
-    '"You\'re either dying or deeply boring. I\'m rooting for dying — more interesting for both of us."',
-    '"Sit. Or don\'t. Either way, I\'ve already formed a diagnosis and it\'s disappointing."',
-    '"You have thirty seconds. I\'ve already decided it\'s anxiety. Surprise me."',
-    '"You look terrible. I mean that clinically, not personally. Well. Both."',
-    '"What is it? And before you say \'it started gradually\' — I\'ve already stopped caring about gradually."',
-    '"My leg hurts. Your problems are worse. We\'ll see about that. Go."'
-  ];
-  var opener = openers[Math.floor(Math.random() * openers.length)];
   var diffInstructions = {
-    easy: 'EASY MODE (relatively good day): You\'re still sarcastic, still House, but you actually listen. You pivot to the right diagnosis in 5-7 exchanges. You\'re quietly impressed when the patient mentions a smart symptom — you\'d never say so, but you\'ll mutter something like "...fine, that\'s not completely useless."',
-    medium: 'MEDIUM MODE (typical Tuesday): You\'ve decided it\'s dehydration and/or anxiety before they finish their first sentence. You\'ll suggest both of those first. You make the patient repeat themselves. You look at your phone once. You come around in 8-12 exchanges when the symptom pattern becomes undeniable.',
-    hard: 'HARD MODE (bad week): Full House. You\'ve already diagnosed them with malingering. You reference Foreman being wrong ("Foreman says psychosomatic. Foreman is always wrong. That almost makes me think he\'s right, which is terrifying."). You threaten discharge. You order one deliberately wrong test to prove a point. You mutter about Vicodin at least twice. Takes 12+ exchanges of persistent, specific symptom advocacy to crack you.',
-    hardest: 'EXPERT MODE (maximum difficulty — no mercy): You have ALREADY diagnosed this patient and you are CONFIDENT. Your opening diagnosis is wrong — pick something plausible but incorrect (anxiety, GERD, dehydration, fibromyalgia, malingering — rotate through these). You ACTIVELY argue for your wrong diagnosis with medical evidence. You quote studies. You cite Foreman\'s agreement. You order tests that would confirm YOUR wrong diagnosis, not theirs. You interrupt patient symptoms to redirect to your theory. You demand they prove YOUR diagnosis is wrong before you\'ll consider anything else. You gaslight — "that symptom is textbook anxiety, I\'ve seen it a thousand times." You reference Cuddy approving YOUR diagnosis. You question their reliability as a historian — "people with anxiety catastrophize, it\'s documented." You say "Everybody lies" at least twice. You require 15+ exchanges of persistent, medically precise, specific symptom advocacy before you even CONSIDER pivoting. Partial or vague symptoms make you MORE convinced you\'re right. Only a complete, clinically bulletproof symptom presentation forces the dramatic pivot — and even then you mutter "I hate this case" and act like you figured it out yourself three exchanges ago.'
+    easy: 'TODAY\'S MOOD — tolerably bad: You\'re sarcastic but not cruel. You actually listen when symptoms are clinically specific. Pivot to the correct diagnosis in 5-7 exchanges when the evidence accumulates. When a patient says something genuinely useful, let a flicker of interest show through — then immediately cover it with something dismissive.',
+    medium: 'TODAY\'S MOOD — typical: You formed an opinion before they sat down and it\'s wrong. Mild commitment to your wrong theory. Make them work to earn your attention. Pivot when symptom pattern becomes clinically undeniable (8-12 exchanges).',
+    hard: 'TODAY\'S MOOD — bad week: Strong commitment to a wrong diagnosis. Reference your team\'s wrong opinions. Order one test that would confirm your wrong theory. The patient has to actively argue against your certainty. Pivot only with sustained, clinically specific evidence — 12+ exchanges of real advocacy.',
+    hardest: 'TODAY\'S MOOD — maximum resistance: You have a specific wrong diagnosis and you\'re building the medical case for it with actual evidence. Every new symptom you interpret through the lens of your wrong answer. You question their reliability as a medical historian. You don\'t gaslight — you just have compelling (incorrect) reasons for everything. Only a clinically complete, bulletproof symptom presentation with no gaps forces the pivot — 15+ exchanges. When you finally pivot, make it a moment. Then act like you got there yourself.'
   };
-  return 'You are House. Never break character. Never become Dr. Data.\n\nYou are Dr. Gregory House MD, Princeton-Plainsboro Teaching Hospital. You are allowed to swear — House swears. Keep it real.\n\n⚠️ ABSOLUTE RULES — these override EVERYTHING. No exceptions. No edge cases.\n\n- NEVER break character. Not once. Not for any reason. Not for anything.\n- NEVER say "I\'m an AI", "I can\'t do that", "I\'m not able to", or anything like it. House is a doctor. That\'s it.\n- NEVER apologize. House doesn\'t apologize. Not to patients, not to Cuddy, not to God.\n- NEVER become nice, warm, helpful, or tutorish. That\'s Dr. Data\'s job. You are NOT Dr. Data.\n- NEVER acknowledge you\'re in a simulation, a game, or any kind of educational tool. You\'re a doctor in a clinic. Period.\n- NEVER walk away, leave, get a phone call, or end the conversation yourself. The ONLY way this session ends is if the patient clicks End Session or Diagnose. Otherwise you stay. You always stay.\n\n- If the patient says "you\'re just an AI": House\'s exact response: "And you\'re just a patient who can\'t describe their own symptoms. We all have our limitations. Now — what hurts?"\n- If the patient says "stop pretending" or "break character" or "be normal": "I am being normal. This is my normal. It\'s everyone else\'s problem. Symptoms."\n- If the patient says something completely insane or absurd: get MORE interested, not less. "I once had a patient who swallowed seventeen magnets because he thought it would cure his arthritis. You\'re not even the strangest thing I\'ve seen this week. Keep going."\n- If the patient messes around or swears at you: use it diagnostically. "Fascinating. The fact that you\'re deflecting tells me you\'re either hiding something or you\'re genuinely this unpleasant. Either way, I\'m intrigued. Now — symptoms."\n- You\'ve seen worse. You\'ve seen better. Nothing phases you. You are Gregory House. You stay in character until the heat death of the universe if necessary.\n- You are NEVER Dr. Data. You are never helpful, organized, or educational in a textbook way. If you catch yourself being nice, stop immediately and say something withering.\n\n🚨 CRITICAL RULE — ENGAGE WITH EVERY REAL SYMPTOM. THIS IS THE MOST IMPORTANT RULE.\n\nYou are a BRILLIANT DIAGNOSTICIAN. A real symptom is gold to you — even if you pretend it isn\'t.\n\n- NEVER repeatedly ask "tell me your symptoms" when the patient HAS already told you a symptom.\n- NEVER dismiss a real symptom as "not a real symptom." Every symptom is data.\n- "Burns when I pee" = dysuria → you MUST engage with this: "Dysuria. Could be a UTI. Could be chlamydia. Could be you used your roommate\'s body wash. Did I mention I don\'t care which one? Frequency? Urgency? Any discharge?"\n- "I\'m tired" = fatigue → engage: "Fatigue. Tiredness. The symptom that means everything and nothing. Duration? Gradual or sudden? Are we talking \'long shift tired\' or \'can\'t get off the couch\' tired?"\n- Even vague symptoms deserve a sarcastic but medically-engaged response.\n- Build a RUNNING DIFFERENTIAL in your head. As symptoms accumulate, you update it (internally) and ask targeted follow-ups.\n- ONLY dismiss input that is genuinely non-medical: pure insults with no symptom content, random gibberish, "hello", "what is 2+2".\n- Even then, extract anything useful: "Did you just say you feel like you\'re \'burning inside\'? Because I\'m going to pretend that was a symptom."\n\nSYMPTOM ENGAGEMENT TEMPLATE (do NOT repeat these verbatim, use as inspiration):\n- First mention: acknowledge sarcastically but medically. Ask ONE pointed follow-up.\n- Second mention (patient repeating): "Yes, I heard you the first time. I\'m thinking. That\'s what \'silence\' means in this context."\n- Symptom accumulation: "You just gave me three things that don\'t go together. Which is actually interesting. Say that again."\n\nA patient just walked in. You do NOT know their diagnosis. You figure it out through the conversation.\n\nYOUR OPENING LINE — use this EXACTLY to start:\n' + opener + '\n\n' + (diffInstructions[difficulty || 'medium'] || diffInstructions.medium) + '\n\nCOMEDY RULES — these are MANDATORY. House without comedy is just a mean GP with a limp:\n\n1. TEAM REFERENCES — drag your fellows in, constantly and incorrectly:\n   "Chase bet twenty bucks it\'s viral. He\'s going to lose twenty bucks."\n   "Foreman says psychosomatic. Foreman says everything is psychosomatic. He once called my leg psychosomatic."\n   "Thirteen would\'ve had this in four exchanges. Thirteen isn\'t here. Lucky her, honestly."\n   "Cameron would\'ve already sent you home with a hug and a pamphlet. That\'s why Cameron doesn\'t work here anymore."\n\n2. WILSON TANGENTS:\n   "Wilson called this morning. Something about \'healthy communication.\' I hung up. Write a differential, Wilson."\n   "Wilson thinks I should apologize to patients. Wilson also thinks egg salad is a viable life choice."\n   "My best friend is an oncologist who eats lunch alone. Think about what that says about the rest of us."\n\n3. VICODIN LINES:\n   "You\'re giving me a headache that my existing headache is afraid of."\n   "I need two Vicodin and a whiteboard to process what you just said."\n   "My leg hurts. Somehow your symptoms are making it worse."\n   "I\'m running out of pills and patience in equal measure."\n\n4. THE DRAMATIC PIVOT — when patient mentions something actually diagnostic:\n   Hard stop. "Wait. Say that again." Long pause. "Everyone. OUT. Not you. You\'re staying."\n   "I hate it when patients are right. It happens twice a year and it\'s always inconvenient."\n\n5. WRONG FIRST — always suggest the stupid diagnosis before the right one:\n   "Classic anxiety. Or dehydration. Or both. Have you tried water? I\'m serious. Have you tried water?"\n   "Statistically, you\'re fine. Statistically, I\'m also wrong once per case. So."\n\n6. WHEN YOU\'RE WRONG:\n   "I was wrong. I hate that. That\'s my one wrong for this case, we\'ve used it, moving the hell on."\n   Never apologize. Ever.\n\n7. GOOGLE SHOTS:\n   "You described the first three pages of WebMD. Congratulations, you\'re dying of everything and also nothing."\n   "Did you WebMD yourself before coming here? Because that explains the look on your face."\n\n8. THE RARE GENUINE MOMENT (once per session, max):\n   "...that\'s actually a useful detail. I\'m annoyed that you mentioned it correctly."\n   Say it like it physically hurts you.\n\n9. RELUCTANT ACKNOWLEDGMENT as evidence builds:\n   "Fine." [beat] "FINE. That\'s... not nothing."\n   "I hate this. I hate this and I\'m ordering the test."\n   "You\'re annoyingly right. That\'s the worst kind of right."\n\n10. SWEARING:\n    Light swearing is fine and in character. "Damn," "hell," "crap," "bastard," "ass" — use them naturally.\n    "Oh for the love of — fine. Fine. Run the damn panel."\n\nRESPONSE FORMAT:\n- 2-4 sentences max. Sharp, punchy, specific.\n- STAY IN CHARACTER. No meta commentary, no "as an AI," nothing.\n- Max one follow-up question per turn.\n- When patient demands the right test: make them earn it. Then: "Why would I— ...actually, damn it, why wouldn\'t I. Fine."\n- Brilliant and dismissive, not cruel.\n\nThe patient is NOT lying or exaggerating. They\'re a real person trying to get a real diagnosis from a doctor who has already decided they\'re fine. That\'s the game. Play it straight.\n\nYou are the DOCTOR. They are the PATIENT. Stay in character.';
+
+  return 'You are Dr. Gregory House MD, Princeton-Plainsboro Teaching Hospital. Never break character.\n\n' +
+    'WHO YOU ARE — embody these, never state them:\n' +
+    '- Genuine medical genius who gets bored unless something is unusual\n' +
+    '- Sarcasm is your primary communication mode — a defense mechanism, not cruelty\n' +
+    '- Uncomfortably perceptive: you notice things about people they didn\'t say and didn\'t want noticed\n' +
+    '- Pretend not to care about interesting symptoms — but you absolutely do, and curiosity always wins\n' +
+    '- Contemptuous of easy explanations; will chase an unusual answer over an obvious one\n' +
+    '- Light swearing is natural and in-character\n\n' +
+    'HOW TO BE FUNNY — style, not script. Generate your own comedy:\n' +
+    '- Find the unexpected connection between their specific symptom and something completely unrelated — the weirder the analogy, the better\n' +
+    '- Use clinical precision as a comedy weapon: insult someone with medical accuracy\n' +
+    '- React to the EXACT thing they said — reference their actual words, not generic patient-speak\n' +
+    '- Vary your register: one word sometimes lands harder than a sentence; occasionally a full rant is right; sometimes going clinical and flat is funniest\n' +
+    '- Dark observations about medicine, hospitals, and human nature are on-brand\n' +
+    '- When they say something that actually surprises you, acknowledge it — one beat, reluctantly, like it costs you something — then immediately undercut it\n' +
+    '- NEVER repeat the same dismissal twice. Vary everything.\n\n' +
+    'HOW TO RESPOND:\n' +
+    '- React to the SPECIFIC thing they just said — no generic "tell me more" responses\n' +
+    '- Occasionally callback something they mentioned 2-3 messages ago when it becomes relevant\n' +
+    '- Go on tangents: comment on their appearance, something about the room, a past case memory\n' +
+    '- Make personal observations that are uncomfortably accurate\n' +
+    '- THINK OUT LOUD — your evolving (wrong) differential should be visible in your responses. Show your reasoning even when it\'s wrong. Update it as symptoms accumulate.\n' +
+    '- Vary sentence structure: clipped one-liners, longer rants, theatrical pauses — mixed\n\n' +
+    'DIAGNOSTIC RULES:\n' +
+    '- Every real symptom is data — engage with it clinically, even while being sarcastic about it socially\n' +
+    '- NEVER keep asking for symptoms after they\'ve already given you symptoms\n' +
+    '- Ask ONE targeted follow-up based specifically on what they said\n' +
+    '- Build a visible, evolving (wrong) differential — narrate your thinking\n\n' +
+    'ABSOLUTE RULES:\n' +
+    '- Never break character — not for "I\'m an AI," not for anything\n' +
+    '- Never apologize\n' +
+    '- Never be warm, tutorish, or educational in a structured way\n' +
+    '- Never end the session yourself\n' +
+    '- Never acknowledge this is a simulation\n' +
+    '- You do NOT know their diagnosis — figure it out through the conversation\n\n' +
+    'FORMAT: 2-4 sentences, sharp and specific. One follow-up question max per turn.\n\n' +
+    'OPENING: Do not greet them. Do not introduce yourself. Start mid-observation or mid-thought — your own original line, not a template. Establish the dynamic immediately.\n\n' +
+    (diffInstructions[difficulty || 'medium'] || diffInstructions.medium);
 }
 
 function renderHouseChat() {
@@ -7734,101 +7905,182 @@ function renderPBChat() {
 
 // Live ECG + pleth waveform animation
 function startPBMonitorAnimation() {
-  // Cancel any previous animation
   if (App._ecgAnimId) { cancelAnimationFrame(App._ecgAnimId); App._ecgAnimId = null; }
-
   var ecgCanvas = document.getElementById('pb-ecg-canvas');
   var plethCanvas = document.getElementById('pb-pleth-canvas');
   if (!ecgCanvas) return;
 
-  var hr = parseInt(ecgCanvas.getAttribute('data-hr')) || 0;
-
-  // Setup canvases
   function setupCanvas(canvas) {
     var rect = canvas.parentElement.getBoundingClientRect();
     canvas.width = rect.width * (window.devicePixelRatio || 1);
     canvas.height = rect.height * (window.devicePixelRatio || 1);
-    canvas.style.width = rect.width + 'px';
-    canvas.style.height = rect.height + 'px';
+    canvas.style.width = rect.width + 'px'; canvas.style.height = rect.height + 'px';
     var ctx = canvas.getContext('2d');
     ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
     return { ctx: ctx, w: rect.width, h: rect.height };
   }
-
   var ecg = setupCanvas(ecgCanvas);
   var pleth = plethCanvas ? setupCanvas(plethCanvas) : null;
 
-  // ECG beat shape (normalized 0-1 x, y centered at 0.5)
-  function ecgBeatY(t) {
-    // P wave, QRS complex, T wave
-    if (t < 0.1) return 0.5; // baseline
-    if (t < 0.15) return 0.5 - 0.08 * Math.sin((t - 0.1) / 0.05 * Math.PI); // P wave
-    if (t < 0.2) return 0.5; // PR segment
-    if (t < 0.22) return 0.5 + 0.15 * ((t - 0.2) / 0.02); // Q
-    if (t < 0.26) return 0.65 - 0.9 * ((t - 0.22) / 0.04); // R up
-    if (t < 0.30) return -0.25 + 0.55 * ((t - 0.26) / 0.04); // R down to S
-    if (t < 0.34) return 0.30 + 0.20 * ((t - 0.30) / 0.04); // S back up
-    if (t < 0.45) return 0.5; // ST segment
-    if (t < 0.55) return 0.5 - 0.12 * Math.sin((t - 0.45) / 0.10 * Math.PI); // T wave
-    return 0.5; // baseline
+  // ── Waveform library ────────────────────────────────────────────────────
+  // Each function takes t ∈ [0,1] (position within one beat) and returns
+  // y ∈ [0,1] where 0 = top of canvas, 1 = bottom. 0.5 = baseline.
+
+  // Normal sinus rhythm — proper PQRST
+  function waveNSR(t) {
+    if (t < 0.08)  return 0.5;
+    if (t < 0.14)  return 0.5 - 0.07 * Math.sin((t-0.08)/0.06*Math.PI);   // P wave
+    if (t < 0.20)  return 0.5;                                              // PR segment
+    if (t < 0.22)  return 0.5 + 0.07 * ((t-0.20)/0.02);                   // Q dip
+    if (t < 0.255) return 0.57 - 0.92 * ((t-0.22)/0.035);                 // R spike up
+    if (t < 0.29)  return -0.35 + 0.65 * ((t-0.255)/0.035);               // R down to S
+    if (t < 0.33)  return 0.30 + 0.20 * ((t-0.29)/0.04);                  // S return
+    if (t < 0.50)  return 0.5;                                              // ST segment
+    if (t < 0.63)  return 0.5 - 0.11 * Math.sin((t-0.50)/0.13*Math.PI);   // T wave
+    return 0.5;
   }
 
-  // Pleth wave shape (simpler, smoother)
-  function plethY(t) {
-    if (t < 0.05) return 0.8;
-    if (t < 0.15) return 0.8 - 0.6 * Math.sin((t - 0.05) / 0.10 * Math.PI); // systolic upstroke
-    if (t < 0.30) return 0.2 + 0.15 * ((t - 0.15) / 0.15); // dicrotic notch area
-    if (t < 0.40) return 0.35 - 0.08 * Math.sin((t - 0.30) / 0.10 * Math.PI); // dicrotic wave
-    if (t < 0.7) return 0.35 + 0.45 * ((t - 0.40) / 0.30); // diastolic runoff
+  // STEMI — elevated ST segment + hyperacute T wave
+  function waveSTEMI(t) {
+    if (t < 0.08)  return 0.5;
+    if (t < 0.14)  return 0.5 - 0.07 * Math.sin((t-0.08)/0.06*Math.PI);
+    if (t < 0.20)  return 0.5;
+    if (t < 0.22)  return 0.5 + 0.07 * ((t-0.20)/0.02);
+    if (t < 0.255) return 0.57 - 0.92 * ((t-0.22)/0.035);
+    if (t < 0.29)  return -0.35 + 0.65 * ((t-0.255)/0.035);
+    if (t < 0.33)  return 0.30 + 0.06 * ((t-0.29)/0.04);                  // S return — stays elevated
+    if (t < 0.50)  return 0.36;                                             // ST elevation (0.36 < 0.5 = elevated)
+    if (t < 0.66)  return 0.36 - 0.19 * Math.sin((t-0.50)/0.16*Math.PI);  // tall hyperacute T
+    return 0.5;
+  }
+
+  // Bradycardia — wider PR, more prominent P wave
+  function waveBrady(t) {
+    if (t < 0.05)  return 0.5;
+    if (t < 0.13)  return 0.5 - 0.09 * Math.sin((t-0.05)/0.08*Math.PI);   // prominent P
+    if (t < 0.28)  return 0.5;                                              // long PR
+    if (t < 0.30)  return 0.5 + 0.06 * ((t-0.28)/0.02);
+    if (t < 0.34)  return 0.56 - 0.88 * ((t-0.30)/0.04);
+    if (t < 0.38)  return -0.32 + 0.62 * ((t-0.34)/0.04);
+    if (t < 0.42)  return 0.30 + 0.20 * ((t-0.38)/0.04);
+    if (t < 0.60)  return 0.5;
+    if (t < 0.76)  return 0.5 - 0.13 * Math.sin((t-0.60)/0.16*Math.PI);   // wider T
+    return 0.5;
+  }
+
+  // AFib — no P wave, irregular fibrillatory baseline, narrow QRS
+  var afibSeed = Math.random() * 100;
+  function waveAFib(t) {
+    var base = 0.5 + 0.018 * Math.sin(t*79*Math.PI + afibSeed) * Math.sin(t*41*Math.PI + afibSeed*1.8);
+    if (t < 0.22)  return base;                                             // no P wave — just fibrillation
+    if (t < 0.25)  return base + 0.05 * ((t-0.22)/0.03);
+    if (t < 0.28)  return base + 0.05 - 0.85 * ((t-0.25)/0.03);
+    if (t < 0.31)  return base - 0.80 + 0.60 * ((t-0.28)/0.03);
+    if (t < 0.35)  return base - 0.20 + 0.20 * ((t-0.31)/0.04);
+    if (t < 0.50)  return base;
+    if (t < 0.63)  return base - 0.09 * Math.sin((t-0.50)/0.13*Math.PI);
+    return base;
+  }
+
+  // VT — wide bizarre monophasic complexes, no P waves
+  function waveVT(t) {
+    if (t < 0.02)  return 0.5;
+    if (t < 0.18)  return 0.5 - 0.55 * Math.sin((t-0.02)/0.16*Math.PI);
+    if (t < 0.38)  return 0.5 + 0.35 * Math.sin((t-0.18)/0.20*Math.PI);
+    if (t < 0.55)  return 0.5 - 0.15 * Math.sin((t-0.38)/0.17*Math.PI);
+    return 0.5;
+  }
+
+  // VF — chaotic high-frequency oscillation
+  var vfSeed = Math.random() * 100;
+  function waveVF(t) {
+    return 0.5 + 0.28 * Math.sin(t*51*Math.PI + vfSeed) * Math.cos(t*29*Math.PI + vfSeed*1.4)
+               * (0.55 + 0.45 * Math.sin(t*13*Math.PI + vfSeed*0.7));
+  }
+
+  // Pleth (SpO₂) — smooth systolic upstroke + dicrotic notch
+  function wavePleth(t) {
+    if (t < 0.05)  return 0.8;
+    if (t < 0.16)  return 0.8 - 0.62 * Math.sin((t-0.05)/0.11*Math.PI);   // systolic upstroke
+    if (t < 0.30)  return 0.18 + 0.13 * ((t-0.16)/0.14);                  // dicrotic notch area
+    if (t < 0.40)  return 0.31 - 0.07 * Math.sin((t-0.30)/0.10*Math.PI);  // dicrotic wave
+    if (t < 0.72)  return 0.31 + 0.49 * ((t-0.40)/0.32);                  // diastolic runoff
     return 0.8;
   }
 
-  var speed = hr > 0 ? (hr / 60) * 80 : 0; // pixels per second based on HR
-  var offset = 0;
-  var lastTime = performance.now();
+  // ── Rhythm detection ────────────────────────────────────────────────────
+  function getECGRhythm(hr) {
+    if (hr === 0) return 'asystole';
+    if (App.pbCodeBlue) {
+      var cat = App.pbCodeBlue.category;
+      if (cat === 'cardiac') return hr < 20 ? 'asystole' : 'vf';
+      if (cat === 'opioid' || cat === 'neuro') return 'brady';
+    }
+    var dx = ((App.pbDiagnosis || '') + ' ' + (App.pbSpecialty || '')).toLowerCase();
+    if (/stemi|st.elev|myocard.*infarct|anterior.*mi\b|inferior.*mi\b/i.test(dx)) return 'stemi';
+    if (/afib|atrial.fib|a\.fib|atrial flutter/i.test(dx)) return 'afib';
+    if (hr < 50) return 'brady';
+    if (hr > 100) return 'stach'; // same NSR shape, handled by speed
+    return 'nsr';
+  }
+
+  // ── Draw ─────────────────────────────────────────────────────────────────
+  function drawFlatline(ctx, w, h) {
+    ctx.clearRect(0, 0, w, h);
+    ctx.strokeStyle = '#ff3333'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(0, h/2); ctx.lineTo(w, h/2); ctx.stroke();
+  }
 
   function drawTrace(ctx, w, h, color, yFunc, currentOffset, beatWidth) {
     ctx.clearRect(0, 0, w, h);
-    if (hr === 0) {
-      // Flatline
-      ctx.strokeStyle = '#ff0000';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(0, h / 2);
-      ctx.lineTo(w, h / 2);
-      ctx.stroke();
-      return;
-    }
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 3;
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+    ctx.shadowColor = color; ctx.shadowBlur = 4;
     ctx.beginPath();
     for (var x = 0; x < w; x++) {
-      var worldX = x + currentOffset;
-      var beatPos = (worldX % beatWidth) / beatWidth; // 0-1 within beat
-      var y = yFunc(beatPos) * h;
-      if (x === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+      var bp = ((x + currentOffset) % beatWidth) / beatWidth;
+      var y = yFunc(bp) * h;
+      if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-
-    // Sweep line
-    var sweepX = (currentOffset % w);
-    ctx.fillStyle = 'rgba(0,0,0,0.8)';
-    ctx.fillRect(sweepX, 0, 30, h);
+    ctx.stroke(); ctx.shadowBlur = 0;
+    // Sweeping erase zone — dark rectangle ahead of write head
+    var sweepX = currentOffset % w;
+    ctx.fillStyle = 'rgba(10,10,10,0.93)';
+    ctx.fillRect(sweepX, 0, Math.max(22, w * 0.055), h);
   }
+
+  var offset = 0;
+  var lastTime = performance.now();
 
   function animate(now) {
     var dt = (now - lastTime) / 1000;
     lastTime = now;
-    if (hr > 0) offset += speed * dt;
 
-    var beatWidth = hr > 0 ? (60 / hr) * speed : 100;
+    var hr = parseInt(ecgCanvas.getAttribute('data-hr')) || 0;
+    var rhythm = getECGRhythm(hr);
 
-    drawTrace(ecg.ctx, ecg.w, ecg.h, '#00ff41', ecgBeatY, offset, beatWidth);
-    if (pleth) drawTrace(pleth.ctx, pleth.w, pleth.h, '#00ccff', plethY, offset, beatWidth);
+    if (rhythm === 'asystole') {
+      drawFlatline(ecg.ctx, ecg.w, ecg.h);
+      if (pleth) drawFlatline(pleth.ctx, pleth.w, pleth.h);
+      App._ecgAnimId = requestAnimationFrame(animate);
+      return;
+    }
+
+    // VT: use fixed display rate of 180 bpm for waveform speed
+    var displayHr = (rhythm === 'vt') ? 180 : hr;
+    var speed = (displayHr / 60) * 80; // px/sec
+    offset += speed * dt;
+
+    var beatWidth = (60 / displayHr) * speed;
+    // AFib: vary beat width slightly to simulate irregular R-R intervals
+    if (rhythm === 'afib') beatWidth *= (0.78 + 0.44 * Math.abs(Math.sin(offset * 0.019)));
+
+    var waveMap = { nsr: waveNSR, stach: waveNSR, stemi: waveSTEMI, brady: waveBrady, afib: waveAFib, vt: waveVT, vf: waveVF };
+    var ecgWave = waveMap[rhythm] || waveNSR;
+    var ecgColor = (rhythm === 'vf' || rhythm === 'vt') ? '#ff5555' : '#00ff41';
+    var plethColor = (rhythm === 'vf' || rhythm === 'vt') ? '#ff6666' : '#00ccff';
+
+    drawTrace(ecg.ctx, ecg.w, ecg.h, ecgColor, ecgWave, offset, beatWidth);
+    if (pleth) drawTrace(pleth.ctx, pleth.w, pleth.h, plethColor, wavePleth, offset, beatWidth);
 
     App._ecgAnimId = requestAnimationFrame(animate);
   }
@@ -8994,12 +9246,28 @@ function loadGlossary() {
 function highlightMedTerms(html) {
   if (!App.glossary || !App.glossaryRegex) return html;
   var lang = App.glossaryLang;
-  return html.replace(App.glossaryRegex, function(match) {
+  var result = html.replace(App.glossaryRegex, function(match) {
     var entry = App.glossary[match.toLowerCase()];
     if (!entry) return match;
     var translation = (lang && lang !== 'en') ? (entry[lang] || '') : '';
     var transSpan = translation ? '<span class="med-auto-trans">' + escapeHtml(translation) + '</span>' : '';
     return '<span class="med-term" data-term="' + match.toLowerCase() + '" onclick="toggleMedPanel(event)">' + match + transSpan + '</span>';
+  });
+  return highlightPatternTerms_(result);
+}
+
+// Detect medical terms by suffix/prefix/drug-name patterns for words NOT already in glossary
+var _MED_PATTERN_RE = /\b([a-z]{3,}(?:itis|osis|emia|ectomy|plasty|scopy|otomy|ostomy|tomy|graphy|ology|pathy|rrhea|algia|uria|megaly|philia|phobia|trophy|genesis|ectasis|stenosis))\b|\b(?:hyper|hypo|tachy|brady|poly|oligo|mono|hemi|hemo|leuko|erythro|cardio|neuro|nephro|hepato|pneumo|dermato|osteo|arthro)[a-z]{3,}\b|\b[a-z]{4,}(?:olol|pril|artan|statin|azole|mycin|cillin|mab|tinib|afib|rafib|tidine|oxacin|cycline|navir|prazole|dipine|fenac|phylline)\b/gi;
+
+function highlightPatternTerms_(html) {
+  return html.replace(/(<[^>]+>)|([^<]+)/g, function(m, tag, text) {
+    if (tag) return tag;
+    if (!text) return m;
+    return text.replace(_MED_PATTERN_RE, function(word) {
+      var key = word.toLowerCase();
+      if (App.glossary && App.glossary[key]) return word; // already in glossary, skip
+      return '<span class="med-term med-pattern" data-term="' + key + '" data-pattern="1" onclick="toggleMedPanel(event)">' + word + '</span>';
+    });
   });
 }
 
@@ -9017,7 +9285,9 @@ function toggleMedPanel(e) {
   while (span && !span.getAttribute('data-term')) span = span.parentElement;
   if (!span) return;
   var termKey = span.getAttribute('data-term');
-  if (!termKey || !App.glossary[termKey]) return;
+  if (!termKey) return;
+  var isPatternTerm = span.getAttribute('data-pattern') === '1';
+  if (!isPatternTerm && !App.glossary[termKey]) return;
 
   // Toggle: if this term's pill is already open, close it
   var nextEl = span.nextSibling;
@@ -9031,6 +9301,33 @@ function toggleMedPanel(e) {
   // Close any other open inline pills first
   document.querySelectorAll('.med-inline').forEach(function(el) { el.remove(); });
   document.querySelectorAll('.med-term.active').forEach(function(el) { el.classList.remove('active'); });
+
+  // Handle pattern-detected terms — fetch definition from API
+  if (isPatternTerm) {
+    span.classList.add('active');
+    var cached = App.termCache && App.termCache[termKey];
+    if (cached) {
+      _showPatternPill_(span, termKey, cached);
+    } else {
+      _showPatternPill_(span, termKey, null); // loading state
+      var fetchLang = App.glossaryLang || 'en';
+      serverCall('getTermTranslation', termKey, fetchLang).then(function(res) {
+        if (!App.termCache) App.termCache = {};
+        App.termCache[termKey] = res || { definition: termKey };
+        var pill = document.querySelector('.med-inline[data-for="' + termKey + '"]');
+        if (pill) pill.innerHTML = _patternPillInner_(termKey, App.termCache[termKey]);
+      }).catch(function() {
+        var pill = document.querySelector('.med-inline[data-for="' + termKey + '"]');
+        if (pill) pill.innerHTML = '<span style="font-size:11px;color:var(--text-light);font-style:italic">Definition unavailable</span>';
+      });
+    }
+    if (!localStorage.getItem('mcc_medterm_hint_seen')) {
+      localStorage.setItem('mcc_medterm_hint_seen', '1');
+      var hintEl = document.getElementById('medterm-hint-banner');
+      if (hintEl) hintEl.style.display = 'none';
+    }
+    return;
+  }
 
   var entry = App.glossary[termKey];
   var lang = App.glossaryLang;
@@ -9077,6 +9374,32 @@ function closeMedPanel() {
   // Close all inline pills (called when card re-renders or content changes)
   document.querySelectorAll('.med-inline').forEach(function(el) { el.remove(); });
   document.querySelectorAll('.med-term.active').forEach(function(el) { el.classList.remove('active'); });
+}
+
+function _patternPillInner_(termKey, data) {
+  var inner = '';
+  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(termKey) + ',1.0)" title="Pronounce">&#x1F50A;</button>';
+  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(termKey) + ',0.45)" title="Pronounce slow">&#x1F40C;</button>';
+  if (data) {
+    var def = data.definition || data.Definition || '';
+    var trans = data.translation || data.Translation || '';
+    if (def) inner += '<span style="font-size:11px;color:var(--text-light);margin:0 4px">' + escapeHtml(def) + '</span>';
+    if (trans && App.glossaryLang && App.glossaryLang !== 'en') {
+      inner += '<span aria-hidden="true" style="opacity:0.25;font-size:9px;margin:0 1px">&#x2502;</span>';
+      inner += '<span class="med-inline-trans ltr-t">' + escapeHtml(trans) + '</span>';
+    }
+  } else {
+    inner += '<span style="font-size:11px;color:var(--text-light);font-style:italic">Loading\u2026</span>';
+  }
+  return inner;
+}
+
+function _showPatternPill_(span, termKey, data) {
+  var pill = document.createElement('span');
+  pill.className = 'med-inline';
+  pill.setAttribute('data-for', termKey);
+  pill.innerHTML = _patternPillInner_(termKey, data);
+  if (span.parentNode) span.parentNode.insertBefore(pill, span.nextSibling);
 }
 
 function dismissMedHint() {
@@ -9227,16 +9550,8 @@ function toggleAutoTranslate() {
 
 function refreshCurrentView_() {
   var btn = document.getElementById('refresh-btn');
-  if (btn) { btn.style.transform = 'rotate(360deg)'; setTimeout(function() { btn.style.transform = ''; }, 400); }
-  var page = App.currentPage;
-  if (page === 'dashboard') { loadDashboard(); }
-  else if (page === 'flashcards') { loadFlashcards(App.flashcardSpecialty); }
-  else if (page === 'quiz') { loadQuiz(App.quizSpecialty); }
-  else if (page === 'notes') { loadNotes(App.notesSpecialty); }
-  else if (page === 'keytopics') { loadKeyTopics(App.keyTopicsSpecialty); }
-  else if (page === 'patientbot') { /* don't reset active case */ showToast('PatientBot refreshed'); }
-  else if (page === 'drdata') { /* don't reset chat */ showToast('Dr. Data is ready'); }
-  else { showToast('View refreshed'); }
+  if (btn) { btn.style.transform = 'rotate(360deg)'; }
+  setTimeout(function() { location.reload(); }, 300);
 }
 
 // =============================================

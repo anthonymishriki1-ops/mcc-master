@@ -56,6 +56,7 @@ function doGet(e) {
         'getLeaderboard': getLeaderboard,
         'getDailyChallenge': getDailyChallenge,
         'getGlossaryStatus': getGlossaryStatus,
+        'getTermTranslation': getTermTranslation,
         'getDevStats': getDevStats
       };
       if (!allowed[fn]) {
@@ -165,6 +166,7 @@ function doPost(e) {
       'getLeaderboard': getLeaderboard,
       'getDailyChallenge': getDailyChallenge,
       'getGlossaryStatus': getGlossaryStatus,
+      'getTermTranslation': getTermTranslation,
       'getDevStats': getDevStats
     };
 
@@ -651,6 +653,103 @@ function getGlossaryStatus() {
     try { return { loaded: true, count: JSON.parse(data).length }; } catch(e) {}
   }
   return { loaded: false, count: 0 };
+}
+
+// Translate/define a single medical term on demand; caches in script cache + Term_Translations sheet
+function getTermTranslation(term, targetLang) {
+  if (!term) return null;
+  var termKey = term.toString().toLowerCase().trim();
+  var lang = (targetLang && targetLang !== 'en') ? targetLang : 'en';
+  var cacheKey = 'termtrans_' + termKey + '_' + lang;
+
+  // 1. Script cache (fast, 6h TTL)
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get(cacheKey);
+  if (cached) {
+    try { return JSON.parse(cached); } catch(e) {}
+  }
+
+  // 2. Term_Translations sheet
+  var result = null;
+  try {
+    var ss = SpreadsheetApp.openById(getConfig_().SHEET_ID);
+    var sheet = ss.getSheetByName('Term_Translations');
+    if (sheet) {
+      var rows = sheet.getDataRange().getValues();
+      for (var i = 1; i < rows.length; i++) {
+        if ((rows[i][0] || '').toString().toLowerCase() === termKey &&
+            (rows[i][1] || '').toString().toLowerCase() === lang) {
+          result = { definition: rows[i][2] || '', translation: rows[i][3] || '' };
+          break;
+        }
+      }
+    }
+  } catch(e) {}
+
+  if (!result) {
+    // 3. Build definition via LanguageApp
+    var definition = '';
+    var translation = '';
+    try {
+      // For non-English targets, translate the term itself
+      if (lang !== 'en') {
+        translation = LanguageApp.translate(term, 'en', lang);
+      }
+      // Simple suffix-based definition (fast, no API quota)
+      var suffixDefs = {
+        'itis': 'inflammation of the', 'osis': 'abnormal condition of',
+        'emia': 'condition of the blood involving', 'ectomy': 'surgical removal of the',
+        'plasty': 'surgical repair/reshaping of the', 'scopy': 'visual examination of the',
+        'otomy': 'surgical incision into the', 'ostomy': 'surgical opening in the',
+        'graphy': 'imaging/recording of the', 'ology': 'study of',
+        'pathy': 'disease or disorder of the', 'algia': 'pain in the',
+        'uria': 'substance in the urine', 'megaly': 'enlargement of the',
+        'trophy': 'nourishment/development of'
+      };
+      var prefixDefs = {
+        'hyper': 'excessive/above normal', 'hypo': 'deficient/below normal',
+        'tachy': 'rapid/fast', 'brady': 'slow', 'poly': 'many/multiple',
+        'oligo': 'few/deficient', 'hemi': 'half', 'cardio': 'heart',
+        'neuro': 'nerve/nervous system', 'nephro': 'kidney', 'hepato': 'liver',
+        'pneumo': 'lung/air', 'dermato': 'skin', 'osteo': 'bone', 'arthro': 'joint'
+      };
+      var matched = false;
+      for (var suf in suffixDefs) {
+        if (termKey.endsWith(suf) && termKey.length > suf.length + 2) {
+          var root = termKey.slice(0, termKey.length - suf.length);
+          definition = suffixDefs[suf].replace('the', 'the ' + root);
+          matched = true; break;
+        }
+      }
+      if (!matched) {
+        for (var pre in prefixDefs) {
+          if (termKey.startsWith(pre) && termKey.length > pre.length + 2) {
+            definition = prefixDefs[pre] + ' — ' + termKey.slice(pre.length);
+            break;
+          }
+        }
+      }
+      if (!definition) definition = 'Medical term: ' + term;
+    } catch(e) {
+      definition = 'Medical term: ' + term;
+    }
+
+    result = { definition: definition, translation: translation };
+
+    // Write to sheet for future use
+    try {
+      var ss2 = SpreadsheetApp.openById(getConfig_().SHEET_ID);
+      var sheet2 = ss2.getSheetByName('Term_Translations');
+      if (!sheet2) {
+        sheet2 = ss2.insertSheet('Term_Translations');
+        sheet2.appendRow(['Term', 'Lang', 'Definition', 'Translation']);
+      }
+      sheet2.appendRow([termKey, lang, definition, translation]);
+    } catch(e2) {}
+  }
+
+  try { cache.put(cacheKey, JSON.stringify(result), 21600); } catch(e) {}
+  return result;
 }
 
 // Build glossary using Claude API — run from GAS editor, call multiple times if it times out
