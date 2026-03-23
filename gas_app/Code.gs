@@ -57,6 +57,7 @@ function doGet(e) {
         'getDailyChallenge': getDailyChallenge,
         'getGlossaryStatus': getGlossaryStatus,
         'getTermTranslation': getTermTranslation,
+        'askHouseMode': askHouseMode,
         'getDevStats': getDevStats
       };
       if (!allowed[fn]) {
@@ -167,6 +168,7 @@ function doPost(e) {
       'getDailyChallenge': getDailyChallenge,
       'getGlossaryStatus': getGlossaryStatus,
       'getTermTranslation': getTermTranslation,
+      'askHouseMode': askHouseMode,
       'getDevStats': getDevStats
     };
 
@@ -486,11 +488,13 @@ function getMCQQuiz(specialty, version, count) {
 
   // Filter out incomplete questions (missing stem, missing options, N/A placeholders)
   data = data.filter(function(r) {
+    var vig = (r.Vignette || '').trim();
     var q = (r.Question || '').trim();
-    if (!q || q.length < 10) return false;
+    var combined = vig ? vig + ' ' + q : q;
+    if (!combined || combined.length < 10) return false;
     // Reject stub questions where vignette was dropped during generation
-    if (q.length < 150) return false;
-    if (!/\d{1,3}[- ]year|patient|woman|man|girl|boy|infant|child|presents|complains/i.test(q)) return false;
+    if (combined.length < 150) return false;
+    if (!/\d{1,3}[- ]year|patient|woman|man|girl|boy|infant|child|presents|complains/i.test(combined)) return false;
     var optA = (r.Option_A || '').trim();
     var optB = (r.Option_B || '').trim();
     if (!optA || !optB) return false;
@@ -510,7 +514,12 @@ function getMCQQuiz(specialty, version, count) {
   return data.map(function(r, i) {
     var opts = { A: r.Option_A || '', B: r.Option_B || '', C: r.Option_C || '', D: r.Option_D || '', E: r.Option_E || '' };
     var specialty = r.Specialty || '';
-    var question = r.Question || '';
+    var vignette = (r.Vignette || '').trim();
+    var stem = (r.Question || '').trim();
+    // Combine vignette + stem if they are in separate columns
+    var question = (vignette && stem && stem.indexOf(vignette.substring(0, 40)) === -1)
+      ? vignette + '\n\n' + stem
+      : (stem || vignette);
     var correct = r.Correct_Answer || '';
     var rationale = r.Rationale || '';
 
@@ -1632,6 +1641,24 @@ function askDrData(message, history) {
   messages.push({ role: 'user', content: message });
 
   var response = callAnthropic_(systemPrompt, messages);
+  return { response: response };
+}
+
+// =============================================
+// AI SERVICE - Dr. House Mode
+// =============================================
+
+// Dedicated House mode endpoint — uses caller-supplied system prompt verbatim
+// so the House persona isn't overwritten by Dr. Data's tutor prompt.
+// history = [{role:'user'|'assistant', content:'...'}] — must alternate, last entry is user.
+function askHouseMode(houseSystemPrompt, history) {
+  if (!houseSystemPrompt || !history || !history.length) {
+    return { response: 'Error: missing parameters' };
+  }
+  var messages = history.map(function(m) {
+    return { role: m.role, content: String(m.content) };
+  });
+  var response = callAnthropic_(houseSystemPrompt, messages, 'claude-haiku-4-5-20251001');
   return { response: response };
 }
 

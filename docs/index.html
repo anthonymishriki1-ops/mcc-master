@@ -3243,7 +3243,9 @@ function patchApiResult_(fn, result) {
 }
 
 // ===== PROFILE / LOGIN =====
-var ALLOWED_NAMES = ['tony','roxanna','soroosh','amin','noha','said','sarah'];
+var ALLOWED_NAMES = ['tony','roxana','soroosh','amin','noha','said','sarah'];
+// Aliases → canonical name (case-insensitive matching applied before ALLOWED_NAMES check)
+var NAME_ALIASES = { 'roxanna': 'roxana' };
 var DEV_USERS = ['tony'];
 
 // ---- API / Notification Config ----
@@ -3347,6 +3349,8 @@ function confirmNameEntry() {
   if (!input) return;
   var name = input.value.trim().toLowerCase();
   if (!name) { input.style.borderColor = 'var(--error)'; errorEl.textContent = 'Please enter your name'; return; }
+  // Resolve aliases to canonical name
+  if (NAME_ALIASES[name]) name = NAME_ALIASES[name];
   if (ALLOWED_NAMES.indexOf(name) === -1) {
     input.style.borderColor = 'var(--error)';
     errorEl.innerHTML = '&#x1F512; Access restricted. Your request has been noted.';
@@ -4674,7 +4678,8 @@ function renderDailyQuiz() {
 
   html += '<div class="card">';
   html += '<p style="font-size:14px;color:var(--text-light);margin-bottom:4px">' + escapeHtml(q.specialty) + '</p>';
-  html += '<p style="font-size:15px;line-height:1.7;margin-bottom:20px">' + medHtml(q.question) + '</p>';
+  var dqParts = q.question.split(/\n\n+/);
+  dqParts.forEach(function(p) { html += '<p style="font-size:15px;line-height:1.7;margin-bottom:12px">' + medHtml(p) + '</p>'; });
 
   var opts = ['A', 'B', 'C', 'D', 'E'];
   for (var i = 0; i < opts.length; i++) {
@@ -5727,7 +5732,9 @@ function renderQuizQuestion() {
   html += '<span style="color:var(--text-light);font-size:13px">' + escapeHtml(q.specialty) + '</span></div></div>';
   html += '<div class="progress-bar" style="margin-bottom:20px"><div class="progress-fill" style="width:' + ((current / total) * 100) + '%"></div></div>';
 
-  html += '<div class="card"><p style="font-size:15px;line-height:1.7;margin-bottom:20px">' + escapeHtml(q.question) + '</p>';
+  var qParts = q.question.split(/\n\n+/);
+  var qHtml = qParts.map(function(p) { return '<p style="font-size:15px;line-height:1.7;margin-bottom:12px">' + medHtml(p) + '</p>'; }).join('');
+  html += '<div class="card">' + qHtml;
   var opts = ['A', 'B', 'C', 'D', 'E'];
   for (var i = 0; i < opts.length; i++) {
     var opt = opts[i]; if (!q.options[opt]) continue;
@@ -7362,31 +7369,24 @@ function sendHouseMessage() {
   // Show typing indicator
   App.pbHouseConvHistory.push({ role: 'typing', content: '' });
   renderHouseChat();
-  // Inject House persona as user→assistant exchange so it wins over any GAS system prompt
+  // Use dedicated askHouseMode — passes House system prompt verbatim, no Dr. Data override
   var sysPrompt = buildHousePrompt_(cond, App.pbDifficulty);
-  var filteredHistory = App.pbHouseConvHistory.filter(function(m) { return m.role !== 'typing'; }).slice(-16);
-  var apiHistory = [
-    { role: 'user', content: '[MCCQE SIMULATION MODE — ACTIVE. READ BEFORE RESPONDING.]\n' + sysPrompt },
-    { role: 'assistant', content: 'Understood. In character as Dr. Gregory House MD for this MCCQE patient simulation. Nothing breaks this. Nothing.' }
-  ].concat(filteredHistory);
-  serverCall('askDrData', message, apiHistory).then(function(result) {
+  // History: only user/assistant turns, no typing markers, no persona preamble
+  // Last entry is already the user's current message (pushed above)
+  var apiHistory = App.pbHouseConvHistory
+    .filter(function(m) { return m.role === 'user' || m.role === 'assistant'; })
+    .slice(-16)
+    .map(function(m) { return { role: m.role, content: m.content }; });
+  serverCall('askHouseMode', sysPrompt, apiHistory).then(function(result) {
     App.pbHouseConvHistory = App.pbHouseConvHistory.filter(function(m) { return m.role !== 'typing'; });
     var response = result.response || result;
     App.pbHouseConvHistory.push({ role: 'assistant', content: response });
     renderHouseChat();
   }).catch(function(e) {
-    // Stay in character on errors — House roasts, never walks away
-    var errorLines = [
-      "*House squints at you.* 'That was so profoundly useless that I momentarily lost the ability to process human language. Try again. With actual symptoms this time.'",
-      "*House scribbles on the whiteboard, crosses it out, throws the marker.* 'I blacked out for a second. Something about this case is breaking my neurons. Start over. Symptoms. Specific ones.'",
-      "House looks up slowly. 'I need you to say that again. Slower. Like you're explaining it to someone who actually wants to be here, which I don't, but I'm still listening.'",
-      "*House taps his cane on the floor.* 'My brain just went on strike. First time in eleven years. Congratulations. Now tell me your symptoms before I reconsider my no-patients policy.'",
-      "'I\'m going to pretend that didn\'t happen.' *long pause* 'Okay I can\'t. What was THAT? Describe your actual symptoms. Now.'"
-    ];
-    var errorLine = errorLines[Math.floor(Math.random() * errorLines.length)];
+    // Remove typing indicator — don't inject any hardcoded House dialogue
     App.pbHouseConvHistory = App.pbHouseConvHistory.filter(function(m) { return m.role !== 'typing'; });
-    App.pbHouseConvHistory.push({ role: 'assistant', content: errorLine });
     renderHouseChat();
+    showToast('Connection error — please try again');
   });
 }
 
