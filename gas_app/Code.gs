@@ -2155,12 +2155,12 @@ function sendPatientBotMessage(caseId, message, history) {
     'eeg', 'electroencephalog', 'emg', 'nerve conduction',
     'skin test', 'patch test', 'allergy test', 'scratch test',
     'pregnancy test', 'hcg', 'beta hcg',
-    'toxicology', 'tox screen', 'drug screen', 'alcohol level', 'bac',
+    'toxicology', 'tox screen', 'drug screen', 'drug.?of.?abuse', 'doa panel', 'doa screen', 'urine drug', 'alcohol level', 'bac',
     'type and screen', 'type and cross', 'crossmatch',
     'genetic', 'karyotype', 'fish',
     // Order patterns
-    'send for', 'order .*(test|scan|image)', 'run .*(test|panel|labs)', 'check .*level',
-    'measure ', 'test for', 'screen for',
+    'send for', 'order ', 'run .*(test|panel|labs)', 'check .*level',
+    'measure ', 'test for', 'screen for', '\\bpanel\\b',
     // Physical exam maneuvers (these should return findings, not just "exam performed")
     'otoscope', 'ophthalmoscope', 'fundoscop', 'palpat', 'auscult', 'percuss',
     'inspect', 'check vitals', 'check pupils', 'check reflexes', 'cranial nerve',
