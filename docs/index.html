@@ -2207,6 +2207,35 @@ label {
   .pb-mon-cell-label { font-size: 7px; }
   .pb-mon-ecg { height: 22px; }
 }
+
+/* ===== FLAG / REPORT ISSUE ===== */
+.flag-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: 1px solid var(--border); border-radius: 8px;
+  padding: 4px 10px; font-size: 12px; color: var(--text-light);
+  cursor: pointer; transition: all 0.15s;
+}
+.flag-btn:hover { border-color: var(--error); color: var(--error); }
+.flag-modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9998;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.flag-modal {
+  background: var(--card); border-radius: 16px; padding: 24px; width: 100%;
+  max-width: 420px; box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+}
+.flag-modal h3 { margin: 0 0 4px; font-size: 17px; }
+.flag-modal p { margin: 0 0 16px; font-size: 13px; color: var(--text-light); }
+.flag-modal textarea {
+  width: 100%; min-height: 80px; padding: 12px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--text);
+  font-size: 14px; resize: vertical; box-sizing: border-box; margin-bottom: 12px;
+}
+.flag-modal select {
+  width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font-size: 14px; margin-bottom: 12px;
+}
+.flag-modal .flag-actions { display: flex; gap: 8px; justify-content: flex-end; }
 </style>
 
 </head>
@@ -3988,7 +4017,8 @@ function renderAchievements(stats) {
 
 function loadDevPanel() {
   var el = document.getElementById('devpanel-content');
-  if (!App.user || !App.user.isDev) { el.innerHTML = '<p class="empty-state">Access denied.</p>'; return; }
+  var profile = sessionStorage.getItem('mcc_profile') || '';
+  if (DEV_USERS.indexOf(profile.toLowerCase()) === -1) { el.innerHTML = '<p class="empty-state">Access denied.</p>'; return; }
   el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
 
   serverCall('getDevStats').then(function(stats) {
@@ -4086,6 +4116,14 @@ function renderDevPanel(stats) {
       html += '</div>';
     }
   }
+  html += '</div>';
+
+  // Flagged Issues section
+  html += '<h3 style="margin:24px 0 16px">&#x1F6A9; Flagged Issues</h3>';
+  html += '<div id="dev-flags-container" class="card" style="padding:16px">';
+  html += '<p style="color:var(--text-light);font-size:13px">Flags are logged to the UserData sheet as <code>content_flag</code> rows. ';
+  html += 'Each flag includes: reporter, content type, category, comment, and timestamp.</p>';
+  html += '<p style="margin-top:8px"><a href="https://docs.google.com/spreadsheets/d/1dqlfIfqzRA4pgLa1NocrlT2iyiJuQBN9Tauy1xLVsvo" target="_blank" style="color:var(--primary);font-weight:600">Open Google Sheet</a></p>';
   html += '</div>';
 
   el.innerHTML = html;
@@ -4255,6 +4293,7 @@ function renderFlashcard() {
     html += '<div style="text-align:center;margin-top:10px;color:var(--text-light);font-size:12px;line-height:1.5;max-width:500px;margin-left:auto;margin-right:auto">';
     html += '&#x1F4CA; Your responses are tracked to build your weak areas profile. Cards you miss will appear more often in Daily Challenges.';
     html += '<br>Keyboard: 1 = Wrong &bull; 2 = Right &bull; &#x2190; Back</div>';
+    html += '<div style="text-align:center;margin-top:8px">' + buildFlagButton({ type: 'flashcard', id: card.id, specialty: card.specialty, content: card.front }) + '</div>';
   } else {
     html += '<div class="flashcard-nav">';
     html += '<button class="btn btn-accent" onclick="flipFlashcard()" style="flex:1;padding:14px;font-size:15px">Tap to Flip</button>';
@@ -4444,7 +4483,7 @@ function renderBulletNotes(filterText) {
       var topic = topicKeys[ti];
       var items = topics[topic];
       html += '<div style="margin-top:12px">';
-      html += '<div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:6px">' + escapeHtml(topic) + ' <span style="color:var(--text-light);font-weight:400">(' + items.length + ')</span></div>';
+      html += '<div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:6px;display:flex;align-items:center;gap:8px">' + escapeHtml(topic) + ' <span style="color:var(--text-light);font-weight:400">(' + items.length + ')</span> ' + buildFlagButton({ type: 'note', id: spec + '/' + topic, specialty: spec, content: topic }) + '</div>';
 
       if (longForm) {
         // Long form: full text for each note
@@ -4607,6 +4646,7 @@ function renderQuizQuestion() {
   html += '<span style="color:var(--text-light);font-size:13px">' + answered + '/' + total + ' answered</span>';
   html += current === total ? '<button class="btn btn-success" onclick="finishQuiz()" style="padding:10px 24px">Finish Quiz</button>' : '<button class="btn btn-primary" onclick="nextQuizQuestion()">Next &rarr;</button>';
   html += '</div>';
+  html += '<div style="text-align:center;margin-top:8px">' + buildFlagButton({ type: 'quiz', id: q.id, specialty: q.specialty, content: q.question.substring(0, 150) }) + '</div>';
   el.innerHTML = html;
 }
 
@@ -6223,6 +6263,7 @@ function renderPBChatInner() {
     html += '<textarea id="pb-input" placeholder="Talk to the patient..." rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendPBMessage()}"></textarea>';
     html += '<button class="btn btn-primary" onclick="sendPBMessage()">Send</button>';
     html += '<button class="btn btn-warning pb-diagnose-btn" onclick="showDiagnoseModal()">Diagnose</button>';
+    html += buildFlagButton({ type: 'patientbot', id: App.pbCaseIndex || 0, specialty: App.pbSpecialty || '', content: 'Case: ' + (App.pbSpecialty || 'Unknown') });
     html += '</div>';
   } else {
     html += '<div style="padding:16px 20px;border-top:1px solid var(--border);background:var(--bg);display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap">';
@@ -6569,6 +6610,115 @@ document.addEventListener('keydown', function(e) {
     }
   }
 });
+
+// =============================================
+// FLAG / REPORT ISSUE SYSTEM
+// =============================================
+
+function buildFlagButton(context) {
+  // context: { type: 'flashcard'|'quiz'|'note'|'patientbot', id: ..., specialty: ..., content: ... }
+  return '<button class="flag-btn" onclick=\'openFlagModal(' + JSON.stringify(context).replace(/'/g, "&#39;") + ')\'>' +
+    '&#x1F6A9; Flag Issue</button>';
+}
+
+function openFlagModal(context) {
+  var existing = document.getElementById('flag-modal-overlay');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'flag-modal-overlay';
+  overlay.className = 'flag-modal-overlay';
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+
+  var contentPreview = (context.content || '').substring(0, 100);
+  if (contentPreview.length >= 100) contentPreview += '...';
+
+  overlay.innerHTML =
+    '<div class="flag-modal">' +
+      '<h3>&#x1F6A9; Flag an Issue</h3>' +
+      '<p>' + escapeHtml(context.type) + (contentPreview ? ': "' + escapeHtml(contentPreview) + '"' : '') + '</p>' +
+      '<select id="flag-category">' +
+        '<option value="incorrect">Incorrect / Wrong Answer</option>' +
+        '<option value="unclear">Unclear / Confusing</option>' +
+        '<option value="outdated">Outdated Information</option>' +
+        '<option value="typo">Typo / Formatting</option>' +
+        '<option value="missing">Missing Information</option>' +
+        '<option value="other">Other</option>' +
+      '</select>' +
+      '<textarea id="flag-comment" placeholder="Describe the issue (optional but helpful)..."></textarea>' +
+      '<div class="flag-actions">' +
+        '<button class="btn btn-outline" onclick="document.getElementById(\'flag-modal-overlay\').remove()">Cancel</button>' +
+        '<button class="btn btn-primary" onclick="submitFlag()" style="background:var(--error)">Submit Flag</button>' +
+      '</div>' +
+    '</div>';
+
+  // Store context for submission
+  overlay.dataset.context = JSON.stringify(context);
+  document.body.appendChild(overlay);
+  setTimeout(function() { document.getElementById('flag-comment').focus(); }, 100);
+}
+
+function submitFlag() {
+  var overlay = document.getElementById('flag-modal-overlay');
+  if (!overlay) return;
+  var context = JSON.parse(overlay.dataset.context);
+  var category = document.getElementById('flag-category').value;
+  var comment = document.getElementById('flag-comment').value.trim();
+  var profile = sessionStorage.getItem('mcc_profile') || 'unknown';
+
+  var flagData = {
+    type: context.type,
+    category: category,
+    comment: comment,
+    contentId: context.id || '',
+    specialty: context.specialty || '',
+    contentPreview: (context.content || '').substring(0, 200),
+    reporter: profile,
+    url: window.location.href,
+    timestamp: new Date().toISOString()
+  };
+
+  overlay.remove();
+  showToast_('Flag submitted — thanks for helping improve MCC Master!');
+
+  // Save to backend
+  serverCall('saveProgress', 'content_flag', flagData).catch(function(e) {
+    console.error('Failed to save flag:', e);
+  });
+
+  // Try AI auto-fix for simple issues
+  if (category === 'incorrect' && comment) {
+    serverCall('askDrData',
+      'A user flagged this ' + context.type + ' content as incorrect: "' + (context.content || '').substring(0, 300) + '". ' +
+      'Their comment: "' + comment + '". ' +
+      'Is the user likely correct? If so, what would the correct information be? Reply in 2-3 sentences max. If you cannot determine the answer, say "NEEDS_REVIEW".',
+      []
+    ).then(function(result) {
+      if (result && result.response && result.response.indexOf('NEEDS_REVIEW') === -1) {
+        // Store AI suggestion for dev review
+        serverCall('saveProgress', 'flag_ai_suggestion', {
+          flagData: flagData,
+          aiSuggestion: result.response
+        }).catch(function() {});
+      }
+    }).catch(function() {});
+  }
+}
+
+// Dev mode: show flagged issues count on dashboard
+function loadFlaggedIssues_() {
+  var profile = sessionStorage.getItem('mcc_profile') || '';
+  if (DEV_USERS.indexOf(profile.toLowerCase()) === -1) return;
+
+  serverCall('getUserStats').then(function() {
+    // Flags are stored as 'content_flag' type in user data sheet
+    // For now, show a badge in the dev nav
+    var devNav = document.getElementById('nav-dev');
+    if (devNav && !devNav.querySelector('.flag-badge')) {
+      // We'll check for flags in the dev stats page
+    }
+  });
+}
 
 // =============================================
 // DESKTOP CLOCK + ALARM (desktop only)
