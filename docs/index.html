@@ -2754,7 +2754,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '2.3';
+var APP_VERSION = '2.4';
 var APP_CHANGELOG = [
   { version: '2.2', date: 'Mar 23 2026', label: 'Bug Fixes & Transparency', items: [
     'FLAG SYSTEM: Users can now flag incorrect, unclear, or outdated content on flashcards, quiz, notes, and PatientBot — flags are logged for review',
@@ -4896,16 +4896,109 @@ function togglePBTTS() {
   showToast('Voice responses ' + (App.pbTTS ? 'ON' : 'OFF'));
 }
 
-function speakText_(text) {
+function speakText_(text, voiceParams) {
   if (!App.pbTTS || !text) return;
   window.speechSynthesis.cancel();
-  var utt = new SpeechSynthesisUtterance(text.replace(/\*+/g,'').replace(/\[.*?\]/g,'').trim());
-  utt.lang = 'en-US'; utt.rate = 0.92; utt.pitch = 1;
-  // Prefer a clearer voice if available
+  var clean = text.replace(/\*+/g,'').replace(/\[.*?\]/g,'').replace(/[*_~`]/g,'').trim();
+  if (!clean) return;
+  var utt = new SpeechSynthesisUtterance(clean);
+  utt.lang = 'en-US';
+
+  // Default neutral voice profile
+  var rate = 0.92, pitch = 1.0, volume = 1.0;
+  var preferFemale = false, preferMale = false, preferOld = false, preferYoung = false;
+
+  // Apply patient voice profile if provided
+  if (voiceParams) {
+    var age = voiceParams.age || 35;
+    var sex = (voiceParams.sex || '').toLowerCase();
+    var distress = voiceParams.distress || 0; // 0-3: none/mild/moderate/severe
+    var conscious = voiceParams.conscious !== false;
+
+    // Age affects rate and pitch
+    if (age <= 12) {
+      // Child: higher pitch, faster, lighter
+      pitch = 1.5; rate = 1.1; preferYoung = true;
+    } else if (age <= 18) {
+      pitch = 1.25; rate = 1.05; preferYoung = true;
+    } else if (age <= 35) {
+      pitch = sex === 'female' ? 1.15 : 1.0; rate = 0.95;
+    } else if (age <= 55) {
+      pitch = sex === 'female' ? 1.05 : 0.95; rate = 0.92;
+    } else if (age <= 70) {
+      // Older: slower, slightly lower, occasional hesitation
+      pitch = sex === 'female' ? 0.95 : 0.88; rate = 0.82; preferOld = true;
+    } else {
+      // Elderly: noticeably slower, weaker, lower
+      pitch = sex === 'female' ? 0.88 : 0.82; rate = 0.72; preferOld = true;
+      volume = 0.88;
+    }
+
+    // Sex affects voice selection
+    if (sex === 'female' || sex === 'trans_f') preferFemale = true;
+    else if (sex === 'male' || sex === 'trans_m') preferMale = true;
+
+    // Pain/distress: slows speech, lowers pitch, adds weight
+    if (distress >= 1) { rate -= 0.06; pitch -= 0.05; } // mild
+    if (distress >= 2) { rate -= 0.10; pitch -= 0.08; volume = 0.9; } // moderate
+    if (distress >= 3) { rate -= 0.15; pitch -= 0.12; volume = 0.82; } // severe — laboured
+
+    // Unconscious/altered — shouldn't be speaking, but just in case
+    if (!conscious) { rate = 0.6; pitch = 0.7; volume = 0.5; }
+  }
+
+  // Clamp to valid ranges
+  utt.rate   = Math.max(0.1, Math.min(10, rate));
+  utt.pitch  = Math.max(0,   Math.min(2,  pitch));
+  utt.volume = Math.max(0,   Math.min(1,  volume));
+
+  // Voice selection: match gender + age preference
   var voices = window.speechSynthesis.getVoices();
-  var pref = voices.find(function(v){ return /Google US English|Samantha|Daniel|Karen/i.test(v.name); });
-  if (pref) utt.voice = pref;
+  if (voices.length > 0) {
+    var scored = voices.map(function(v) {
+      var s = 0;
+      var n = v.name.toLowerCase();
+      if (!v.localService) s += 1; // prefer online voices (better quality)
+      if (/en.us|en.gb|en.au/i.test(v.lang)) s += 3;
+      if (preferFemale && /female|woman|girl|samantha|karen|victoria|moira|fiona|zira|hazel|susan|lisa|kate|allison/i.test(n)) s += 5;
+      if (preferMale   && /male|man|boy|daniel|david|alex|fred|tom|james|mark|oliver/i.test(n)) s += 5;
+      if (preferOld    && /senior|slow|reed/i.test(n)) s += 2;
+      if (preferYoung  && /junior|child|young/i.test(n)) s += 2;
+      // High-quality voices
+      if (/google|premium|neural|enhanced/i.test(n)) s += 2;
+      return { v: v, s: s };
+    });
+    scored.sort(function(a, b) { return b.s - a.s; });
+    if (scored.length > 0) utt.voice = scored[0].v;
+  }
+
   window.speechSynthesis.speak(utt);
+}
+
+// Build voice params from current patient info + vitals
+function getPBVoiceParams_() {
+  var p = App.pbPatientInfo;
+  if (!p) return null;
+  var distress = 0;
+  // Infer distress from vitals
+  if (App.pbVitals) {
+    var hr = App.pbVitals.hr || App.pbVitals.heartRate || 0;
+    var spo2 = App.pbVitals.spo2 || App.pbVitals.o2sat || 100;
+    var bp = App.pbVitals.systolic || 120;
+    var rr = App.pbVitals.rr || App.pbVitals.respiratoryRate || 16;
+    if (hr > 120 || spo2 < 92 || rr > 24 || bp < 90) distress = 3;
+    else if (hr > 100 || spo2 < 96 || rr > 20 || bp < 100) distress = 2;
+    else if (hr > 90 || spo2 < 98) distress = 1;
+  }
+  // Also check for pain keywords in recent patient speech
+  var lastAssistant = '';
+  for (var i = App.pbHistory.length - 1; i >= 0; i--) {
+    if (App.pbHistory[i].role === 'assistant') { lastAssistant = App.pbHistory[i].content || ''; break; }
+  }
+  if (/\b(agony|can't breathe|dying|terrible|unbearable|crushing|10.{0,3}10|severe pain)\b/i.test(lastAssistant)) distress = 3;
+  else if (/\b(really hurts|lot of pain|hard to breathe|dizzy|weak)\b/i.test(lastAssistant)) distress = Math.max(distress, 2);
+  else if (/\b(hurts|painful|aching|sore|discomfort|nauseous)\b/i.test(lastAssistant)) distress = Math.max(distress, 1);
+  return { age: p.age || 35, sex: p.sex || '', distress: distress };
 }
 
 // Score how medically-likely a phrase is (for picking best STT alternative)
@@ -4918,7 +5011,7 @@ function scoreMedicalPhrase_(text) {
 function pbSpeakLastMessage_() {
   if (!App.pbTTS) return;
   var last = App.pbHistory[App.pbHistory.length - 1];
-  if (last && last.role === 'assistant') speakText_(last.content);
+  if (last && last.role === 'assistant') speakText_(last.content, getPBVoiceParams_());
 }
 
 // ---- English Coach Mode (direct Claude API) ----
