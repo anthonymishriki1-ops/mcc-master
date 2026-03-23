@@ -76,12 +76,16 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
+// Dev secret for Netlify proxy auth (set as Script Property 'DEV_SECRET')
+var DEV_SECRET = PropertiesService.getScriptProperties().getProperty('DEV_SECRET') || '';
+
 // --- REST API for external frontends (GitHub Pages) ---
 function doPost(e) {
   try {
     var payload = JSON.parse(e.postData.contents);
     var fn = payload.fn;
     var args = payload.args || [];
+    var devSecret = payload.devSecret || '';
 
     // Whitelist of callable functions
     var allowed = {
@@ -108,12 +112,18 @@ function doPost(e) {
       'getUserQuizHistory': getUserQuizHistory,
       'getLeaderboard': getLeaderboard,
       'getDailyChallenge': getDailyChallenge,
-      'getGlossaryStatus': getGlossaryStatus
+      'getGlossaryStatus': getGlossaryStatus,
+      'getDevStats': getDevStats
     };
 
     if (!allowed[fn]) {
       return ContentService.createTextOutput(JSON.stringify({ error: 'Function not allowed: ' + fn }))
         .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // Pass devSecret as first arg for getDevStats when called via proxy
+    if (fn === 'getDevStats' && devSecret) {
+      args = [devSecret];
     }
 
     var result = allowed[fn].apply(null, args);
@@ -145,9 +155,10 @@ function getUserId_(guestId) {
 }
 
 // --- Dev Panel: get all user activity ---
-function getDevStats() {
+function getDevStats(devSecretArg) {
   var email = Session.getActiveUser().getEmail() || '';
-  if (email.toLowerCase() !== ADMIN_EMAIL) return { error: 'Not authorized' };
+  var hasDevSecret = DEV_SECRET && devSecretArg && devSecretArg === DEV_SECRET;
+  if (email.toLowerCase() !== ADMIN_EMAIL && !hasDevSecret) return { error: 'Not authorized' };
 
   var sheet = ensureUserDataSheet_();
   var data = sheet.getDataRange().getValues();
@@ -161,12 +172,20 @@ function getDevStats() {
     var type = data[i][1];
     var ts = data[i][3];
 
-    if (!users[userId]) users[userId] = { quizzes: 0, pb: 0, daily: 0, cards: 0, lastActive: '', isGuest: userId.indexOf('guest_') === 0 };
+    if (!users[userId]) users[userId] = { quizzes: 0, pb: 0, daily: 0, cards: 0, lastActive: '', isGuest: userId.indexOf('guest_') === 0, recentActivity: [] };
     if (type === 'quiz_result') users[userId].quizzes++;
     if (type === 'pb_result') users[userId].pb++;
     if (type === 'daily_result') users[userId].daily++;
     if (type === 'card_rating') users[userId].cards++;
     if (ts) users[userId].lastActive = ts;
+
+    // Store recent activity (last 20 non-card events per user)
+    if (type !== 'card_rating' && users[userId].recentActivity.length < 20) {
+      var detail = data[i][2]; // data column
+      var summary = '';
+      try { var parsed = typeof detail === 'string' ? JSON.parse(detail) : detail; summary = parsed; } catch(ex) { summary = detail; }
+      users[userId].recentActivity.push({ type: type, data: summary, time: ts ? ts.toString() : '' });
+    }
 
     // Activity by day
     var day = ts ? ts.toString().slice(0, 10) : 'unknown';

@@ -2754,11 +2754,12 @@ function serverCall(funcName) {
   var GAS_API = 'https://script.google.com/macros/s/AKfycbyr4fykFUygDTJlJigbdtvms6NNTC0Ywxg48banF_buFbK9VEptCYvYRuF4Evw6nOH7/exec';
   var isHosted = window.location.protocol === 'https:' || window.location.protocol === 'http:';
   var API_URL = isHosted ? '/.netlify/functions/api' : GAS_API;
+  var profile = localStorage.getItem('mcc_profile') || '';
   return fetch(API_URL, {
     method: 'POST',
     redirect: 'follow',
     headers: { 'Content-Type': isHosted ? 'application/json' : 'text/plain' },
-    body: JSON.stringify({ fn: funcName, args: args })
+    body: JSON.stringify({ fn: funcName, args: args, profile: profile })
   })
   .then(function(resp) {
     if (!resp.ok) throw new Error('API error: ' + resp.status);
@@ -3682,12 +3683,13 @@ function renderDevPanel(stats) {
   for (var i = 0; i < userList.length; i++) {
     var uid = userList[i];
     var u = stats.users[uid];
-    var displayName = uid.indexOf('guest_') === 0 ? '&#x1F464; Guest' : uid.split('@')[0];
+    var displayName = uid.indexOf('guest_') === 0 ? '&#x1F464; Guest' : (uid.indexOf('profile_') === 0 ? uid.replace('profile_', '').charAt(0).toUpperCase() + uid.replace('profile_', '').slice(1) : uid.split('@')[0]);
     var isGuest = u.isGuest;
     var lastDate = u.lastActive ? new Date(u.lastActive).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Never';
     var totalActivity = u.quizzes + u.pb + u.daily + u.cards;
+    var detailId = 'dev-user-detail-' + i;
 
-    html += '<div class="card" style="padding:16px 20px;margin-bottom:10px">';
+    html += '<div class="card" style="padding:16px 20px;margin-bottom:10px;cursor:pointer" onclick="var d=document.getElementById(\'' + detailId + '\');d.style.display=d.style.display===\'none\'?\'block\':\'none\'">';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">';
     html += '<div>';
     html += '<strong style="font-size:16px">' + displayName + '</strong>';
@@ -3700,7 +3702,32 @@ function renderDevPanel(stats) {
     if (u.daily > 0) html += '<span title="Daily challenges">&#x2B50; ' + u.daily + '</span>';
     if (u.cards > 0) html += '<span title="Cards reviewed">&#x1F0CF; ' + u.cards + '</span>';
     if (totalActivity === 0) html += '<span style="opacity:0.5">No activity</span>';
-    html += '</div></div></div>';
+    html += '</div></div>';
+
+    // Expandable activity detail
+    html += '<div id="' + detailId + '" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px">';
+    if (u.recentActivity && u.recentActivity.length > 0) {
+      html += '<div style="font-size:13px;font-weight:700;margin-bottom:8px;color:var(--text-light)">Recent Activity</div>';
+      for (var j = u.recentActivity.length - 1; j >= 0; j--) {
+        var act = u.recentActivity[j];
+        var typeLabel = act.type === 'quiz_result' ? '&#x1F4DD; Quiz' : act.type === 'pb_result' ? '&#x1FA7A; PatientBot' : act.type === 'daily_result' ? '&#x2B50; Daily' : act.type;
+        var timeStr = act.time ? new Date(act.time).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+        var detailStr = '';
+        if (act.data && typeof act.data === 'object') {
+          if (act.data.score !== undefined) detailStr += 'Score: ' + act.data.score + '% ';
+          if (act.data.specialty) detailStr += '(' + act.data.specialty + ') ';
+          if (act.data.got !== undefined) detailStr += act.data.got + '/' + act.data.total + ' correct ';
+          if (act.data.points) detailStr += '+' + act.data.points + 'XP ';
+        }
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(128,128,128,0.1);font-size:13px">';
+        html += '<span>' + typeLabel + (detailStr ? ' &mdash; ' + escapeHtml(detailStr) : '') + '</span>';
+        html += '<span style="color:var(--text-light);font-size:12px">' + timeStr + '</span>';
+        html += '</div>';
+      }
+    } else {
+      html += '<p style="font-size:13px;color:var(--text-light);margin:0">No detailed activity data.</p>';
+    }
+    html += '</div></div>';
   }
 
   // Activity by day chart (simple text version)
@@ -3858,12 +3885,12 @@ function renderFlashcard() {
     html += '</div>';
   }
 
-  // Card counter + back button
+  // Card counter + back button + skip to
   html += '<div class="flashcard-meta">';
   if (App.flashcardIndex > 0) {
     html += '<button class="btn btn-outline" onclick="prevFlashcard()" style="padding:10px 20px;font-size:15px;margin-right:12px;font-weight:700">&#x2190; Back</button>';
   }
-  html += '<span>' + current + ' / ' + total + '</span>';
+  html += '<span style="cursor:pointer" onclick="skipToFlashcard()" title="Click to skip to a card number">' + current + ' / ' + total + '</span>';
   if (card.hyFlag) html += ' <span class="hy-badge">&#x2B50; Important</span>';
   html += '<br><span>' + escapeHtml(card.specialty) + ' &mdash; ' + escapeHtml(card.topic) + '</span></div>';
   html += '<div class="progress-bar" style="margin-bottom:20px"><div class="progress-fill" style="width:' + ((current / total) * 100) + '%"></div></div>';
@@ -3914,6 +3941,19 @@ function renderFlashcardDone() {
   if (points > 0) {
     serverCall('saveProgress', 'flashcard_result', { got: got, review: review, total: total, points: points, specialty: App.flashcardSpecialty }, App.guestId);
   }
+}
+
+function skipToFlashcard() {
+  var total = App.flashcards.length;
+  var input = prompt('Skip to card number (1-' + total + '):', (App.flashcardIndex + 1));
+  if (input === null) return;
+  var num = parseInt(input, 10);
+  if (isNaN(num) || num < 1 || num > total) { alert('Please enter a number between 1 and ' + total); return; }
+  App.flashcardIndex = num - 1;
+  App.flashcardFlipped = false;
+  App.flashcardResumed = false;
+  saveFlashcardProgress_();
+  renderFlashcard();
 }
 
 function flipFlashcard() { App.flashcardFlipped = !App.flashcardFlipped; renderFlashcard(); }
