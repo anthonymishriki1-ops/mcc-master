@@ -3,6 +3,10 @@
 
 const GAS_API = process.env.GAS_API_URL || 'https://script.google.com/macros/s/AKfycbyr4fykFUygDTJlJigbdtvms6NNTC0Ywxg48banF_buFbK9VEptCYvYRuF4Evw6nOH7/exec';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
+const DEV_SECRET = process.env.DEV_SECRET || '';
+
+// Dev profiles that get isDev access
+const DEV_PROFILES = ['tony'];
 
 // Functions that can be handled directly with Anthropic API
 const AI_FUNCTIONS = new Set([
@@ -189,12 +193,43 @@ async function handleGenerateCaseDebrief(args) {
   return { scores: { history:0,exam:0,investigations:0,diagnosis:0,management:0,communication:0,safety:0 }, overall:0, grade:'F', strengths:[], improvements:['Could not generate scorecard.'], missed:[] };
 }
 
+// Handle getCurrentUser based on profile name
+function handleGetCurrentUser(args, profile) {
+  const isDev = DEV_PROFILES.includes((profile || '').toLowerCase());
+  const displayName = profile ? (profile.charAt(0).toUpperCase() + profile.slice(1)) : 'Guest';
+  return { email: profile || '', name: displayName, isGuest: !profile, isDev };
+}
+
+// Handle getDevStats by proxying to GAS with dev secret
+async function handleGetDevStats(args, profile) {
+  if (!DEV_PROFILES.includes((profile || '').toLowerCase())) {
+    return { error: 'Not authorized' };
+  }
+  // Proxy to GAS with dev secret to bypass email check
+  const resp = await fetch(GAS_API, {
+    method: 'POST',
+    redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ fn: 'getDevStats', args: [], devSecret: DEV_SECRET })
+  });
+  if (!resp.ok) throw new Error('GAS API error: ' + resp.status);
+  const data = await resp.json();
+  if (data.error) throw new Error(data.error);
+  return data.result;
+}
+
 // Direct Anthropic handler map
 const AI_HANDLERS = {
   analyzeQuizResults: handleAnalyzeQuizResults,
   submitDiagnosis: handleSubmitDiagnosis,
   debriefPatientBot: handleDebriefPatientBot,
   generateCaseDebrief: handleGenerateCaseDebrief,
+};
+
+// Functions handled directly by Netlify (no GAS proxy needed)
+const LOCAL_HANDLERS = {
+  getCurrentUser: handleGetCurrentUser,
+  getDevStats: handleGetDevStats,
 };
 
 // Proxy to GAS API
@@ -225,7 +260,7 @@ export default async (req, context) => {
 
   try {
     const body = await req.json();
-    const { fn, args = [] } = body;
+    const { fn, args = [], profile = '' } = body;
 
     if (!fn) {
       return new Response(JSON.stringify({ error: 'Missing function name' }), {
@@ -235,8 +270,12 @@ export default async (req, context) => {
 
     let result;
 
+    // Handle locally (no GAS needed)
+    if (LOCAL_HANDLERS[fn]) {
+      result = await LOCAL_HANDLERS[fn](args, profile);
+    }
     // Use direct Anthropic if API key is set and function has a handler
-    if (ANTHROPIC_API_KEY && AI_HANDLERS[fn]) {
+    else if (ANTHROPIC_API_KEY && AI_HANDLERS[fn]) {
       try {
         result = await AI_HANDLERS[fn](args);
       } catch (e) {
