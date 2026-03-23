@@ -6642,6 +6642,27 @@ function sendPBMessage() {
     return;
   }
 
+  // Intercept anatomically impossible exams typed manually
+  var ptSexCheck_ = (App.pbPatientInfo && App.pbPatientInfo.sex) ? App.pbPatientInfo.sex.toLowerCase() : '';
+  if (ptSexCheck_) {
+    var msgLc_ = message.toLowerCase();
+    var maleOnly_   = ['testicular','prostate exam','penile','*testicular','*prostate'];
+    var femaleOnly_ = ['pelvic exam','speculum exam','bimanual','pap smear','*pelvic','*speculum'];
+    var blocked_ = false;
+    if ((ptSexCheck_ === 'female' || ptSexCheck_ === 'trans_f') &&
+        maleOnly_.some(function(t){ return msgLc_.indexOf(t) !== -1; })) blocked_ = true;
+    if ((ptSexCheck_ === 'male' || ptSexCheck_ === 'trans_m') &&
+        femaleOnly_.some(function(t){ return msgLc_.indexOf(t) !== -1; })) blocked_ = true;
+    if (blocked_) {
+      input.value = '';
+      App.pbHistory.push({ role: 'user', content: message });
+      App.pbHistory.push({ role: 'assistant', content: 'Finding: Not applicable — patient anatomy does not include this structure.' });
+      var renderTarget_ = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
+      renderTarget_();
+      return;
+    }
+  }
+
   input.value = ''; App.pbHistory.push({ role: 'user', content: message });
 
   var target = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
@@ -7845,6 +7866,33 @@ function renderPBChatInner() {
         '---Infusion---','*set up rapid infuser (Level 1)*','*set up IV pump*','*set up PCA (patient-controlled analgesia)*','*set up syringe driver*',
         '---Other---','*apply 12-lead EKG*','*apply defibrillator pads*','*set up suction (wall)*','*set up chest drainage system (Pleur-evac)*','*apply sequential compression devices (SCDs)*','*apply TED stockings*','*insert bite block*','*prepare code cart at bedside*'] }
     ];
+
+    // ── Sex-based anatomy filter ──────────────────────────────────────────
+    // Items that require female anatomy
+    var FEMALE_ONLY_ITEMS_ = [
+      '*pelvic exam (bimanual)*', '*speculum exam*', '*breast exam (bilateral)*',
+      'order transvaginal ultrasound', 'order obstetric ultrasound',
+      'order first trimester dating US', 'order breast ultrasound',
+      'order colposcopy', 'order hysteroscopy', 'pregnancy test'
+    ];
+    // Items that require male anatomy
+    var MALE_ONLY_ITEMS_ = [
+      '*testicular exam*', '*prostate exam*', '*external genital exam*',
+      'order testicular ultrasound'
+    ];
+    var ptSex_ = (App.pbPatientInfo && App.pbPatientInfo.sex) ? App.pbPatientInfo.sex.toLowerCase() : '';
+    if (ptSex_) {
+      var ptIsFemale_ = (ptSex_ === 'female' || ptSex_ === 'trans_f');
+      var ptIsMale_   = (ptSex_ === 'male'   || ptSex_ === 'trans_m');
+      for (var cfi = 0; cfi < categories.length; cfi++) {
+        categories[cfi].items = categories[cfi].items.filter(function(item) {
+          if (ptIsMale_   && FEMALE_ONLY_ITEMS_.indexOf(item) !== -1) return false;
+          if (ptIsFemale_ && MALE_ONLY_ITEMS_.indexOf(item)   !== -1) return false;
+          return true;
+        });
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────
 
     // Quick action tabs — always visible
     html += '<div class="pb-action-bar">';
