@@ -218,7 +218,7 @@ function sendHeartbeat(guestId) {
   var cache = CacheService.getScriptCache();
   var key = 'online_' + userId;
   var displayName = userId.replace('guest_', '');
-  cache.put(key, displayName, 300); // 5-minute TTL
+  cache.put(key, displayName, 900); // 15-minute TTL
 
   // Maintain list of active user keys
   var activeList = cache.get('online_users_list');

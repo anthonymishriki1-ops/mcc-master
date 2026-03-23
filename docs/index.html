@@ -6608,12 +6608,10 @@ function formatPBInput(text) {
 function startHeartbeat_() {
   // Send initial heartbeat
   serverCall('sendHeartbeat').catch(function() {});
-  // Refresh online users immediately and then every 2 minutes
   refreshOnlineUsers_();
-  setInterval(function() {
-    serverCall('sendHeartbeat').catch(function() {});
-    refreshOnlineUsers_();
-  }, 120000);
+  // Heartbeat every 10 min, refresh display every 5 min
+  setInterval(function() { serverCall('sendHeartbeat').catch(function() {}); }, 600000);
+  setInterval(refreshOnlineUsers_, 300000);
 }
 
 function refreshOnlineUsers_() {
