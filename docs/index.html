@@ -3214,7 +3214,7 @@ var ALLOWED_NAMES = ['tony','roxanna','soroosh','amin','noha','said','sarah'];
 var DEV_USERS = ['tony'];
 
 // ---- API / Notification Config ----
-var CLAUDE_API_KEY = 'YOUR_CLAUDE_API_KEY_HERE'; // paste your sk-ant-... key
+// CLAUDE_API_KEY removed — English Coach now routes through the same GAS backend as Dr. Data/PatientBot
 var NTFY_TOPIC = 'mcc-access-alerts'; // change to a private topic name (others can't guess it)
 
 function getGuestId() {
@@ -5554,7 +5554,7 @@ function ecStartSession_() {
   ecCallClaude_([{ role: 'user', content: 'Start our session with a scenario for me to practice.' }], function(reply) {
     App.ecHistory.push({ role: 'assistant', content: reply });
     renderECMessages_();
-    if (App.ecTTS !== false) speakText_(reply);
+    speakEC_(reply);
   });
 }
 
@@ -5625,33 +5625,38 @@ function sendECMessage() {
     if (t) t.remove();
     App.ecHistory.push({ role: 'assistant', content: reply });
     renderECMessages_();
-    if (App.ecTTS !== false) speakText_(reply);
+    speakEC_(reply);
   });
 }
 
 function ecCallClaude_(messages, callback) {
-  if (!CLAUDE_API_KEY || CLAUDE_API_KEY === 'YOUR_CLAUDE_API_KEY_HERE') {
-    callback('[Claude API key not set. Add your key to CLAUDE_API_KEY in the config at the top of the script.]');
-    return;
-  }
-  fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': CLAUDE_API_KEY,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model: 'claude-3-5-haiku-20241022',
-      max_tokens: 300,
-      system: EC_SYSTEM_PROMPT,
-      messages: messages
-    })
-  }).then(function(r){ return r.json(); }).then(function(d){
-    var text = d.content && d.content[0] ? d.content[0].text : 'Sorry, no response.';
-    callback(text);
-  }).catch(function(e){ callback('Error: ' + (e.message || String(e))); });
+  // Routes through the same GAS backend as Dr. Data and PatientBot — no separate API key needed.
+  // Inject EC system prompt as a user→assistant exchange so it reliably takes effect.
+  var lastMsg = messages[messages.length - 1];
+  var userMessage = (lastMsg && lastMsg.role === 'user') ? lastMsg.content : 'Continue.';
+  var apiHistory = [
+    { role: 'user', content: '[ENGLISH COACH SESSION — follow these instructions for the whole conversation]\n' + EC_SYSTEM_PROMPT },
+    { role: 'assistant', content: 'Ready. Starting a practice scenario.' }
+  ].concat(messages.slice(0, -1));
+  serverCall('askDrData', userMessage, apiHistory).then(function(result) {
+    callback(result.response || result);
+  }).catch(function(e) {
+    callback('Connection issue — try again in a moment.');
+  });
+}
+
+// EC-specific TTS — uses speechSynthesis directly, independent of PatientBot TTS toggle
+function speakEC_(text) {
+  if (!window.speechSynthesis || App.ecTTS === false) return;
+  var clean = text.replace(/\*+/g,'').replace(/\[.*?\]/g,'').replace(/[*_~`#]/g,'').replace(/💬[^\n]*/g,'').trim();
+  if (!clean) return;
+  window.speechSynthesis.cancel();
+  setTimeout(function() {
+    if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+    var utt = new SpeechSynthesisUtterance(clean);
+    utt.lang = 'en-US'; utt.rate = 0.9; utt.pitch = 1.0; utt.volume = 1.0;
+    window.speechSynthesis.speak(utt);
+  }, 120);
 }
 
 function renderECMessages_() {
