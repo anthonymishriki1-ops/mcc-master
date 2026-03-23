@@ -226,86 +226,127 @@ body {
 /* --- Medical Term Tooltips --- */
 .med-term {
   color: #2563eb;
-  background: rgba(37, 99, 235, 0.08);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
   border-radius: 3px;
-  padding: 0 2px;
-  cursor: help;
+  padding: 0 1px;
+  cursor: pointer;
   position: relative;
-  transition: background 0.15s;
+  transition: background 0.12s;
 }
-.med-term:hover, .med-term:active {
-  background: rgba(37, 99, 235, 0.18);
-}
-[data-theme="dark"] .med-term {
-  color: #60a5fa;
-  background: rgba(96, 165, 250, 0.12);
-}
-[data-theme="dark"] .med-term:hover, [data-theme="dark"] .med-term:active {
-  background: rgba(96, 165, 250, 0.25);
-}
+.med-term:hover { background: rgba(37,99,235,0.10); }
+.med-term.active { background: rgba(37,99,235,0.15); }
+[data-theme="dark"] .med-term { color: #60a5fa; }
+[data-theme="dark"] .med-term:hover { background: rgba(96,165,250,0.15); }
+[data-theme="dark"] .med-term.active { background: rgba(96,165,250,0.22); }
 
-.med-tooltip {
+/* Persistent click panel — stays open until dismissed */
+.med-panel {
   position: fixed;
   z-index: 9999;
   background: var(--card);
   border: 2px solid var(--primary);
-  border-radius: 12px;
-  padding: 14px 18px;
-  max-width: 340px;
-  min-width: 220px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  border-radius: 14px;
+  padding: 14px 16px 12px;
+  max-width: 320px;
+  min-width: 240px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.22);
   font-size: 14px;
-  line-height: 1.6;
-  pointer-events: auto;
+  line-height: 1.55;
   animation: tooltipIn 0.15s ease;
 }
-
 @keyframes tooltipIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-
-.med-tooltip-term {
+.med-panel-close {
+  float: right;
+  font-size: 16px;
+  color: var(--text-light);
+  cursor: pointer;
+  line-height: 1;
+  margin-left: 8px;
+  padding: 0 2px;
+}
+.med-panel-close:hover { color: var(--text); }
+.med-panel-term {
   font-weight: 800;
   font-size: 16px;
   color: var(--primary);
   margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
-
-.med-tooltip-cat {
-  display: inline-block;
+.med-panel-cat {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.5px;
   text-transform: uppercase;
-  padding: 2px 8px;
+  padding: 2px 7px;
   border-radius: 4px;
   background: var(--primary);
   color: white;
-  margin-left: 8px;
-  vertical-align: middle;
 }
-
-.med-tooltip-def {
+.med-panel-def {
   color: var(--text);
-  margin: 8px 0;
+  margin: 6px 0 8px;
+  font-size: 13.5px;
 }
-
-.med-tooltip-translation {
-  color: var(--text-light);
-  font-style: italic;
+.med-panel-translation {
   border-top: 1px solid var(--border);
-  padding-top: 8px;
-  margin-top: 8px;
+  padding-top: 10px;
+  margin-top: 4px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
   direction: rtl;
   text-align: right;
+}
+.med-panel-translation.ltr {
+  direction: ltr;
+  text-align: left;
   font-size: 15px;
 }
-
-.med-tooltip-translation.ltr {
+.med-panel-translation-label {
+  font-size: 10px;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  display: block;
+  margin-bottom: 4px;
   direction: ltr;
   text-align: left;
 }
+.med-panel-pronounce {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.med-panel-pronounce button {
+  flex: 1;
+  padding: 7px 4px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: background 0.12s;
+}
+.med-panel-pronounce button:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
+.med-panel-pronounce button:active { transform: scale(0.96); }
 
 .sidebar-lang-select {
   background: rgba(255,255,255,0.1);
@@ -2754,8 +2795,14 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '2.5';
+var APP_VERSION = '2.6';
 var APP_CHANGELOG = [
+  { version: '2.6', date: 'Mar 23 2026', label: 'Med Term Click Panel + Pronunciation', items: [
+    'TRANSLATION: Clicking a highlighted medical term now opens a persistent panel — no more blink/hover disappearing',
+    'TRANSLATION: Panel stays open until you click outside or hit X',
+    'PRONUNCIATION: Two buttons in the panel — Normal speed and Slow (0.45x) — hear every syllable clearly',
+    'UX: Active term is underlined+highlighted while its panel is open',
+  ]},
   { version: '2.2', date: 'Mar 23 2026', label: 'Bug Fixes & Transparency', items: [
     'FLAG SYSTEM: Users can now flag incorrect, unclear, or outdated content on flashcards, quiz, notes, and PatientBot — flags are logged for review',
     'BUG FIX: 14 quiz questions were missing their clinical vignettes (showed only "Which of the following..." with no patient scenario) — these are now filtered out automatically',
@@ -7247,59 +7294,111 @@ function highlightMedTerms(html) {
   return html.replace(App.glossaryRegex, function(match) {
     var entry = App.glossary[match.toLowerCase()];
     if (!entry) return match;
-    return '<span class="med-term" data-term="' + match.toLowerCase() + '" onmouseenter="showMedTooltip(event)" onmouseleave="hideMedTooltip()" onclick="showMedTooltip(event)">' + match + '</span>';
+    return '<span class="med-term" data-term="' + match.toLowerCase() + '" onclick="toggleMedPanel(event)">' + match + '</span>';
   });
 }
 
-var _tooltipTimeout = null;
-function showMedTooltip(e) {
-  clearTimeout(_tooltipTimeout);
-  hideMedTooltip();
-  var termKey = e.target.getAttribute('data-term');
+// ── Click-to-open persistent med term panel ────────────────────────────────
+var _medPanelDismiss = null; // outside-click listener reference
+
+function toggleMedPanel(e) {
+  e.stopPropagation();
+  var span = e.currentTarget || e.target;
+  var termKey = span.getAttribute('data-term');
   if (!termKey || !App.glossary[termKey]) return;
+
+  // If this exact term's panel is already open → close it
+  var existing = document.getElementById('med-panel-active');
+  if (existing) {
+    var wasFor = existing.getAttribute('data-for');
+    closeMedPanel();
+    if (wasFor === termKey) return; // toggle off
+  }
+
   var entry = App.glossary[termKey];
   var lang = App.glossaryLang;
   var rtlLangs = ['fa', 'ar', 'ur'];
   var isRTL = rtlLangs.indexOf(lang) !== -1;
 
-  var tooltip = document.createElement('div');
-  tooltip.className = 'med-tooltip';
-  tooltip.id = 'med-tooltip-active';
-
-  var catLabel = entry.Category || entry.category || '';
-  var def = entry.Definition || entry.definition || '';
+  var catLabel  = entry.Category    || entry.category    || '';
+  var def       = entry.Definition  || entry.definition  || '';
+  var dispTerm  = entry.Term        || entry.term        || termKey;
   var translation = (lang && lang !== 'en') ? (entry[lang] || entry.translation || '') : '';
 
-  var inner = '<div class="med-tooltip-term">' + escapeHtml(entry.Term || entry.term || termKey);
-  if (catLabel) inner += '<span class="med-tooltip-cat">' + escapeHtml(catLabel) + '</span>';
-  inner += '</div>';
-  if (def) inner += '<div class="med-tooltip-def">' + escapeHtml(def) + '</div>';
-  if (translation) inner += '<div class="med-tooltip-translation' + (isRTL ? '' : ' ltr') + '">' + escapeHtml(translation) + '</div>';
-  tooltip.innerHTML = inner;
+  var panel = document.createElement('div');
+  panel.className = 'med-panel';
+  panel.id = 'med-panel-active';
+  panel.setAttribute('data-for', termKey);
 
-  document.body.appendChild(tooltip);
+  var html = '<button class="med-panel-close" onclick="closeMedPanel()" title="Close">&#x2715;</button>';
+  html += '<div class="med-panel-term">' + escapeHtml(dispTerm);
+  if (catLabel) html += '<span class="med-panel-cat">' + escapeHtml(catLabel) + '</span>';
+  html += '</div>';
+  if (def) html += '<div class="med-panel-def">' + escapeHtml(def) + '</div>';
 
-  // Position above the term
-  var rect = e.target.getBoundingClientRect();
-  var ttRect = tooltip.getBoundingClientRect();
-  var top = rect.top - ttRect.height - 8;
-  var left = rect.left;
+  if (translation) {
+    html += '<div class="med-panel-translation' + (isRTL ? '' : ' ltr') + '">';
+    html += '<div class="med-panel-translation-label">Translation</div>';
+    html += escapeHtml(translation);
+    html += '</div>';
+  }
 
-  // If no room above, show below
-  if (top < 8) top = rect.bottom + 8;
-  // Keep on screen horizontally
-  if (left + ttRect.width > window.innerWidth) left = window.innerWidth - ttRect.width - 12;
-  if (left < 12) left = 12;
+  html += '<div class="med-panel-pronounce">';
+  html += '<button onclick="pronounceMedTerm(' + JSON.stringify(dispTerm) + ', 1.0)" title="Normal speed">&#x1F50A; Normal</button>';
+  html += '<button onclick="pronounceMedTerm(' + JSON.stringify(dispTerm) + ', 0.45)" title="Slow — hear every syllable">&#x1F40C; Slow</button>';
+  html += '</div>';
 
-  tooltip.style.top = top + 'px';
-  tooltip.style.left = left + 'px';
+  panel.innerHTML = html;
+  document.body.appendChild(panel);
+
+  // Mark span as active
+  document.querySelectorAll('.med-term.active').forEach(function(el) { el.classList.remove('active'); });
+  span.classList.add('active');
+
+  // Position: below the term, clamped to viewport
+  var rect = span.getBoundingClientRect();
+  panel.style.visibility = 'hidden';
+  panel.style.top = '0px';
+  panel.style.left = '0px';
+  requestAnimationFrame(function() {
+    var pw = panel.offsetWidth;
+    var ph = panel.offsetHeight;
+    var top = rect.bottom + 8;
+    var left = rect.left;
+    if (top + ph > window.innerHeight - 12) top = rect.top - ph - 8;
+    if (top < 8) top = 8;
+    if (left + pw > window.innerWidth - 12) left = window.innerWidth - pw - 12;
+    if (left < 12) left = 12;
+    panel.style.top  = top  + 'px';
+    panel.style.left = left + 'px';
+    panel.style.visibility = '';
+  });
+
+  // Dismiss when clicking outside
+  _medPanelDismiss = function(ev) {
+    if (!panel.contains(ev.target)) closeMedPanel();
+  };
+  setTimeout(function() { document.addEventListener('click', _medPanelDismiss); }, 10);
 }
 
-function hideMedTooltip() {
-  _tooltipTimeout = setTimeout(function() {
-    var tt = document.getElementById('med-tooltip-active');
-    if (tt) tt.remove();
-  }, 200);
+function closeMedPanel() {
+  if (_medPanelDismiss) {
+    document.removeEventListener('click', _medPanelDismiss);
+    _medPanelDismiss = null;
+  }
+  var panel = document.getElementById('med-panel-active');
+  if (panel) panel.remove();
+  document.querySelectorAll('.med-term.active').forEach(function(el) { el.classList.remove('active'); });
+}
+
+function pronounceMedTerm(term, rate) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  var utt = new SpeechSynthesisUtterance(term);
+  utt.lang  = 'en-US';
+  utt.rate  = rate;
+  utt.pitch = 1.0;
+  window.speechSynthesis.speak(utt);
 }
 
 // =============================================
