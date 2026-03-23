@@ -3099,6 +3099,14 @@ function patchApiResult_(fn, result) {
       if (/dermoid/i.test(c.front) && /hamartoma/i.test(c.back)) {
         c.back = c.back.replace(/hamartoma/gi, 'choristoma');
       }
+      // Fix THEWATER mnemonic — should be formatted as acronym
+      if (/\bthewater\b/i.test(c.front) || (/\bthewater\b/i.test(c.back))) {
+        var fix = function(text) {
+          return text.replace(/\bthewater\b/gi, 'T-H-E-W-A-T-E-R (mnemonic for substance use history)');
+        };
+        if (/\bthewater\b/i.test(c.front)) c.front = fix(c.front);
+        if (/\bthewater\b/i.test(c.back)) c.back = fix(c.back);
+      }
     });
   }
   return result;
