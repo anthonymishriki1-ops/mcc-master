@@ -19,6 +19,52 @@ function getConfig_() {
 
 // --- Web App Entry ---
 function doGet(e) {
+  // API call via GET (used by GitHub Pages frontend to avoid CORS/redirect issues with POST)
+  if (e && e.parameter && e.parameter.apiCall) {
+    try {
+      var payload = JSON.parse(e.parameter.apiCall);
+      var fn = payload.fn;
+      var args = payload.args || [];
+      var allowed = {
+        'getCurrentUser': getCurrentUser,
+        'getSpecialties': getSpecialties,
+        'getFlashcards': getFlashcards,
+        'getBulletNotes': getBulletNotes,
+        'getMCQQuiz': getMCQQuiz,
+        'getTopicsForSpecialty': getTopicsForSpecialty,
+        'getDontMiss': getDontMiss,
+        'getGlossary': getGlossary,
+        'getImageChapters': getImageChapters,
+        'getChapterImages': getChapterImages,
+        'askDrData': askDrData,
+        'startPatientBotCase': startPatientBotCase,
+        'sendPatientBotMessage': sendPatientBotMessage,
+        'submitDiagnosis': submitDiagnosis,
+        'debriefPatientBot': debriefPatientBot,
+        'saveQuizResult': saveQuizResult,
+        'saveProgress': saveProgress,
+        'analyzeQuizResults': analyzeQuizResults,
+        'saveCardRating': saveCardRating,
+        'getUserStats': getUserStats,
+        'getUserQuizHistory': getUserQuizHistory,
+        'getLeaderboard': getLeaderboard,
+        'getDailyChallenge': getDailyChallenge,
+        'getGlossaryStatus': getGlossaryStatus,
+        'getDevStats': getDevStats
+      };
+      if (!allowed[fn]) {
+        return ContentService.createTextOutput(JSON.stringify({ error: 'Function not allowed: ' + fn }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      var result = allowed[fn].apply(null, args);
+      return ContentService.createTextOutput(JSON.stringify({ result: result }))
+        .setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({ error: err.message }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
   // Debug: list sheets
   if (e && e.parameter && e.parameter.action === 'debugSheets') {
     var config = getConfig_();

@@ -2754,12 +2754,9 @@ function serverCall(funcName) {
   var GAS_API = 'https://script.google.com/macros/s/AKfycbz6k69fs4pqcHvLP2H9S8B7abKCZ0axS9wIR5ZoMSk1vyZgJCaSN5Kxetup02QF56Pk/exec';
   var API_URL = GAS_API;
   var profile = localStorage.getItem('mcc_profile') || '';
-  return fetch(API_URL, {
-    method: 'POST',
-    redirect: 'follow',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ fn: funcName, args: args, profile: profile })
-  })
+  var payload = JSON.stringify({ fn: funcName, args: args, profile: profile });
+  var url = API_URL + '?apiCall=' + encodeURIComponent(payload);
+  return fetch(url)
   .then(function(resp) {
     if (!resp.ok) throw new Error('API error: ' + resp.status);
     return resp.json();
