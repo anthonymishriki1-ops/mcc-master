@@ -3122,12 +3122,18 @@ function init() {
   var savedProfile = localStorage.getItem('mcc_profile');
   if (!savedProfile) {
     showProfileSelect();
-    // Preload data in background while user logs in
+    // Preload everything heavy while user types their name
+    // (everything except Toronto Notes / Library books)
     serverCall('getSpecialties').then(function(specs) {
       App.specialties = specs;
       populateSpecialtyDropdowns();
     });
     loadGlossary();
+    serverCall('getUserStats').then(function(stats) { App.stats = stats; });
+    serverCall('getFlashcards', 'All').then(function(data) { App.preloadedFlashcards = data; });
+    serverCall('getBulletNotes', 'All').then(function(data) { App.bulletNotes = data; });
+    serverCall('getDontMiss', 'All').then(function(data) { App.dontMissItems = data; });
+    serverCall('getImageChapters').then(function(ch) { App.diagramChapters = ch; });
     return;
   }
 
@@ -3240,7 +3246,8 @@ function loadDashboard() {
   var el = document.getElementById('dashboard-content');
   el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
 
-  serverCall('getUserStats').then(function(stats) {
+  var statsPromise = App.stats ? Promise.resolve(App.stats) : serverCall('getUserStats');
+  statsPromise.then(function(stats) {
     App.stats = stats;
     renderDashboard(stats);
     updateSidebarLevel(stats.level);
@@ -4087,7 +4094,10 @@ function loadFlashcards(specialty) {
   App.flashcardSpecialty = specialty;
   var el = document.getElementById('flashcard-content');
   el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
-  serverCall('getFlashcards', specialty).then(function(data) {
+  // Use preloaded data if available (loaded during login screen)
+  var preloaded = (specialty === 'All' && App.preloadedFlashcards) ? Promise.resolve(App.preloadedFlashcards) : serverCall('getFlashcards', specialty);
+  preloaded.then(function(data) {
+    App.preloadedFlashcards = null; // free memory after first use
     App.flashcardsAll = data; App.flashcards = data;
     if (document.getElementById('flashcard-hy-only').checked) App.flashcards = data.filter(function(c) { return c.hyFlag; });
 
