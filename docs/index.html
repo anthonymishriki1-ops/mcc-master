@@ -225,10 +225,23 @@ body {
 
 /* --- Medical Term Tooltips --- */
 .med-term {
-  color: var(--primary);
-  border-bottom: 1px dotted var(--primary);
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.08);
+  border-radius: 3px;
+  padding: 0 2px;
   cursor: help;
   position: relative;
+  transition: background 0.15s;
+}
+.med-term:hover, .med-term:active {
+  background: rgba(37, 99, 235, 0.18);
+}
+[data-theme="dark"] .med-term {
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.12);
+}
+[data-theme="dark"] .med-term:hover, [data-theme="dark"] .med-term:active {
+  background: rgba(96, 165, 250, 0.25);
 }
 
 .med-tooltip {
@@ -1165,22 +1178,22 @@ body {
 [data-theme="dark"] .pb-dm-appearance { color: #999880; }
 
 /* Bedside monitor */
-.pb-monitor { background: #0a0a0a; border-radius: 6px; margin-bottom: 8px; overflow: hidden; border: 1px solid #333; box-shadow: 0 1px 6px rgba(0,0,0,0.3); position: relative; max-width: 480px; }
-.pb-mon-header { display: flex; justify-content: space-between; align-items: center; padding: 4px 12px; background: #1a1a1a; border-bottom: 1px solid #222; font-family: 'Courier New', Courier, monospace; font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 1px; }
+.pb-monitor { background: #0a0a0a; border-radius: 6px; margin-bottom: 8px; overflow: hidden; border: 1px solid #333; box-shadow: 0 1px 6px rgba(0,0,0,0.3); position: relative; max-width: 340px; }
+.pb-mon-header { display: flex; justify-content: space-between; align-items: center; padding: 3px 8px; background: #1a1a1a; border-bottom: 1px solid #222; font-family: 'Courier New', Courier, monospace; font-size: 9px; color: #555; text-transform: uppercase; letter-spacing: 0.8px; }
 .pb-mon-header .pb-mon-live { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #00ff41; margin-right: 6px; animation: livePulse 1.5s ease-in-out infinite; }
 @keyframes livePulse { 0%,100% { opacity: 1; box-shadow: 0 0 4px #00ff41; } 50% { opacity: 0.3; box-shadow: none; } }
 .pb-mon-title { color: #666; }
 .pb-mon-id { color: #444; }
-.pb-mon-ecg { padding: 2px 6px 0; height: 32px; overflow: hidden; border-bottom: 1px solid #1a1a1a; position: relative; }
+.pb-mon-ecg { padding: 1px 4px 0; height: 26px; overflow: hidden; border-bottom: 1px solid #1a1a1a; position: relative; }
 .pb-ecg-canvas { width: 100%; height: 100%; display: block; }
 .pb-ecg-svg { width: 100%; height: 100%; }
 .pb-ecg-line { fill: none; stroke: #00ff41; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 3px rgba(0,255,65,0.5)); animation: ecgScroll 2.5s linear infinite; }
 @keyframes ecgScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-70px); } }
 .pb-mon-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; padding: 1px; background: #1a1a1a; }
-.pb-mon-cell { padding: 4px 4px; text-align: center; font-family: 'Courier New', Courier, monospace; position: relative; }
-.pb-mon-cell-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 2px; opacity: 0.8; }
-.pb-mon-unit { opacity: 0.5; font-size: 8px; }
-.pb-mon-cell-value { font-size: 16px; font-weight: 700; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+.pb-mon-cell { padding: 3px 2px; text-align: center; font-family: 'Courier New', Courier, monospace; position: relative; }
+.pb-mon-cell-label { font-size: 8px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1px; opacity: 0.8; }
+.pb-mon-unit { opacity: 0.5; font-size: 7px; }
+.pb-mon-cell-value { font-size: 13px; font-weight: 700; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
 .pb-mon-hr { background: #0a0a0a; color: #00ff41; }
 .pb-mon-hr .pb-mon-cell-label { color: #00cc33; }
 .pb-mon-bp { background: #0a0a0a; color: #ff3333; }
@@ -2144,6 +2157,56 @@ label {
     font-size: 13px;
   }
 }
+
+/* ===== CLOCK WIDGET (desktop only) ===== */
+.clock-widget {
+  position: fixed; top: 12px; right: 16px; z-index: 900;
+  background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+  padding: 6px 14px; font-size: 14px; font-weight: 700; color: var(--text);
+  cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.08); user-select: none;
+  transition: all 0.2s;
+}
+.clock-widget:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.14); }
+.clock-expanded {
+  position: fixed; top: 12px; right: 16px; z-index: 901;
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  padding: 20px; width: 260px; box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+}
+.clock-expanded .clock-time { font-size: 36px; font-weight: 900; text-align: center; margin-bottom: 4px; }
+.clock-expanded .clock-date { font-size: 13px; color: var(--text-light); text-align: center; margin-bottom: 16px; }
+.clock-alarm-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.clock-alarm-row input { flex: 1; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 15px; font-weight: 600; }
+.clock-alarm-row button { padding: 8px 14px; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer; border: none; }
+.alarm-active-pill { display: inline-block; background: var(--primary); color: white; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+
+/* ===== DAILY QUOTE ===== */
+.daily-quote {
+  padding: 14px 18px; margin-bottom: 18px; border-radius: 12px;
+  background: linear-gradient(135deg, var(--card), var(--bg));
+  border-left: 4px solid var(--primary); font-size: 14px; line-height: 1.6;
+  color: var(--text); font-style: italic;
+}
+.daily-quote .quote-attr { font-style: normal; font-size: 12px; color: var(--text-light); margin-top: 6px; font-weight: 600; }
+
+/* ===== LATE NIGHT NUDGE ===== */
+.night-nudge {
+  position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); z-index: 9999;
+  background: linear-gradient(135deg, #1a1a2e, #16213e); color: #e0e0e0;
+  border-radius: 16px; padding: 20px 24px; max-width: 380px; width: 90%;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.4); animation: nudgeSlide 0.4s ease;
+}
+.night-nudge h4 { margin: 0 0 8px; color: #bb86fc; font-size: 15px; }
+.night-nudge p { margin: 0 0 12px; font-size: 14px; line-height: 1.6; }
+.night-nudge button { background: #bb86fc; color: #1a1a2e; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; font-size: 13px; cursor: pointer; }
+@keyframes nudgeSlide { from { opacity: 0; transform: translateX(-50%) translateY(20px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+@media (max-width: 768px) {
+  .clock-widget, .clock-expanded { display: none !important; }
+  .pb-monitor { max-width: 100%; }
+  .pb-mon-cell-value { font-size: 12px; }
+  .pb-mon-cell-label { font-size: 7px; }
+  .pb-mon-ecg { height: 22px; }
+}
 </style>
 
 </head>
@@ -2619,8 +2682,9 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '2.0';
+var APP_VERSION = '2.1';
 var APP_CHANGELOG = [
+  { version: '2.1', date: 'Mar 2026', items: ['GitHub Pages deployment (works without Netlify)', 'Screen zoom controls (+/-)', 'Medical term highlighting — tap blue words for definitions', 'Weekly AI progress report every Saturday', 'First-name login with saved progress', 'Dev mode for admin users', 'Compact PatientBot vitals monitor', 'Faster loading with background preload'] },
   { version: '2.0', date: 'Mar 2026', items: ['Duolingo-style skill map dashboard', 'Mastery tracking per specialty', 'PatientBot with MCCQE clinical presentations', 'OSCE scorecard', 'Partial credit diagnosis', 'Management actions (discharge, prescribe, refer)', 'Library ebook viewer', 'Medical term translations (Persian/Arabic)', 'Colorful action palette'] },
   { version: '1.0', date: 'Mar 2026', items: ['Initial release', 'Flashcards, Quiz, PatientBot, Daily Challenge', 'Leaderboard and achievements', 'Search and Dr. Data AI'] }
 ];
@@ -2782,7 +2846,7 @@ function serverCall(funcName) {
   // Use GAS API directly (works from any host including GitHub Pages)
   var GAS_API = 'https://script.google.com/macros/s/AKfycbz6k69fs4pqcHvLP2H9S8B7abKCZ0axS9wIR5ZoMSk1vyZgJCaSN5Kxetup02QF56Pk/exec';
   var API_URL = GAS_API;
-  var profile = localStorage.getItem('mcc_profile') || '';
+  var profile = sessionStorage.getItem('mcc_profile') || '';
   var payload = JSON.stringify({ fn: funcName, args: args, profile: profile });
   var url = API_URL + '?apiCall=' + encodeURIComponent(payload);
   return fetch(url)
@@ -2792,14 +2856,195 @@ function serverCall(funcName) {
   })
   .then(function(data) {
     if (data.error) throw new Error(data.error);
-    return data.result;
+    return patchApiResult_(funcName, data.result);
   });
 }
 
-function switchProfile() {
-  localStorage.removeItem('mcc_profile');
+// Client-side patches — no Apps Script redeploy needed
+function patchApiResult_(fn, result) {
+  if (fn === 'getMCQQuiz' && Array.isArray(result)) {
+    result = result.filter(function(q) {
+      // Reject stub questions where vignette was dropped (bare stems < 150 chars)
+      if (!q.question || q.question.length < 150) return false;
+      if (!/\d{1,3}[- ]year|patient|woman|man|girl|boy|infant|child|presents|complains/i.test(q.question)) return false;
+      return true;
+    });
+    result.forEach(function(q) {
+      // Fix Q3: CKD/naproxen — relabel to Nephrology, fix answer to acetaminophen-first
+      if (/naproxen/i.test(q.question) && /ckd|chronic kidney/i.test(q.question)) {
+        q.specialty = 'Nephrology';
+        var hasAcetOnly = false;
+        Object.keys(q.options).forEach(function(k) {
+          if (/acetaminophen/i.test(q.options[k]) && !/opioid/i.test(q.options[k])) { hasAcetOnly = true; q.correct = k; }
+        });
+        if (!hasAcetOnly) {
+          q.options.E = 'Discontinue naproxen and initiate regular acetaminophen';
+          q.correct = 'E';
+        }
+        q.rationale = 'In CKD, NSAIDs are contraindicated due to nephrotoxicity. Per Canadian pain guidelines and the WHO analgesic ladder, optimize non-opioid analgesia first \u2014 regular acetaminophen (up to 3g/day in CKD). Opioids only if non-opioid measures fail, with caution in renal impairment due to active metabolite accumulation.';
+      }
+      // Fix Q6: erythroplakia recall → clinical vignette
+      if (/erythroplakia/i.test(q.question) && /percentage/i.test(q.question)) {
+        q.question = 'A 62-year-old man presents with a persistent, painless red patch on the floor of his mouth for 3 months. He has a 40-pack-year smoking history and drinks alcohol daily. Examination reveals a 2 cm velvety, erythematous lesion. Biopsy shows severe dysplasia with focal carcinoma in situ. What is the most appropriate next step in management?';
+        q.options = { A: 'Observation with repeat biopsy in 6 months', B: 'Wide surgical excision with clear margins', C: 'Topical antifungal therapy', D: 'Laser ablation of the lesion', E: 'Referral for radiation therapy' };
+        q.correct = 'B';
+        q.rationale = 'Erythroplakia carries high malignant potential \u2014 14\u201350% harbour carcinoma in situ or invasive carcinoma at biopsy. With confirmed severe dysplasia/CIS, wide surgical excision with clear margins is standard of care. Observation risks progression to invasive SCC. Laser ablation doesn\u2019t provide margins for histological assessment.';
+      }
+      // Ensure all questions have 5 options
+      if (q.options && !q.options.E && q.options.A && q.options.B && q.options.C && q.options.D) {
+        q.options.E = /investigat|diagnos/i.test(q.question) ? 'Serum alpha-fetoprotein level' :
+                      /management|treatment/i.test(q.question) ? 'Watchful waiting with reassessment in 3 months' : 'None of the above';
+      }
+    });
+  }
+  if (fn === 'getFlashcards' && Array.isArray(result)) {
+    result.forEach(function(c) {
+      // Fix dermoid cyst: choristoma, not hamartoma
+      if (/dermoid/i.test(c.front) && /hamartoma/i.test(c.back)) {
+        c.back = c.back.replace(/hamartoma/gi, 'choristoma');
+      }
+    });
+  }
+  return result;
+}
+
+// ===== PROFILE / LOGIN =====
+var ALLOWED_NAMES = ['tony','roxanna','soroosh','amin','noha','said','sarah'];
+var DEV_USERS = ['tony'];
+
+function getGuestId() {
+  var profile = sessionStorage.getItem('mcc_profile');
+  if (profile) return 'profile_' + profile;
+  var id = localStorage.getItem('mcc_guest_id');
+  if (!id) { id = 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); localStorage.setItem('mcc_guest_id', id); }
+  return id;
+}
+
+function showProfileSelect() {
+  var content = document.getElementById('content');
+  var sidebar = document.getElementById('sidebar');
+  var bottomNav = document.getElementById('bottom-nav');
+  if (sidebar) sidebar.style.display = 'none';
+  if (bottomNav) bottomNav.style.display = 'none';
+  content.style.marginLeft = '0';
+
+  var lastName = localStorage.getItem('mcc_last_name');
+  var lastDisplay = localStorage.getItem('mcc_last_display');
+
+  var html = '<div style="max-width:400px;margin:0 auto;padding:60px 20px;text-align:center">';
+  html += '<h1 style="font-size:28px;font-weight:900;color:var(--primary);margin-bottom:8px">MCC Master</h1>';
+
+  if (lastName) {
+    var displayName = lastDisplay || (lastName.charAt(0).toUpperCase() + lastName.slice(1));
+    var isGuest = lastName.indexOf('guest_') === 0;
+    html += '<p style="color:var(--text-light);margin-bottom:32px;font-size:17px">Welcome back!</p>';
+    html += '<div style="font-size:24px;font-weight:800;color:var(--text);margin-bottom:32px">Hello ' + escapeHtml(displayName) + '</div>';
+    if (isGuest) {
+      html += '<button class="btn btn-primary" onclick="loginAsReturningGuest(\'' + escapeHtml(lastName) + '\',\'' + escapeHtml(displayName) + '\')" style="width:100%;padding:16px;font-size:17px;font-weight:700;margin-bottom:14px">Enter MCC Master</button>';
+    } else {
+      html += '<button class="btn btn-primary" onclick="loginAsProfile(\'' + escapeHtml(lastName) + '\')" style="width:100%;padding:16px;font-size:17px;font-weight:700;margin-bottom:14px">Enter MCC Master</button>';
+    }
+    html += '<button class="btn btn-outline" onclick="showNameEntry()" style="width:100%;padding:12px;font-size:14px;color:var(--text-light)">I\'m not ' + escapeHtml(displayName) + '</button>';
+  } else {
+    html += '<p style="color:var(--text-light);margin-bottom:32px;font-size:15px">Enter your first name to get started</p>';
+    html += '<input type="text" id="profile-name-input" placeholder="Your first name" autocomplete="off" style="width:100%;padding:14px 16px;font-size:16px;font-weight:600;border-radius:12px;border:2px solid var(--border);background:var(--card);color:var(--text);margin-bottom:8px;text-align:center;box-sizing:border-box" onkeydown="if(event.key===\'Enter\')confirmNameEntry()">';
+    html += '<div id="profile-name-error" style="color:var(--error);font-size:13px;margin-bottom:16px;min-height:20px"></div>';
+    html += '<button class="btn btn-primary" onclick="confirmNameEntry()" style="width:100%;padding:14px;font-size:16px;font-weight:700">Start Studying</button>';
+  }
+  html += '</div>';
+
+  document.querySelectorAll('.page').forEach(function(pg) { pg.classList.remove('active'); });
+  var profilePage = document.getElementById('profile-select-page');
+  if (!profilePage) {
+    profilePage = document.createElement('div');
+    profilePage.id = 'profile-select-page';
+    content.appendChild(profilePage);
+  }
+  profilePage.innerHTML = html;
+  profilePage.style.display = 'block';
+
+  var nameInput = document.getElementById('profile-name-input');
+  if (nameInput) setTimeout(function() { nameInput.focus(); }, 100);
+}
+
+function showNameEntry() {
   localStorage.removeItem('mcc_last_name');
+  sessionStorage.removeItem('mcc_profile');
   showProfileSelect();
+}
+
+function getNextGuestNumber() {
+  var num = parseInt(localStorage.getItem('mcc_guest_counter') || '0') + 1;
+  localStorage.setItem('mcc_guest_counter', String(num));
+  return num;
+}
+
+function loginAsGuest() {
+  var guestNum = getNextGuestNumber();
+  var guestId = 'guest_' + guestNum;
+  var displayName = 'Guest ' + guestNum;
+  sessionStorage.setItem('mcc_profile', guestId);
+  localStorage.setItem('mcc_last_name', guestId);
+  localStorage.setItem('mcc_last_display', displayName);
+  App.guestId = 'profile_' + guestId;
+  App.user = { name: displayName, email: displayName, isGuest: true };
+  afterLogin_(displayName);
+}
+
+function confirmNameEntry() {
+  var input = document.getElementById('profile-name-input');
+  var errorEl = document.getElementById('profile-name-error');
+  if (!input) return;
+  var name = input.value.trim().toLowerCase();
+  if (!name) { input.style.borderColor = 'var(--error)'; errorEl.textContent = 'Please enter your name'; return; }
+  // Anyone can log in with just their first name
+  loginAsProfile(name);
+}
+
+function loginAsReturningGuest(guestId, displayName) {
+  sessionStorage.setItem('mcc_profile', guestId);
+  App.guestId = 'profile_' + guestId;
+  App.user = { name: displayName, email: displayName, isGuest: true };
+  afterLogin_(displayName);
+}
+
+function loginAsProfile(profileId) {
+  var displayName = profileId.charAt(0).toUpperCase() + profileId.slice(1);
+  sessionStorage.setItem('mcc_profile', profileId);
+  localStorage.setItem('mcc_last_name', profileId);
+  localStorage.setItem('mcc_last_display', displayName);
+  App.guestId = 'profile_' + profileId;
+  App.user = { name: displayName, email: displayName, isGuest: true };
+  afterLogin_(displayName);
+
+  // Show tutorial on first login
+  var tutorialSeen = localStorage.getItem('mcc_tutorial_v2_' + profileId);
+  if (!tutorialSeen) {
+    setTimeout(function() { startTutorial(); }, 800);
+  }
+}
+
+function afterLogin_(displayName) {
+  var sidebar = document.getElementById('sidebar');
+  var bottomNav = document.getElementById('bottom-nav');
+  var content = document.getElementById('content');
+  if (sidebar) sidebar.style.display = '';
+  if (bottomNav) bottomNav.style.display = '';
+  content.style.marginLeft = '';
+
+  var profilePage = document.getElementById('profile-select-page');
+  if (profilePage) profilePage.remove();
+
+  document.getElementById('user-email').textContent = displayName;
+
+  // Enable dev mode for dev users
+  var profileId = sessionStorage.getItem('mcc_profile') || '';
+  if (DEV_USERS.indexOf(profileId.toLowerCase()) !== -1) {
+    var devNav = document.getElementById('nav-dev');
+    if (devNav) devNav.style.display = '';
+  }
+
+  finishInit();
 }
 
 // ===== TUTORIAL =====
@@ -2866,7 +3111,7 @@ function nextTutorialStep() {
 }
 
 function endTutorial() {
-  var profileId = localStorage.getItem('mcc_profile');
+  var profileId = sessionStorage.getItem('mcc_profile');
   if (profileId) localStorage.setItem('mcc_tutorial_v2_' + profileId, '1');
   var overlay = document.getElementById('tutorial-overlay');
   if (overlay) overlay.remove();
@@ -2874,61 +3119,91 @@ function endTutorial() {
 
 function init() {
   // Check if profile is selected
-  var savedProfile = localStorage.getItem('mcc_profile');
+  var savedProfile = sessionStorage.getItem('mcc_profile');
   if (!savedProfile) {
     showProfileSelect();
-    // Still load specialties in background
+    // Preload everything heavy while user types their name
+    // (everything except Toronto Notes / Library books)
     serverCall('getSpecialties').then(function(specs) {
       App.specialties = specs;
       populateSpecialtyDropdowns();
     });
+    loadGlossary();
+    serverCall('getUserStats').then(function(stats) { App.stats = stats; });
+    serverCall('getFlashcards', 'All').then(function(data) { App.preloadedFlashcards = data; });
+    serverCall('getBulletNotes', 'All').then(function(data) { App.bulletNotes = data; });
+    serverCall('getDontMiss', 'All').then(function(data) { App.dontMissItems = data; });
+    serverCall('getImageChapters').then(function(ch) { App.diagramChapters = ch; });
     return;
   }
 
-  // Load profile (whitelisted name or guest)
-  var isKnownName = ALLOWED_NAMES.indexOf(savedProfile) !== -1;
-  var isGuestProfile = savedProfile.indexOf('guest_') === 0;
-  if (isKnownName || isGuestProfile) {
-    var displayName = localStorage.getItem('mcc_last_display') || (savedProfile.charAt(0).toUpperCase() + savedProfile.slice(1));
-    App.guestId = 'profile_' + savedProfile;
-    App.user = { name: displayName, email: displayName, isGuest: true };
-    document.getElementById('user-email').textContent = displayName;
-  } else {
-    App.guestId = getGuestId();
-    App.user = { name: 'Guest', email: 'Guest', isGuest: true };
-    document.getElementById('user-email').textContent = 'Guest';
-  }
+  // Load profile — just use first name
+  var displayName = localStorage.getItem('mcc_last_display') || (savedProfile.charAt(0).toUpperCase() + savedProfile.slice(1));
+  App.guestId = 'profile_' + savedProfile;
+  App.user = { name: displayName, email: displayName, isGuest: true };
+  document.getElementById('user-email').textContent = displayName;
 
-  serverCall('getCurrentUser').then(function(user) {
-    if (!user.isGuest) {
-      App.user = user;
-      document.getElementById('user-email').textContent = user.email;
-    }
-    if (user.isDev) {
-      var devNav = document.getElementById('nav-dev');
-      if (devNav) devNav.style.display = '';
-    }
-  });
+  // Enable dev mode for dev users
+  if (DEV_USERS.indexOf(savedProfile.toLowerCase()) !== -1) {
+    var devNav = document.getElementById('nav-dev');
+    if (devNav) devNav.style.display = '';
+  }
 
   finishInit();
 }
 
 function finishInit() {
-  serverCall('getSpecialties').then(function(specs) {
-    App.specialties = specs;
+  // Use preloaded data if available (loaded during login screen), otherwise fetch fresh
+  if (App.specialties) {
     populateSpecialtyDropdowns();
-  });
+  } else {
+    serverCall('getSpecialties').then(function(specs) {
+      App.specialties = specs;
+      populateSpecialtyDropdowns();
+    });
+  }
 
-  // Restore language setting and load glossary
+  // Restore language setting and always load glossary for term highlighting
   var savedLang = localStorage.getItem('mcc_lang');
   if (savedLang) {
     App.glossaryLang = savedLang;
     var langSelect = document.getElementById('lang-select');
     if (langSelect) langSelect.value = savedLang;
-    loadGlossary();
+  }
+  if (!App.glossaryLang) App.glossaryLang = 'en';
+  // Only load glossary if not already loaded during login
+  if (!App.glossary || !App.glossary.length) loadGlossary();
+
+  // Check for shared flashcard link (?fc=123&spec=Cardiology)
+  var urlParams = new URLSearchParams(window.location.search);
+  var sharedCard = urlParams.get('fc');
+  if (sharedCard) {
+    App.sharedFlashcard = parseInt(sharedCard, 10);
+    App.sharedFlashcardSpec = urlParams.get('spec') || 'All';
+    // Clean URL without reload
+    window.history.replaceState({}, '', window.location.pathname);
   }
 
   loadDashboard();
+
+  // If shared flashcard link, navigate directly to that card
+  if (App.sharedFlashcard) {
+    setTimeout(function() {
+      navigateTo('flashcards');
+      // loadFlashcards will be called by navigateTo — wait for it, then jump
+      var checkReady = setInterval(function() {
+        if (App.flashcards && App.flashcards.length > 0) {
+          clearInterval(checkReady);
+          var spec = App.sharedFlashcardSpec;
+          if (spec && spec !== App.flashcardSpecialty) {
+            var dd = document.getElementById('flashcard-specialty');
+            if (dd) { dd.value = spec; loadFlashcards(spec); }
+          }
+          setTimeout(function() { jumpToCard_(App.sharedFlashcard); }, 300);
+        }
+      }, 200);
+    }, 100);
+  }
 
   var lastVersion = localStorage.getItem('mcc_last_version');
   if (lastVersion !== APP_VERSION) {
@@ -3005,13 +3280,50 @@ function loadDashboard() {
   var el = document.getElementById('dashboard-content');
   el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
 
-  serverCall('getUserStats').then(function(stats) {
+  var statsPromise = App.stats ? Promise.resolve(App.stats) : serverCall('getUserStats');
+  statsPromise.then(function(stats) {
     App.stats = stats;
     renderDashboard(stats);
     updateSidebarLevel(stats.level);
+    // Check for weekly report on Saturdays
+    checkWeeklyReport_(stats);
   }).catch(function(e) {
     el.innerHTML = '<div class="card"><p>Error loading dashboard: ' + escapeHtml(e.message || String(e)) + '</p></div>';
   });
+}
+
+function checkWeeklyReport_(stats) {
+  var today = new Date();
+  if (today.getDay() !== 6) return; // Saturday only
+  var weekKey = 'mcc_weekly_' + today.toISOString().slice(0, 10);
+  if (localStorage.getItem(weekKey)) return; // Already shown today
+
+  // Build a summary prompt from stats
+  var weakText = (stats.weakAreas || []).map(function(w) { return w.specialty + ' (' + w.avgScore + '%)'; }).join(', ') || 'No data';
+  var prompt = 'Generate a brief weekly progress report for an MCCQE Part I student.\n\n' +
+    'Stats this period:\n' +
+    '- Quizzes completed: ' + (stats.totalQuizzes || 0) + ', avg score: ' + (stats.avgScore || 0) + '%\n' +
+    '- PatientBot cases: ' + (stats.pbTotal || 0) + ' (' + (stats.pbCorrect || 0) + ' correct)\n' +
+    '- Flashcards reviewed: ' + (stats.totalCardsReviewed || 0) + '\n' +
+    '- Daily challenges: ' + (stats.dailyChallengesCompleted || 0) + '\n' +
+    '- Current streak: ' + (stats.streak || 0) + ' days\n' +
+    '- Weak areas: ' + weakText + '\n' +
+    '- Level: ' + (stats.level ? stats.level.name : 'Unknown') + ' (' + (stats.totalPoints || 0) + ' XP)\n\n' +
+    'Write 3-4 sentences: acknowledge what they did well, identify 1-2 specific areas to focus on next week, and give one concrete study tip. Be encouraging but honest. Keep it under 100 words.';
+
+  serverCall('askDrData', prompt, []).then(function(result) {
+    if (!result || !result.response) return;
+    localStorage.setItem(weekKey, '1');
+    var banner = document.createElement('div');
+    banner.id = 'weekly-report';
+    banner.style.cssText = 'background:linear-gradient(135deg,#1a237e,#283593);color:white;border-radius:12px;padding:20px;margin-bottom:20px;position:relative';
+    banner.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:flex-start">' +
+      '<div><div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;opacity:0.8;margin-bottom:8px">Weekly Progress Report</div>' +
+      '<p style="font-size:14px;line-height:1.7;margin:0;opacity:0.95">' + escapeHtml(result.response) + '</p></div>' +
+      '<button onclick="this.parentElement.parentElement.remove()" style="background:none;border:none;color:white;font-size:18px;cursor:pointer;opacity:0.6;padding:0 0 0 12px">&#x2715;</button></div>';
+    var dashContent = document.getElementById('dashboard-content');
+    if (dashContent) dashContent.insertBefore(banner, dashContent.firstChild);
+  }).catch(function() {});
 }
 
 function updateSidebarLevel(level) {
@@ -3784,7 +4096,8 @@ function renderDevPanel(stats) {
 // =============================================
 
 function getFlashcardProgressKey_(specialty) {
-  return 'mcc_fc_progress_' + (specialty || 'All');
+  var profile = sessionStorage.getItem('mcc_profile') || 'default';
+  return 'mcc_fc_progress_' + profile + '_' + (specialty || 'All');
 }
 
 function saveFlashcardProgress_() {
@@ -3816,7 +4129,10 @@ function loadFlashcards(specialty) {
   App.flashcardSpecialty = specialty;
   var el = document.getElementById('flashcard-content');
   el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
-  serverCall('getFlashcards', specialty).then(function(data) {
+  // Use preloaded data if available (loaded during login screen)
+  var preloaded = (specialty === 'All' && App.preloadedFlashcards) ? Promise.resolve(App.preloadedFlashcards) : serverCall('getFlashcards', specialty);
+  preloaded.then(function(data) {
+    App.preloadedFlashcards = null; // free memory after first use
     App.flashcardsAll = data; App.flashcards = data;
     if (document.getElementById('flashcard-hy-only').checked) App.flashcards = data.filter(function(c) { return c.hyFlag; });
 
@@ -3910,14 +4226,21 @@ function renderFlashcard() {
     html += '</div>';
   }
 
-  // Card counter + back button + skip to
+  // Card counter + back button + jump to card + share
   html += '<div class="flashcard-meta">';
   if (App.flashcardIndex > 0) {
     html += '<button class="btn btn-outline" onclick="prevFlashcard()" style="padding:10px 20px;font-size:15px;margin-right:12px;font-weight:700">&#x2190; Back</button>';
   }
-  html += '<span style="cursor:pointer" onclick="skipToFlashcard()" title="Click to skip to a card number">' + current + ' / ' + total + '</span>';
+  html += '<span style="cursor:pointer" onclick="var r=document.getElementById(\'fc-jump-row\');r.style.display=r.style.display===\'none\'?\'flex\':\'none\'" title="Click to jump to a card">' + current + ' / ' + total + '</span>';
+  html += ' <button onclick="shareFlashcardPosition()" style="background:none;border:none;cursor:pointer;font-size:14px;vertical-align:middle;opacity:0.6" title="Copy link to this card">&#x1F517;</button>';
   if (card.hyFlag) html += ' <span class="hy-badge">&#x2B50; Important</span>';
   html += '<br><span>' + escapeHtml(card.specialty) + ' &mdash; ' + escapeHtml(card.topic) + '</span></div>';
+  // Jump-to-card row (hidden by default, shown on click)
+  html += '<div id="fc-jump-row" style="display:none;margin-bottom:12px;gap:8px;align-items:center;justify-content:center">';
+  html += '<span style="font-size:13px;font-weight:600">Jump to card:</span>';
+  html += '<input type="number" id="fc-jump-input" min="1" max="' + total + '" value="' + current + '" style="width:80px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:14px;font-weight:600;text-align:center" onkeydown="if(event.key===\'Enter\')jumpToFlashcard()">';
+  html += '<button class="btn btn-primary" onclick="jumpToFlashcard()" style="padding:6px 14px;font-size:13px">Go</button>';
+  html += '</div>';
   html += '<div class="progress-bar" style="margin-bottom:20px"><div class="progress-fill" style="width:' + ((current / total) * 100) + '%"></div></div>';
   html += '<div class="flashcard-container"><div class="flashcard' + (App.flashcardFlipped ? ' flipped' : '') + '" onclick="flipFlashcard()">';
   html += '<div class="flashcard-front"><div>' + medHtml(card.front) + '</div></div>';
@@ -3972,13 +4295,47 @@ function skipToFlashcard() {
   var total = App.flashcards.length;
   var input = prompt('Skip to card number (1-' + total + '):', (App.flashcardIndex + 1));
   if (input === null) return;
-  var num = parseInt(input, 10);
-  if (isNaN(num) || num < 1 || num > total) { alert('Please enter a number between 1 and ' + total); return; }
+  jumpToCard_(parseInt(input, 10));
+}
+
+function jumpToFlashcard() {
+  var input = document.getElementById('fc-jump-input');
+  if (!input) return;
+  jumpToCard_(parseInt(input.value, 10));
+}
+
+function jumpToCard_(num) {
+  var total = App.flashcards.length;
+  if (isNaN(num) || num < 1 || num > total) { alert('Enter a number between 1 and ' + total); return; }
   App.flashcardIndex = num - 1;
   App.flashcardFlipped = false;
   App.flashcardResumed = false;
   saveFlashcardProgress_();
   renderFlashcard();
+}
+
+function shareFlashcardPosition() {
+  var card = App.flashcardIndex + 1;
+  var spec = App.flashcardSpecialty || 'All';
+  var url = window.location.origin + window.location.pathname + '?fc=' + card + '&spec=' + encodeURIComponent(spec);
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(function() {
+      showToast_('Link copied! Card #' + card + ' — share with your study group');
+    });
+  } else {
+    prompt('Copy this link to share card #' + card + ':', url);
+  }
+}
+
+function showToast_(msg) {
+  var existing = document.getElementById('mcc-toast');
+  if (existing) existing.remove();
+  var toast = document.createElement('div');
+  toast.id = 'mcc-toast';
+  toast.style.cssText = 'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#333;color:white;padding:12px 24px;border-radius:12px;font-size:14px;font-weight:600;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.3);animation:nudgeSlide 0.3s ease';
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  setTimeout(function() { if (toast.parentNode) toast.remove(); }, 3000);
 }
 
 function flipFlashcard() { App.flashcardFlipped = !App.flashcardFlipped; renderFlashcard(); }
@@ -4036,7 +4393,13 @@ function nextFlashcard() { if (App.flashcardIndex < App.flashcards.length - 1) {
 function loadBulletNotes(specialty) {
   var el = document.getElementById('notes-content');
   el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
-  serverCall('getBulletNotes', specialty || 'All').then(function(data) { App.bulletNotes = data; renderBulletNotes(); })
+  // Use preloaded notes if available and requesting All
+  var spec = specialty || 'All';
+  if (spec === 'All' && App.bulletNotes && App.bulletNotes.length > 0) {
+    renderBulletNotes();
+    return;
+  }
+  serverCall('getBulletNotes', spec).then(function(data) { App.bulletNotes = data; renderBulletNotes(); })
     .catch(function(e) { el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>'; });
 }
 
@@ -4076,7 +4439,7 @@ function renderBulletNotes(filterText) {
     html += '</div>';
 
     // Topics within specialty
-    html += '<div class="notes-list" style="display:none;padding:0 20px 16px;border-top:1px solid var(--border)">';
+    html += '<div class="notes-list" style="padding:0 20px 16px;border-top:1px solid var(--border)">';
     for (var ti = 0; ti < topicKeys.length; ti++) {
       var topic = topicKeys[ti];
       var items = topics[topic];
@@ -4295,6 +4658,7 @@ function showQuizResults(score, total, percentage, points) {
   html += '<div class="score-big" style="color:' + color + '">' + percentage + '%</div>';
   html += '<p style="font-size:18px;color:var(--text-light)">' + score + ' correct out of ' + total + '</p>';
   html += '<p style="margin-top:4px;font-weight:700;color:' + passColor + '">' + passText + ' (pass: 73%)</p>';
+  html += '<p style="font-size:11px;color:var(--text-light);margin-top:2px">Pass threshold set above the estimated ~70% MCCQE cut score to push you harder.</p>';
   html += '<p style="color:var(--accent);font-weight:700;margin-top:8px">+' + points + ' XP</p>';
   html += '</div>';
 
@@ -4432,7 +4796,12 @@ function loadQuizHistory() {
 function loadDontMiss(specialty) {
   var el = document.getElementById('dontmiss-content');
   el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
-  serverCall('getDontMiss', specialty || 'All').then(function(data) { App.dontMissItems = data; renderDontMiss(); })
+  var spec = specialty || 'All';
+  if (spec === 'All' && App.dontMissItems && App.dontMissItems.length > 0) {
+    renderDontMiss();
+    return;
+  }
+  serverCall('getDontMiss', spec).then(function(data) { App.dontMissItems = data; renderDontMiss(); })
     .catch(function(e) { el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>'; });
 }
 
@@ -4691,6 +5060,10 @@ function renderDrDataChat() {
 
 function loadDiagramChapters() {
   var el = document.getElementById('diagrams-content');
+  if (App.diagramChapters && App.diagramChapters.length > 0) {
+    renderDiagramChapters();
+    return;
+  }
   el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
   serverCall('getImageChapters').then(function(chapters) { App.diagramChapters = chapters; renderDiagramChapters(); })
     .catch(function(e) { el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>'; });
@@ -4821,7 +5194,7 @@ function showPatientBotSetup() {
   App.pbCaseId = null; App.pbHistory = []; App.pbCurrentCase = 0; App.pbCaseScores = [];
 
   // Show tutorial on first visit
-  var profileId = localStorage.getItem('mcc_profile') || 'default';
+  var profileId = sessionStorage.getItem('mcc_profile') || 'default';
   var tutKey = 'mcc_pb_tutorial_' + profileId;
   if (!localStorage.getItem(tutKey)) {
     localStorage.setItem(tutKey, '1');
@@ -6022,7 +6395,7 @@ function loadGlossary() {
 }
 
 function highlightMedTerms(html) {
-  if (!App.glossary || !App.glossaryRegex || !App.glossaryLang) return html;
+  if (!App.glossary || !App.glossaryRegex) return html;
   return html.replace(App.glossaryRegex, function(match) {
     var entry = App.glossary[match.toLowerCase()];
     if (!entry) return match;
@@ -6047,7 +6420,7 @@ function showMedTooltip(e) {
 
   var catLabel = entry.Category || entry.category || '';
   var def = entry.Definition || entry.definition || '';
-  var translation = entry[lang] || entry.translation || entry.fa || '';
+  var translation = (lang && lang !== 'en') ? (entry[lang] || entry.translation || '') : '';
 
   var inner = '<div class="med-tooltip-term">' + escapeHtml(entry.Term || entry.term || termKey);
   if (catLabel) inner += '<span class="med-tooltip-cat">' + escapeHtml(catLabel) + '</span>';
@@ -6058,14 +6431,15 @@ function showMedTooltip(e) {
 
   document.body.appendChild(tooltip);
 
-  // Position near the term
+  // Position above the term
   var rect = e.target.getBoundingClientRect();
   var ttRect = tooltip.getBoundingClientRect();
-  var top = rect.bottom + 8;
+  var top = rect.top - ttRect.height - 8;
   var left = rect.left;
 
-  // Keep on screen
-  if (top + ttRect.height > window.innerHeight) top = rect.top - ttRect.height - 8;
+  // If no room above, show below
+  if (top < 8) top = rect.bottom + 8;
+  // Keep on screen horizontally
   if (left + ttRect.width > window.innerWidth) left = window.innerWidth - ttRect.width - 12;
   if (left < 12) left = 12;
 
@@ -6195,6 +6569,214 @@ document.addEventListener('keydown', function(e) {
     }
   }
 });
+
+// =============================================
+// DESKTOP CLOCK + ALARM (desktop only)
+// =============================================
+(function() {
+  if (window.innerWidth < 769) return; // mobile skip
+
+  var clockEl = document.createElement('div');
+  clockEl.className = 'clock-widget';
+  clockEl.id = 'clock-widget';
+  document.body.appendChild(clockEl);
+
+  var clockExpanded = false;
+  var alarmTime = null;
+  var alarmFired = false;
+  var alarmAudio = null;
+
+  function pad(n) { return n < 10 ? '0' + n : n; }
+
+  function updateClock() {
+    var now = new Date();
+    var h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    var h12 = h % 12 || 12;
+
+    if (!clockExpanded) {
+      clockEl.innerHTML = pad(h12) + ':' + pad(m) + ' ' + ampm;
+    } else {
+      var dateStr = now.toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' });
+      var html = '<div class="clock-time">' + pad(h12) + ':' + pad(m) + '<span style="font-size:16px;opacity:0.5">:' + pad(s) + ' ' + ampm + '</span></div>';
+      html += '<div class="clock-date">' + dateStr + '</div>';
+      html += '<div style="font-size:12px;font-weight:700;color:var(--text-light);margin-bottom:6px">SET ALARM</div>';
+      html += '<div class="clock-alarm-row">';
+      html += '<input type="time" id="alarm-time-input" value="' + (alarmTime || '') + '">';
+      html += '<button style="background:var(--primary);color:white" onclick="setClockAlarm()">Set</button>';
+      if (alarmTime) html += '<button style="background:var(--error);color:white" onclick="clearClockAlarm()">Clear</button>';
+      html += '</div>';
+      if (alarmTime) {
+        html += '<div style="margin-top:4px"><span class="alarm-active-pill">Alarm: ' + alarmTime + '</span></div>';
+      }
+      html += '<div style="text-align:right;margin-top:8px"><button onclick="collapseClockWidget()" style="background:none;border:none;color:var(--text-light);cursor:pointer;font-size:12px">Close</button></div>';
+      clockEl.innerHTML = html;
+      clockEl.className = 'clock-expanded';
+    }
+
+    // Check alarm
+    if (alarmTime && !alarmFired) {
+      var alarmStr = pad(h) + ':' + pad(m);
+      if (alarmStr === alarmTime) {
+        alarmFired = true;
+        fireAlarm_();
+      }
+    }
+  }
+
+  window.setClockAlarm = function() {
+    var input = document.getElementById('alarm-time-input');
+    if (input && input.value) {
+      alarmTime = input.value;
+      alarmFired = false;
+      localStorage.setItem('mcc_alarm', alarmTime);
+    }
+  };
+
+  window.clearClockAlarm = function() {
+    alarmTime = null;
+    alarmFired = false;
+    localStorage.removeItem('mcc_alarm');
+    if (alarmAudio) { alarmAudio.pause(); alarmAudio = null; }
+    var banner = document.getElementById('alarm-banner');
+    if (banner) banner.remove();
+  };
+
+  window.collapseClockWidget = function() {
+    clockExpanded = false;
+    clockEl.className = 'clock-widget';
+  };
+
+  function fireAlarm_() {
+    // Beep using Web Audio
+    try {
+      var ctx = new (window.AudioContext || window.webkitAudioContext)();
+      function beep() {
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.frequency.value = 880; osc.type = 'sine';
+        gain.gain.value = 0.3;
+        osc.start(); osc.stop(ctx.currentTime + 0.15);
+      }
+      beep(); setTimeout(beep, 300); setTimeout(beep, 600);
+    } catch(e) {}
+
+    var banner = document.createElement('div');
+    banner.id = 'alarm-banner';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:var(--primary);color:white;text-align:center;padding:14px;font-weight:700;font-size:15px;box-shadow:0 4px 16px rgba(0,0,0,0.2)';
+    banner.innerHTML = 'Alarm! Time to take a break or wrap up. <button onclick="clearClockAlarm()" style="background:white;color:var(--primary);border:none;padding:6px 16px;border-radius:8px;font-weight:700;margin-left:12px;cursor:pointer">Dismiss</button>';
+    document.body.appendChild(banner);
+  }
+
+  clockEl.addEventListener('click', function(e) {
+    if (!clockExpanded && e.target === clockEl) {
+      clockExpanded = true;
+      updateClock();
+    }
+  });
+
+  // Restore saved alarm
+  var savedAlarm = localStorage.getItem('mcc_alarm');
+  if (savedAlarm) { alarmTime = savedAlarm; alarmFired = false; }
+
+  setInterval(updateClock, 1000);
+  updateClock();
+})();
+
+// =============================================
+// LATE-NIGHT STUDY NUDGE (11pm - 4am, at 3h/4h/6h)
+// =============================================
+(function() {
+  var SESSION_KEY = 'mcc_session_start';
+  var NUDGE_KEY = 'mcc_nudge_shown';
+
+  // Record session start
+  if (!sessionStorage.getItem(SESSION_KEY)) {
+    sessionStorage.setItem(SESSION_KEY, Date.now().toString());
+    sessionStorage.setItem(NUDGE_KEY, '');
+  }
+
+  function isLateNight() {
+    var h = new Date().getHours();
+    return h >= 23 || h < 4;
+  }
+
+  function getSessionHours() {
+    var start = parseInt(sessionStorage.getItem(SESSION_KEY) || Date.now());
+    return (Date.now() - start) / (1000 * 60 * 60);
+  }
+
+  function nudgeAlreadyShown(tier) {
+    var shown = sessionStorage.getItem(NUDGE_KEY) || '';
+    return shown.indexOf(tier) !== -1;
+  }
+
+  function markNudgeShown(tier) {
+    var shown = sessionStorage.getItem(NUDGE_KEY) || '';
+    sessionStorage.setItem(NUDGE_KEY, shown + ',' + tier);
+  }
+
+  function showNudge(hours) {
+    var tier = String(hours);
+    if (nudgeAlreadyShown(tier)) return;
+    markNudgeShown(tier);
+
+    var msgs = {
+      3: { title: 'Three hours in...', fallback: 'You\'ve been at this for 3 hours straight. Your brain called — it wants a water break and maybe a snack. You\'ve earned it.' },
+      4: { title: 'Four hours. Really.', fallback: 'Okay champion, 4 hours deep at ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) + '. Your cortisol is writing you a strongly worded letter. Maybe call it a night?' },
+      6: { title: 'You absolute legend.', fallback: 'SIX HOURS. At this hour. Your future patients would not approve of this sleep hygiene. Save your progress, close the laptop, and go to bed. Doctor\'s orders (from your future self).' }
+    };
+    var msg = msgs[hours] || msgs[3];
+
+    // Try to get a witty AI summary of what they did
+    var profileId = sessionStorage.getItem('mcc_profile') || '';
+    serverCall('getUserStats').then(function(stats) {
+      var prompt = 'A medical student has been studying on MCC Master for ' + hours + ' hours straight and it\'s ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) + ' at night. ' +
+        'Today they did: ' + (stats.totalQuizzes || 0) + ' quizzes (avg ' + (stats.avgScore || 0) + '%), ' + (stats.totalCardsReviewed || 0) + ' flashcards, ' + (stats.pbTotal || 0) + ' patient cases. ' +
+        'Write a 2-3 sentence late-night nudge telling them to go to sleep. Be genuinely funny — think tired-resident humor, not corporate wellness. ' +
+        'Acknowledge what they accomplished today to make them feel good, then roast them lovingly for still being awake. Keep it under 60 words.';
+      return serverCall('askDrData', prompt, []);
+    }).then(function(result) {
+      if (result && result.response) {
+        renderNudge_(msg.title, result.response, hours);
+      } else {
+        renderNudge_(msg.title, msg.fallback, hours);
+      }
+    }).catch(function() {
+      renderNudge_(msg.title, msg.fallback, hours);
+    });
+  }
+
+  function renderNudge_(title, text, hours) {
+    var existing = document.getElementById('night-nudge');
+    if (existing) existing.remove();
+
+    var nudge = document.createElement('div');
+    nudge.id = 'night-nudge';
+    nudge.className = 'night-nudge';
+    var emoji = hours >= 6 ? '&#x1F634;' : hours >= 4 ? '&#x1F62B;' : '&#x1F319;';
+    nudge.innerHTML = '<h4>' + emoji + ' ' + title + '</h4>' +
+      '<p>' + escapeHtml(text) + '</p>' +
+      '<div style="display:flex;gap:8px">' +
+      '<button onclick="this.closest(\'.night-nudge\').remove()">5 more minutes...</button>' +
+      '<button onclick="this.closest(\'.night-nudge\').remove()" style="background:rgba(255,255,255,0.15);color:#e0e0e0">Got it, going to bed</button>' +
+      '</div>';
+    document.body.appendChild(nudge);
+
+    // Auto-dismiss after 30s
+    setTimeout(function() { if (nudge.parentNode) nudge.remove(); }, 30000);
+  }
+
+  // Check every 60 seconds
+  setInterval(function() {
+    if (!isLateNight()) return;
+    var hrs = getSessionHours();
+    if (hrs >= 6) showNudge(6);
+    else if (hrs >= 4) showNudge(4);
+    else if (hrs >= 3) showNudge(3);
+  }, 60000);
+})();
 
 // =============================================
 // INIT ON LOAD
