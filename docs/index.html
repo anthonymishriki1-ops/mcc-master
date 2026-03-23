@@ -2809,10 +2809,143 @@ function serverCall(funcName) {
   });
 }
 
-function switchProfile() {
-  localStorage.removeItem('mcc_profile');
+// ===== PROFILE / LOGIN =====
+var ALLOWED_NAMES = ['tony','roxanna','soroosh','amin','noha','said','sarah'];
+var DEV_USERS = ['tony'];
+
+function getGuestId() {
+  var profile = localStorage.getItem('mcc_profile');
+  if (profile) return 'profile_' + profile;
+  var id = localStorage.getItem('mcc_guest_id');
+  if (!id) { id = 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); localStorage.setItem('mcc_guest_id', id); }
+  return id;
+}
+
+function showProfileSelect() {
+  var content = document.getElementById('content');
+  var sidebar = document.getElementById('sidebar');
+  var bottomNav = document.getElementById('bottom-nav');
+  if (sidebar) sidebar.style.display = 'none';
+  if (bottomNav) bottomNav.style.display = 'none';
+  content.style.marginLeft = '0';
+
+  var lastName = localStorage.getItem('mcc_last_name');
+  var lastDisplay = localStorage.getItem('mcc_last_display');
+
+  var html = '<div style="max-width:400px;margin:0 auto;padding:60px 20px;text-align:center">';
+  html += '<h1 style="font-size:28px;font-weight:900;color:var(--primary);margin-bottom:8px">MCC Master</h1>';
+
+  if (lastName) {
+    var displayName = lastDisplay || (lastName.charAt(0).toUpperCase() + lastName.slice(1));
+    var isGuest = lastName.indexOf('guest_') === 0;
+    html += '<p style="color:var(--text-light);margin-bottom:32px;font-size:17px">Welcome back!</p>';
+    html += '<div style="font-size:24px;font-weight:800;color:var(--text);margin-bottom:32px">Hello ' + escapeHtml(displayName) + '</div>';
+    if (isGuest) {
+      html += '<button class="btn btn-primary" onclick="loginAsReturningGuest(\'' + escapeHtml(lastName) + '\',\'' + escapeHtml(displayName) + '\')" style="width:100%;padding:16px;font-size:17px;font-weight:700;margin-bottom:14px">Enter MCC Master</button>';
+    } else {
+      html += '<button class="btn btn-primary" onclick="loginAsProfile(\'' + escapeHtml(lastName) + '\')" style="width:100%;padding:16px;font-size:17px;font-weight:700;margin-bottom:14px">Enter MCC Master</button>';
+    }
+    html += '<button class="btn btn-outline" onclick="showNameEntry()" style="width:100%;padding:12px;font-size:14px;color:var(--text-light)">I\'m not ' + escapeHtml(displayName) + '</button>';
+  } else {
+    html += '<p style="color:var(--text-light);margin-bottom:32px;font-size:15px">Enter your first name to get started</p>';
+    html += '<input type="text" id="profile-name-input" placeholder="Your first name" autocomplete="off" style="width:100%;padding:14px 16px;font-size:16px;font-weight:600;border-radius:12px;border:2px solid var(--border);background:var(--card);color:var(--text);margin-bottom:8px;text-align:center;box-sizing:border-box" onkeydown="if(event.key===\'Enter\')confirmNameEntry()">';
+    html += '<div id="profile-name-error" style="color:var(--error);font-size:13px;margin-bottom:16px;min-height:20px"></div>';
+    html += '<button class="btn btn-primary" onclick="confirmNameEntry()" style="width:100%;padding:14px;font-size:16px;font-weight:700">Start Studying</button>';
+  }
+  html += '</div>';
+
+  document.querySelectorAll('.page').forEach(function(pg) { pg.classList.remove('active'); });
+  var profilePage = document.getElementById('profile-select-page');
+  if (!profilePage) {
+    profilePage = document.createElement('div');
+    profilePage.id = 'profile-select-page';
+    content.appendChild(profilePage);
+  }
+  profilePage.innerHTML = html;
+  profilePage.style.display = 'block';
+
+  var nameInput = document.getElementById('profile-name-input');
+  if (nameInput) setTimeout(function() { nameInput.focus(); }, 100);
+}
+
+function showNameEntry() {
   localStorage.removeItem('mcc_last_name');
+  localStorage.removeItem('mcc_profile');
   showProfileSelect();
+}
+
+function getNextGuestNumber() {
+  var num = parseInt(localStorage.getItem('mcc_guest_counter') || '0') + 1;
+  localStorage.setItem('mcc_guest_counter', String(num));
+  return num;
+}
+
+function loginAsGuest() {
+  var guestNum = getNextGuestNumber();
+  var guestId = 'guest_' + guestNum;
+  var displayName = 'Guest ' + guestNum;
+  localStorage.setItem('mcc_profile', guestId);
+  localStorage.setItem('mcc_last_name', guestId);
+  localStorage.setItem('mcc_last_display', displayName);
+  App.guestId = 'profile_' + guestId;
+  App.user = { name: displayName, email: displayName, isGuest: true };
+  afterLogin_(displayName);
+}
+
+function confirmNameEntry() {
+  var input = document.getElementById('profile-name-input');
+  var errorEl = document.getElementById('profile-name-error');
+  if (!input) return;
+  var name = input.value.trim().toLowerCase();
+  if (!name) { input.style.borderColor = 'var(--error)'; errorEl.textContent = 'Please enter your name'; return; }
+  // Anyone can log in with just their first name
+  loginAsProfile(name);
+}
+
+function loginAsReturningGuest(guestId, displayName) {
+  localStorage.setItem('mcc_profile', guestId);
+  App.guestId = 'profile_' + guestId;
+  App.user = { name: displayName, email: displayName, isGuest: true };
+  afterLogin_(displayName);
+}
+
+function loginAsProfile(profileId) {
+  var displayName = profileId.charAt(0).toUpperCase() + profileId.slice(1);
+  localStorage.setItem('mcc_profile', profileId);
+  localStorage.setItem('mcc_last_name', profileId);
+  localStorage.setItem('mcc_last_display', displayName);
+  App.guestId = 'profile_' + profileId;
+  App.user = { name: displayName, email: displayName, isGuest: true };
+  afterLogin_(displayName);
+
+  // Show tutorial on first login
+  var tutorialSeen = localStorage.getItem('mcc_tutorial_v2_' + profileId);
+  if (!tutorialSeen) {
+    setTimeout(function() { startTutorial(); }, 800);
+  }
+}
+
+function afterLogin_(displayName) {
+  var sidebar = document.getElementById('sidebar');
+  var bottomNav = document.getElementById('bottom-nav');
+  var content = document.getElementById('content');
+  if (sidebar) sidebar.style.display = '';
+  if (bottomNav) bottomNav.style.display = '';
+  content.style.marginLeft = '';
+
+  var profilePage = document.getElementById('profile-select-page');
+  if (profilePage) profilePage.remove();
+
+  document.getElementById('user-email').textContent = displayName;
+
+  // Enable dev mode for dev users
+  var profileId = localStorage.getItem('mcc_profile') || '';
+  if (DEV_USERS.indexOf(profileId.toLowerCase()) !== -1) {
+    var devNav = document.getElementById('nav-dev');
+    if (devNav) devNav.style.display = '';
+  }
+
+  finishInit();
 }
 
 // ===== TUTORIAL =====
@@ -2890,38 +3023,26 @@ function init() {
   var savedProfile = localStorage.getItem('mcc_profile');
   if (!savedProfile) {
     showProfileSelect();
-    // Still load specialties in background
+    // Preload data in background while user logs in
     serverCall('getSpecialties').then(function(specs) {
       App.specialties = specs;
       populateSpecialtyDropdowns();
     });
+    loadGlossary();
     return;
   }
 
-  // Load profile (whitelisted name or guest)
-  var isKnownName = ALLOWED_NAMES.indexOf(savedProfile) !== -1;
-  var isGuestProfile = savedProfile.indexOf('guest_') === 0;
-  if (isKnownName || isGuestProfile) {
-    var displayName = localStorage.getItem('mcc_last_display') || (savedProfile.charAt(0).toUpperCase() + savedProfile.slice(1));
-    App.guestId = 'profile_' + savedProfile;
-    App.user = { name: displayName, email: displayName, isGuest: true };
-    document.getElementById('user-email').textContent = displayName;
-  } else {
-    App.guestId = getGuestId();
-    App.user = { name: 'Guest', email: 'Guest', isGuest: true };
-    document.getElementById('user-email').textContent = 'Guest';
-  }
+  // Load profile — just use first name
+  var displayName = localStorage.getItem('mcc_last_display') || (savedProfile.charAt(0).toUpperCase() + savedProfile.slice(1));
+  App.guestId = 'profile_' + savedProfile;
+  App.user = { name: displayName, email: displayName, isGuest: true };
+  document.getElementById('user-email').textContent = displayName;
 
-  serverCall('getCurrentUser').then(function(user) {
-    if (!user.isGuest) {
-      App.user = user;
-      document.getElementById('user-email').textContent = user.email;
-    }
-    if (user.isDev) {
-      var devNav = document.getElementById('nav-dev');
-      if (devNav) devNav.style.display = '';
-    }
-  });
+  // Enable dev mode for dev users
+  if (DEV_USERS.indexOf(savedProfile.toLowerCase()) !== -1) {
+    var devNav = document.getElementById('nav-dev');
+    if (devNav) devNav.style.display = '';
+  }
 
   finishInit();
 }
@@ -3024,9 +3145,45 @@ function loadDashboard() {
     App.stats = stats;
     renderDashboard(stats);
     updateSidebarLevel(stats.level);
+    // Check for weekly report on Saturdays
+    checkWeeklyReport_(stats);
   }).catch(function(e) {
     el.innerHTML = '<div class="card"><p>Error loading dashboard: ' + escapeHtml(e.message || String(e)) + '</p></div>';
   });
+}
+
+function checkWeeklyReport_(stats) {
+  var today = new Date();
+  if (today.getDay() !== 6) return; // Saturday only
+  var weekKey = 'mcc_weekly_' + today.toISOString().slice(0, 10);
+  if (localStorage.getItem(weekKey)) return; // Already shown today
+
+  // Build a summary prompt from stats
+  var weakText = (stats.weakAreas || []).map(function(w) { return w.specialty + ' (' + w.avgScore + '%)'; }).join(', ') || 'No data';
+  var prompt = 'Generate a brief weekly progress report for an MCCQE Part I student.\n\n' +
+    'Stats this period:\n' +
+    '- Quizzes completed: ' + (stats.totalQuizzes || 0) + ', avg score: ' + (stats.avgScore || 0) + '%\n' +
+    '- PatientBot cases: ' + (stats.pbTotal || 0) + ' (' + (stats.pbCorrect || 0) + ' correct)\n' +
+    '- Flashcards reviewed: ' + (stats.totalCardsReviewed || 0) + '\n' +
+    '- Daily challenges: ' + (stats.dailyChallengesCompleted || 0) + '\n' +
+    '- Current streak: ' + (stats.streak || 0) + ' days\n' +
+    '- Weak areas: ' + weakText + '\n' +
+    '- Level: ' + (stats.level ? stats.level.name : 'Unknown') + ' (' + (stats.totalPoints || 0) + ' XP)\n\n' +
+    'Write 3-4 sentences: acknowledge what they did well, identify 1-2 specific areas to focus on next week, and give one concrete study tip. Be encouraging but honest. Keep it under 100 words.';
+
+  serverCall('askDrData', prompt, []).then(function(result) {
+    if (!result || !result.response) return;
+    localStorage.setItem(weekKey, '1');
+    var banner = document.createElement('div');
+    banner.id = 'weekly-report';
+    banner.style.cssText = 'background:linear-gradient(135deg,#1a237e,#283593);color:white;border-radius:12px;padding:20px;margin-bottom:20px;position:relative';
+    banner.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:flex-start">' +
+      '<div><div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;opacity:0.8;margin-bottom:8px">Weekly Progress Report</div>' +
+      '<p style="font-size:14px;line-height:1.7;margin:0;opacity:0.95">' + escapeHtml(result.response) + '</p></div>' +
+      '<button onclick="this.parentElement.parentElement.remove()" style="background:none;border:none;color:white;font-size:18px;cursor:pointer;opacity:0.6;padding:0 0 0 12px">&#x2715;</button></div>';
+    var dashContent = document.getElementById('dashboard-content');
+    if (dashContent) dashContent.insertBefore(banner, dashContent.firstChild);
+  }).catch(function() {});
 }
 
 function updateSidebarLevel(level) {

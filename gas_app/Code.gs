@@ -25,6 +25,12 @@ function doGet(e) {
       var payload = JSON.parse(e.parameter.apiCall);
       var fn = payload.fn;
       var args = payload.args || [];
+      var profile = payload.profile || '';
+      // Functions that accept guestId as their last parameter
+      var needsGuestId = ['saveQuizResult','saveProgress','analyzeQuizResults','saveCardRating','getUserStats','getUserQuizHistory','getLeaderboard','getDailyChallenge','getWeakCards_','getPBCaseLibrary'];
+      if (profile && needsGuestId.indexOf(fn) !== -1) {
+        args.push(profile);
+      }
       var allowed = {
         'getCurrentUser': getCurrentUser,
         'getSpecialties': getSpecialties,
