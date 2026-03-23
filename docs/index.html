@@ -2417,6 +2417,7 @@ label {
       <li class="nav-group-label">PRACTICE</li>
       <li data-page="quiz" onclick="navigateTo('quiz')">&#x1F4CB; Practice Quiz</li>
       <li data-page="patientbot" onclick="navigateTo('patientbot')">&#x1F3E5; PatientBot</li>
+      <li data-page="house" onclick="navigateTo('house')">&#x1F9E0; Dr. House</li>
 
       <li class="nav-group-label">TOOLS</li>
       <li data-page="search" onclick="navigateTo('search')">&#x1F50D; Search</li>
@@ -2434,7 +2435,7 @@ label {
       <select class="sidebar-lang-select" id="lang-select" onchange="setLanguage(this.value)" title="Translation language for medical terms">
         <option value="">&#x1F310; Translations Off</option>
         <option value="fr">&#x1F1EB;&#x1F1F7; Français (French)</option>
-        <option value="fa">&#x1F1EE;&#x1F1F7; فارسی (Persian)</option>
+        <option value="fa">&#x1F1EE;&#x1F1F7; فارسی (Farsi)</option>
         <option value="ar">&#x1F1F8;&#x1F1E6; العربية (Arabic)</option>
         <option value="zh">&#x1F1E8;&#x1F1F3; 中文 (Chinese)</option>
         <option value="hi">&#x1F1EE;&#x1F1F3; हिन्दी (Hindi)</option>
@@ -2577,6 +2578,14 @@ label {
           <button class="btn btn-primary" onclick="sendDrDataMessage()">Send</button>
         </div>
       </div>
+    </div>
+
+    <!-- DR. HOUSE -->
+    <div id="page-house" class="page">
+      <div class="page-header">
+        <h2>&#x1F9E0; Dr. House</h2>
+      </div>
+      <div id="house-content"></div>
     </div>
 
     <!-- PATIENTBOT -->
@@ -2956,7 +2965,7 @@ var APP_CHANGELOG = [
     'Partial credit diagnosis',
     'Management actions (discharge, prescribe, refer)',
     'Library ebook viewer',
-    'Medical term translations (Persian/Arabic)',
+    'Medical term translations (Farsi/Arabic)',
     'Colorful action palette'
   ]},
   { version: '1.0', date: 'Mar 2026', label: 'Initial Release', items: [
@@ -3061,6 +3070,7 @@ function navigateTo(page) {
     case 'dontmiss': if (App.dontMissItems.length === 0) loadDontMiss('All'); break;
     case 'search': document.getElementById('search-input').focus(); break;
     case 'patientbot': if (!App.pbCaseId) showPatientBotSetup(); break;
+    case 'house': showHouseSetup(); break;
     case 'diagrams': if (!App.diagramChapters) loadDiagramChapters(); break;
     case 'leaderboard': loadLeaderboard(); break;
     case 'achievements': loadAchievements(); break;
@@ -3075,20 +3085,20 @@ function toggleSidebar() {
 // ===== ZOOM CONTROLS =====
 function adjustZoom(delta) {
   var current = parseInt(localStorage.getItem('mcc_zoom') || '100');
-  var next = Math.max(50, Math.min(150, current + delta));
+  var next = Math.max(70, Math.min(150, current + delta));
   localStorage.setItem('mcc_zoom', next);
-  document.documentElement.style.fontSize = next + '%';
+  document.body.style.zoom = (next / 100).toString();
   document.getElementById('zoom-level').textContent = next + '%';
 }
 function resetZoom() {
   localStorage.setItem('mcc_zoom', '100');
-  document.documentElement.style.fontSize = '100%';
+  document.body.style.zoom = '1';
   document.getElementById('zoom-level').textContent = '100%';
 }
 (function() {
   var saved = parseInt(localStorage.getItem('mcc_zoom') || '100');
   if (saved !== 100) {
-    document.documentElement.style.fontSize = saved + '%';
+    document.body.style.zoom = (saved / 100).toString();
     var el = document.getElementById('zoom-level');
     if (el) el.textContent = saved + '%';
   }
@@ -3408,12 +3418,12 @@ function startTutorial() {
   var steps = [
     {
       title: 'Blue Terms: Tap for Pronunciation',
-      text: 'Medical terms throughout the app are <span style="border-bottom:2px solid var(--accent);color:var(--accent);font-weight:600">underlined</span>. Tap one → 🔊 Normal speed, 🐌 Slow. Always pronounces in English.',
+      text: 'Medical terms throughout the app are <span style="border-bottom:2px solid var(--accent);color:var(--accent);font-weight:600">underlined</span>. Tap one → 🔊 Normal speed, 🐌 Slow.',
       target: null
     },
     {
       title: 'Translations',
-      text: 'Pick French, Persian, or Arabic from the sidebar. The translation shows inline next to the term. That\'s it.',
+      text: 'Pick French, Farsi, or Arabic from the sidebar. The translation shows inline next to the term. That\'s it.',
       target: null
     }
   ];
@@ -6532,13 +6542,13 @@ function showPatientBotSetup() {
   html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">';
   html += '<span style="font-size:32px">&#x1F3A4;</span>';
   html += '<div><div style="font-weight:800;font-size:16px">English Coach Mode</div>';
-  html += '<div style="font-size:12px;color:var(--text-light);margin-top:2px">Speak aloud — Claude listens and responds. Medical vocabulary + Farsi accent aware.</div></div></div>';
+  html += '<div style="font-size:12px;color:var(--text-light);margin-top:2px">Practise pronouncing medical terms out loud. Voice in, voice out.</div></div></div>';
   html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">';
   html += '<span style="font-size:11px;background:rgba(99,102,241,0.12);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:600">&#x1F3E5; Medical English</span>';
-  html += '<span style="font-size:11px;background:rgba(99,102,241,0.12);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:600">&#x1F1EE;&#x1F1F7; Farsi accent aware</span>';
+  html += '<span style="font-size:11px;background:rgba(99,102,241,0.12);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:600">&#x1F1EE;&#x1F1F7; Farsi</span>';
   html += '<span style="font-size:11px;background:rgba(99,102,241,0.12);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:600">&#x1F50A; Voice in + out</span>';
   html += '</div>';
-  html += '<div style="font-size:12px;color:var(--text-light);margin-bottom:14px">Practise explaining symptoms, taking history, discussing diagnoses. Claude gently corrects English and understands medical terms.</div>';
+  html += '<div style="font-size:12px;color:var(--text-light);margin-bottom:14px">History taking, OSCE communication, explaining diagnoses — spoken back and forth with Claude.</div>';
   html += '<button class="btn btn-primary" style="width:100%;padding:13px;font-weight:700" onclick="showEnglishCoach()">&#x1F3A4; Open English Coach</button>';
   html += '</div></div>';
 
@@ -6656,7 +6666,7 @@ function startPBSession() {
   App.pbCheatMode = document.getElementById('pb-cheat').checked;
   App.pbCurrentCase = 0; App.pbCaseScores = [];
   App.pbSetupSpecialty = document.getElementById('pb-specialty').value;
-  if (App.pbSetupSpecialty === 'house') { startHouseMode(); return; }
+  if (App.pbSetupSpecialty === 'house') { navigateTo('house'); startHouseMode(); return; }
   startNextPBCase();
 }
 
@@ -6804,8 +6814,32 @@ var HOUSE_CONDITIONS = [
   { id:'first_psychosis', level:'medium', name:'First-Episode Psychosis', spec:'Psychiatry', symptoms:['I\'ve been hearing voices for four months — they comment on what I\'m doing','I stopped going to university because the voices won\'t stop','I believe my neighbors are monitoring me through my phone','I haven\'t been sleeping or eating properly','my family says I\'m a completely different person from 6 months ago'], history:['21-year-old university student','no previous psychiatric history','smokes cannabis on weekends for 2 years','father has schizophrenia'], push_for:['urgent psychiatric assessment','urine drug screen','TSH, B12, glucose, metabolic panel to rule out organic cause','brain MRI to rule out structural lesion'], red_herrings:['cannabis-induced psychosis alone','bipolar disorder with psychotic features','brain tumor'], clues:['auditory hallucinations + paranoid delusions + 6+ months duration + social deterioration + first-degree relative with schizophrenia = first-episode schizophrenia — early intervention dramatically changes prognosis'] },
 ];
 
+function showHouseSetup() {
+  var el = document.getElementById('house-content');
+  if (!el) return;
+  var diff = App.pbDifficulty || 'medium';
+  var html = '<div style="max-width:600px;margin:0 auto;padding:24px 16px">';
+  html += '<div style="background:linear-gradient(135deg,#1a1a2e,#2d1b69);color:white;border-radius:18px;padding:32px 28px;margin-bottom:24px;box-shadow:0 8px 32px rgba(0,0,0,0.25)">';
+  html += '<div style="font-size:48px;margin-bottom:12px">&#x1F9E0;</div>';
+  html += '<h2 style="margin:0 0 8px;font-size:26px;font-weight:900">Dr. House Mode</h2>';
+  html += '<p style="margin:0;opacity:0.8;font-size:15px;line-height:1.6">You are the patient. House is the doctor — dismissive, brilliant, and certain you\'re fine.<br>Describe your symptoms. Convince him. Get to the right diagnosis before he sends you home with antacids.</p>';
+  html += '</div>';
+  html += '<div class="card" style="padding:20px;margin-bottom:16px">';
+  html += '<div style="font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;color:var(--text-light)">Difficulty</div>';
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+  var diffs = [{v:'easy',l:'Easy'},{v:'medium',l:'Medium'},{v:'hard',l:'Hard'},{v:'hardest',l:'Expert'}];
+  for (var i = 0; i < diffs.length; i++) {
+    var d = diffs[i];
+    var active = diff === d.v ? 'background:var(--primary);color:white;border-color:var(--primary)' : '';
+    html += '<button class="quiz-count-btn' + (diff===d.v?' active':'') + '" onclick="App.pbDifficulty=\''+d.v+'\';showHouseSetup()" style="flex:1;min-width:80px">'+d.l+'</button>';
+  }
+  html += '</div></div>';
+  html += '<button class="btn btn-primary" style="width:100%;padding:16px;font-size:17px;font-weight:800" onclick="startHouseMode()">&#x1F92F; See What House Has to Say</button>';
+  html += '</div>';
+  el.innerHTML = html;
+}
+
 function startHouseMode() {
-  var el = document.getElementById('patientbot-content');
   var difficulty = App.pbDifficulty || 'medium';
   var levelMap = { easy: ['easy'], medium: ['easy','medium'], hard: ['medium','hard'], hardest: ['hard','expert'] };
   var allowed = levelMap[difficulty] || ['medium','hard'];
@@ -6819,7 +6853,7 @@ function startHouseMode() {
 }
 
 function renderHouseBriefing() {
-  var el = document.getElementById('patientbot-content');
+  var el = document.getElementById('house-content');
   var cond = App.pbHouseCase;
   if (!cond) return;
   var html = '<div style="max-width:640px;margin:0 auto;padding:20px">';
@@ -6844,13 +6878,12 @@ function renderHouseBriefing() {
   html += '<div style="font-size:14px;color:var(--text-light);line-height:1.6">You are the <strong>patient</strong>. House is the doctor — skeptical, sarcastic, and brilliant. Describe your symptoms. Push for the right tests. Convince him.<br><br>The goal: get him to the right diagnosis before he dismisses you and sends you home with antacids.</div>';
   html += '</div>';
   html += '<button class="btn btn-success" onclick="startHouseConversation_()" style="width:100%;padding:14px;font-size:16px;font-weight:700">&#x1F92F; I\'m ready, Doctor.</button>';
-  html += '<button class="btn btn-outline" onclick="showPatientBotSetup()" style="width:100%;padding:12px;font-size:14px;margin-top:10px">&#x2190; Back to Setup</button>';
+  html += '<button class="btn btn-outline" onclick="showHouseSetup()" style="width:100%;padding:12px;font-size:14px;margin-top:10px">&#x2190; Back to Setup</button>';
   html += '</div>';
   el.innerHTML = html;
 }
 
 function startHouseConversation_() {
-  var el = document.getElementById('patientbot-content');
   App.pbHouseConvHistory = [];
   renderHouseChat();
 }
@@ -6875,7 +6908,7 @@ function buildHousePrompt_(cond, difficulty) {
 }
 
 function renderHouseChat() {
-  var el = document.getElementById('patientbot-content');
+  var el = document.getElementById('house-content');
   var cond = App.pbHouseCase;
   if (!cond) return;
   var history = App.pbHouseConvHistory;
@@ -6961,7 +6994,7 @@ function sendHouseMessage() {
 }
 
 function endHouseMode_() {
-  var el = document.getElementById('patientbot-content');
+  var el = document.getElementById('house-content');
   var cond = App.pbHouseCase;
   var score = App.pbHouseScore;
   var total_symptoms = cond.symptoms.length;
@@ -6992,7 +7025,7 @@ function endHouseMode_() {
   html += '</div>';
   html += '<div style="display:flex;gap:12px;justify-content:center;margin-top:20px;flex-wrap:wrap">';
   html += '<button class="btn btn-primary" onclick="startHouseMode()" style="padding:12px 24px">&#x1F504; Play Again</button>';
-  html += '<button class="btn btn-outline" onclick="showPatientBotSetup()">&#x2190; Back to Setup</button>';
+  html += '<button class="btn btn-outline" onclick="showHouseSetup()">&#x2190; Change Difficulty</button>';
   html += '</div></div></div>';
   el.innerHTML = html;
 }
@@ -8032,7 +8065,7 @@ function checkLangPrompt_() {
       '<h3 style="margin:0 0 8px;text-align:center">Medical Term Translations</h3>' +
       '<p style="margin:0 0 24px;color:var(--text-light);font-size:14px;text-align:center;line-height:1.6">Hover over highlighted medical terms while studying to see translations. Pick your preferred language or skip.</p>' +
       '<div style="display:flex;flex-direction:column;gap:10px">' +
-      '<button onclick="pickLang_(\'fa\')" style="padding:14px;border-radius:12px;border:2px solid var(--border);background:var(--bg);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;transition:all 0.15s" onmouseenter="this.style.borderColor=\'var(--primary)\'" onmouseleave="this.style.borderColor=\'var(--border)\'">&#x1F1EE;&#x1F1F7; فارسی (Persian)</button>' +
+      '<button onclick="pickLang_(\'fa\')" style="padding:14px;border-radius:12px;border:2px solid var(--border);background:var(--bg);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;transition:all 0.15s" onmouseenter="this.style.borderColor=\'var(--primary)\'" onmouseleave="this.style.borderColor=\'var(--border)\'">&#x1F1EE;&#x1F1F7; فارسی (Farsi)</button>' +
       '<button onclick="pickLang_(\'ar\')" style="padding:14px;border-radius:12px;border:2px solid var(--border);background:var(--bg);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;transition:all 0.15s" onmouseenter="this.style.borderColor=\'var(--primary)\'" onmouseleave="this.style.borderColor=\'var(--border)\'">&#x1F1F8;&#x1F1E6; العربية (Arabic)</button>' +
       '<button onclick="pickLang_(\'fr\')" style="padding:14px;border-radius:12px;border:2px solid var(--border);background:var(--bg);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;transition:all 0.15s" onmouseenter="this.style.borderColor=\'var(--primary)\'" onmouseleave="this.style.borderColor=\'var(--border)\'">&#x1F1EB;&#x1F1F7; Français (French)</button>' +
       '<button onclick="pickLang_(\'zh\')" style="padding:14px;border-radius:12px;border:2px solid var(--border);background:var(--bg);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;transition:all 0.15s" onmouseenter="this.style.borderColor=\'var(--primary)\'" onmouseleave="this.style.borderColor=\'var(--border)\'">&#x1F1E8;&#x1F1F3; 中文 (Chinese)</button>' +
