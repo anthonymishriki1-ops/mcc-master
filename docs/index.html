@@ -225,10 +225,23 @@ body {
 
 /* --- Medical Term Tooltips --- */
 .med-term {
-  color: var(--primary);
-  border-bottom: 1px dotted var(--primary);
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.08);
+  border-radius: 3px;
+  padding: 0 2px;
   cursor: help;
   position: relative;
+  transition: background 0.15s;
+}
+.med-term:hover, .med-term:active {
+  background: rgba(37, 99, 235, 0.18);
+}
+[data-theme="dark"] .med-term {
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.12);
+}
+[data-theme="dark"] .med-term:hover, [data-theme="dark"] .med-term:active {
+  background: rgba(96, 165, 250, 0.25);
 }
 
 .med-tooltip {
@@ -2919,14 +2932,16 @@ function finishInit() {
     populateSpecialtyDropdowns();
   });
 
-  // Restore language setting and load glossary
+  // Restore language setting and always load glossary for term highlighting
   var savedLang = localStorage.getItem('mcc_lang');
   if (savedLang) {
     App.glossaryLang = savedLang;
     var langSelect = document.getElementById('lang-select');
     if (langSelect) langSelect.value = savedLang;
-    loadGlossary();
   }
+  // Always load glossary — highlights medical terms in blue even without translation
+  if (!App.glossaryLang) App.glossaryLang = 'en';
+  loadGlossary();
 
   loadDashboard();
 
@@ -6022,7 +6037,7 @@ function loadGlossary() {
 }
 
 function highlightMedTerms(html) {
-  if (!App.glossary || !App.glossaryRegex || !App.glossaryLang) return html;
+  if (!App.glossary || !App.glossaryRegex) return html;
   return html.replace(App.glossaryRegex, function(match) {
     var entry = App.glossary[match.toLowerCase()];
     if (!entry) return match;
@@ -6047,7 +6062,7 @@ function showMedTooltip(e) {
 
   var catLabel = entry.Category || entry.category || '';
   var def = entry.Definition || entry.definition || '';
-  var translation = entry[lang] || entry.translation || entry.fa || '';
+  var translation = (lang && lang !== 'en') ? (entry[lang] || entry.translation || '') : '';
 
   var inner = '<div class="med-tooltip-term">' + escapeHtml(entry.Term || entry.term || termKey);
   if (catLabel) inner += '<span class="med-tooltip-cat">' + escapeHtml(catLabel) + '</span>';
@@ -6058,14 +6073,15 @@ function showMedTooltip(e) {
 
   document.body.appendChild(tooltip);
 
-  // Position near the term
+  // Position above the term
   var rect = e.target.getBoundingClientRect();
   var ttRect = tooltip.getBoundingClientRect();
-  var top = rect.bottom + 8;
+  var top = rect.top - ttRect.height - 8;
   var left = rect.left;
 
-  // Keep on screen
-  if (top + ttRect.height > window.innerHeight) top = rect.top - ttRect.height - 8;
+  // If no room above, show below
+  if (top < 8) top = rect.bottom + 8;
+  // Keep on screen horizontally
   if (left + ttRect.width > window.innerWidth) left = window.innerWidth - ttRect.width - 12;
   if (left < 12) left = 12;
 
