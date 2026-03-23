@@ -2903,11 +2903,13 @@ function adjustZoom(delta) {
   localStorage.setItem('mcc_zoom', next);
   document.documentElement.style.fontSize = next + '%';
   document.getElementById('zoom-level').textContent = next + '%';
+  syncSettings_();
 }
 function resetZoom() {
   localStorage.setItem('mcc_zoom', '100');
   document.documentElement.style.fontSize = '100%';
   document.getElementById('zoom-level').textContent = '100%';
+  syncSettings_();
 }
 (function() {
   var saved = parseInt(localStorage.getItem('mcc_zoom') || '100');
@@ -2929,6 +2931,7 @@ function toggleDarkMode() {
     localStorage.setItem('mcc_theme', 'dark');
     document.getElementById('dark-mode-btn').innerHTML = '&#x2600; Light Mode';
   }
+  syncSettings_();
 }
 
 // Apply saved theme on load
@@ -2956,15 +2959,65 @@ function serverCall(funcName) {
   var profile = sessionStorage.getItem('mcc_profile') || '';
   var payload = JSON.stringify({ fn: funcName, args: args, profile: profile });
   var url = API_URL + '?apiCall=' + encodeURIComponent(payload);
-  return fetch(url)
-  .then(function(resp) {
-    if (!resp.ok) throw new Error('API error: ' + resp.status);
-    return resp.json();
-  })
-  .then(function(data) {
-    if (data.error) throw new Error(data.error);
-    return patchApiResult_(funcName, data.result);
-  });
+  // AI-heavy calls (PatientBot, Dr. Data, debrief) get 90s timeout; everything else 20s
+  var slowFns = ['sendPatientBotMessage','startPatientBot','submitDiagnosis','generateCaseDebrief','askDrData','analyzeQuizResults'];
+  var timeout = slowFns.indexOf(funcName) !== -1 ? 90000 : 20000;
+  return Promise.race([
+    fetch(url).then(function(resp) {
+      if (!resp.ok) throw new Error('API error: ' + resp.status);
+      return resp.json();
+    }).then(function(data) {
+      if (data.error) throw new Error(data.error);
+      return patchApiResult_(funcName, data.result);
+    }),
+    new Promise(function(_, reject) {
+      setTimeout(function() { reject(new Error('Request timed out — check your connection and try again')); }, timeout);
+    })
+  ]);
+}
+
+// ===== SETTINGS SYNC (backup/restore to GAS) =====
+var _syncSettingsTimer = null;
+function syncSettings_() {
+  // Debounce — only sync 3s after last change
+  clearTimeout(_syncSettingsTimer);
+  _syncSettingsTimer = setTimeout(function() {
+    var settings = {
+      theme: localStorage.getItem('mcc_theme') || 'light',
+      zoom: localStorage.getItem('mcc_zoom') || '100',
+      lang: localStorage.getItem('mcc_lang') || 'en',
+      dailyGoal: localStorage.getItem('mcc_daily_goal') || '20'
+    };
+    serverCall('saveProgress', 'user_settings', settings).catch(function() {});
+  }, 3000);
+}
+
+function restoreSettings_(saved) {
+  if (!saved) return;
+  // Only restore if local has no value (i.e. new device / cleared storage)
+  if (!localStorage.getItem('mcc_theme') && saved.theme) {
+    localStorage.setItem('mcc_theme', saved.theme);
+    if (saved.theme === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      var btn = document.getElementById('dark-mode-btn');
+      if (btn) btn.innerHTML = '&#x2600; Light Mode';
+    }
+  }
+  if (!localStorage.getItem('mcc_zoom') && saved.zoom && saved.zoom !== '100') {
+    localStorage.setItem('mcc_zoom', saved.zoom);
+    document.documentElement.style.fontSize = saved.zoom + '%';
+    var el = document.getElementById('zoom-level');
+    if (el) el.textContent = saved.zoom + '%';
+  }
+  if (!localStorage.getItem('mcc_lang') && saved.lang) {
+    localStorage.setItem('mcc_lang', saved.lang);
+    App.glossaryLang = saved.lang;
+    var sel = document.getElementById('lang-select');
+    if (sel) sel.value = saved.lang;
+  }
+  if (!localStorage.getItem('mcc_daily_goal') && saved.dailyGoal) {
+    localStorage.setItem('mcc_daily_goal', saved.dailyGoal);
+  }
 }
 
 // Client-side patches — no Apps Script redeploy needed
@@ -3237,10 +3290,10 @@ function init() {
     });
     loadGlossary();
     serverCall('getUserStats').then(function(stats) { App.stats = stats; });
-    serverCall('getFlashcards', 'All').then(function(data) { App.preloadedFlashcards = data; });
-    serverCall('getBulletNotes', 'All').then(function(data) { App.bulletNotes = data; });
-    serverCall('getDontMiss', 'All').then(function(data) { App.dontMissItems = data; });
-    serverCall('getImageChapters').then(function(ch) { App.diagramChapters = ch; });
+    serverCall('getFlashcards', 'All').then(function(data) { App.preloadedFlashcards = data; }).catch(function(e) { console.warn('Preload flashcards failed:', e); });
+    serverCall('getBulletNotes', 'All').then(function(data) { App.bulletNotes = data; }).catch(function(e) { console.warn('Preload notes failed:', e); });
+    serverCall('getDontMiss', 'All').then(function(data) { App.dontMissItems = data; }).catch(function(e) { console.warn('Preload key topics failed:', e); });
+    serverCall('getImageChapters').then(function(ch) { App.diagramChapters = ch; }).catch(function(e) { console.warn('Preload diagrams failed:', e); });
     return;
   }
 
@@ -3390,6 +3443,8 @@ function loadDashboard() {
   var statsPromise = App.stats ? Promise.resolve(App.stats) : serverCall('getUserStats');
   statsPromise.then(function(stats) {
     App.stats = stats;
+    // Restore user settings from GAS backup (only fills in missing localStorage values)
+    if (stats.savedSettings) restoreSettings_(stats.savedSettings);
     renderDashboard(stats);
     updateSidebarLevel(stats.level);
     // Check for weekly report on Saturdays
@@ -5724,11 +5779,24 @@ var pbActionSpecs = {
   '*insert pigtail catheter*': { prompt: 'Which side/for what?', placeholder: 'e.g. left pleural effusion, right pneumothorax' }
 };
 
+var PB_HIGH_RISK_ACTIONS = [
+  '*defibrillate*','*apply AED*','*synchronized cardioversion*',
+  '*rapid sequence intubation*','*cricothyrotomy*',
+  '*needle decompression*','*pericardiocentesis*','*emergency thoracotomy*',
+  '*bag-mask ventilation*','start CPR','*start CPR*',
+  '*high-quality chest compressions*','transcutaneous pacing'
+];
+
 function insertPBAction(text) {
   // Check if this action needs a specification
   if (pbActionSpecs[text]) {
     showActionSpecPrompt(text, pbActionSpecs[text]);
     return;
+  }
+  // Confirm high-risk resus actions before sending
+  if (PB_HIGH_RISK_ACTIONS.indexOf(text) !== -1) {
+    var label = text.replace(/^\*|\*$/g, '');
+    if (!confirm('⚠️ High-risk intervention: "' + label + '"\n\nThis could be fatal if inappropriate. Proceed?')) return;
   }
   // Ensure text has asterisks for actions
   if (text.indexOf('*') === -1) text = '*' + text + '*';
@@ -5891,7 +5959,9 @@ function showPBSummary() {
 function getPBTranscript() {
   // Save compact transcript for case library (max 20 messages, truncated)
   return App.pbHistory.slice(0, 20).map(function(m) {
-    return { role: m.role, content: (m.content || '').substring(0, 400) };
+    var c = m.content;
+    if (typeof c !== 'string') c = JSON.stringify(c) || '';
+    return { role: m.role, content: c.substring(0, 400) };
   });
 }
 
@@ -6171,11 +6241,12 @@ function renderPBChatInner() {
       var pc = m.content;
       html += '<div style="background:rgba(255,193,7,0.12);border:2px solid #f9a825;color:var(--text);padding:16px 20px;margin:12px 0;border-radius:12px;font-size:14px;line-height:1.6">';
       html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
-      html += '<strong style="color:#e65100;font-size:16px">&#x1F7E1; Not quite</strong>';
+      html += '<strong style="color:#e65100;font-size:16px">&#x1F7E1; Close, but not quite (Attempt 1/2)</strong>';
       html += '<span style="background:#e65100;color:white;padding:3px 10px;border-radius:8px;font-size:13px;font-weight:700">' + (pc.score || '?') + '/100</span>';
       html += '</div>';
-      html += 'Your answer is on the right track but incomplete. Keep investigating — order more tests, ask more questions, then try again.';
-      html += '<div style="margin-top:8px;font-size:13px;color:var(--text-light)">You can try once more with the Diagnose button.</div>';
+      if (pc.feedback) html += '<div style="margin-bottom:8px">' + escapeHtml(pc.feedback) + '</div>';
+      html += 'Your answer is on the right track. Keep investigating — order more tests, ask more questions, then try again.';
+      html += '<div style="margin-top:8px;font-size:13px;font-weight:600;color:#e65100">&#x1F449; You have 1 more attempt — use the Diagnose button when ready.</div>';
       html += '</div>';
     } else if (m.role === 'system') {
       // Consequence message from clinical engine — color-coded by severity
@@ -6348,6 +6419,9 @@ function renderPBChatInner() {
     html += '<span style="color:var(--text-light);font-size:15px">Case resolved.</span>';
     if (App.dailyPhase === 'pb') {
       html += '<button class="btn btn-success" onclick="finishCurrentPBCase()">Next Case</button>';
+    } else if (App.pbTotalCases > 1 && App.pbCurrentCase < App.pbTotalCases) {
+      html += '<button class="btn btn-success" style="font-size:16px;padding:10px 24px" onclick="finishCurrentPBCase()">Next Case (' + App.pbCurrentCase + '/' + App.pbTotalCases + ')</button>';
+      html += '<button class="btn btn-outline" onclick="endPBCase()">End Session</button>';
     } else {
       html += '<button class="btn btn-primary" onclick="quickNewPBCase()">New Case</button>';
       html += '<button class="btn btn-outline" onclick="showPatientBotSetup()">Change Settings</button>';
