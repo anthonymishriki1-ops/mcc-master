@@ -2754,7 +2754,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '2.4';
+var APP_VERSION = '2.5';
 var APP_CHANGELOG = [
   { version: '2.2', date: 'Mar 23 2026', label: 'Bug Fixes & Transparency', items: [
     'FLAG SYSTEM: Users can now flag incorrect, unclear, or outdated content on flashcards, quiz, notes, and PatientBot — flags are logged for review',
@@ -4945,6 +4945,12 @@ function speakText_(text, voiceParams) {
 
     // Unconscious/altered — shouldn't be speaking, but just in case
     if (!conscious) { rate = 0.6; pitch = 0.7; volume = 0.5; }
+
+    // Substance use → slurred (slower + slightly lower pitch)
+    if (voiceParams.slurred) { rate -= 0.18; pitch -= 0.1; }
+
+    // Language barrier → slower, more deliberate
+    if (voiceParams.slow) { rate -= 0.12; }
   }
 
   // Clamp to valid ranges
@@ -4998,7 +5004,24 @@ function getPBVoiceParams_() {
   if (/\b(agony|can't breathe|dying|terrible|unbearable|crushing|10.{0,3}10|severe pain)\b/i.test(lastAssistant)) distress = 3;
   else if (/\b(really hurts|lot of pain|hard to breathe|dizzy|weak)\b/i.test(lastAssistant)) distress = Math.max(distress, 2);
   else if (/\b(hurts|painful|aching|sore|discomfort|nauseous)\b/i.test(lastAssistant)) distress = Math.max(distress, 1);
-  return { age: p.age || 35, sex: p.sex || '', distress: distress };
+  // Archetype affects voice tone even without vitals-based distress
+  var archetype = App.pbCustom && App.pbCustom.archetype;
+  var archetypeDistress = 0;
+  if (archetype === 'catastrophizer') archetypeDistress = 2;      // anxious, fast
+  else if (archetype === 'denier') archetypeDistress = -1;         // artificially calm
+  else if (archetype === 'hidden_agenda') archetypeDistress = 1;   // slightly nervous
+
+  var circumstances = (App.pbCustom && App.pbCustom.circumstances) || [];
+  var isSubstanceUse = circumstances.indexOf('substance_use') !== -1;
+  var isLanguageBarrier = circumstances.indexOf('language_barrier') !== -1;
+
+  return {
+    age: p.age || 35,
+    sex: p.sex || '',
+    distress: Math.max(0, distress + archetypeDistress),
+    slurred: isSubstanceUse,
+    slow: isLanguageBarrier
+  };
 }
 
 // Score how medically-likely a phrase is (for picking best STT alternative)
@@ -5859,50 +5882,87 @@ function showPatientBotSetup() {
 
   // Customize patient panel
   html += '<div style="margin:16px 0">';
-  html += '<button class="btn btn-outline btn-sm" onclick="document.getElementById(\'pb-customize\').style.display=document.getElementById(\'pb-customize\').style.display===\'none\'?\'\':\'none\'" style="width:100%;padding:10px;font-size:14px">&#x2699; Customize Patient</button>';
+  html += '<button class="btn btn-outline btn-sm" onclick="document.getElementById(\'pb-customize\').style.display=document.getElementById(\'pb-customize\').style.display===\'none\'?\'\':\'none\'" style="width:100%;padding:10px;font-size:14px">&#x2699;&#xFE0F; Customize Patient</button>';
   html += '<div id="pb-customize" style="display:none;margin-top:12px;padding:16px;border:1px solid var(--border);border-radius:10px;background:var(--card)">';
 
-  // Sex
-  html += '<div class="form-group" style="text-align:left;margin-bottom:12px"><label style="font-size:13px;font-weight:700">Gender / Identity</label>';
-  html += '<div id="pb-sex-group">';
-  html += '<div class="quiz-count-btns">';
+  // ── Gender / Identity ──
+  html += '<div class="form-group" style="text-align:left;margin-bottom:14px"><label style="font-size:13px;font-weight:700">Gender / Identity</label>';
+  html += '<div id="pb-sex-group"><div class="quiz-count-btns">';
   html += '<button class="quiz-count-btn active" onclick="setPBSex(\'random\',this)">Random</button>';
   html += '<button class="quiz-count-btn" onclick="setPBSex(\'male\',this)">Male</button>';
   html += '<button class="quiz-count-btn" onclick="setPBSex(\'female\',this)">Female</button>';
-  html += '</div>';
-  html += '<div class="quiz-count-btns" style="margin-top:6px">';
+  html += '</div><div class="quiz-count-btns" style="margin-top:6px">';
   html += '<button class="quiz-count-btn" onclick="setPBSex(\'nonbinary\',this)">Non-binary</button>';
   html += '<button class="quiz-count-btn" onclick="setPBSex(\'trans_m\',this)">Trans Man</button>';
   html += '<button class="quiz-count-btn" onclick="setPBSex(\'trans_f\',this)">Trans Woman</button>';
   html += '</div></div></div>';
 
-  // Age slider
-  html += '<div class="form-group" style="text-align:left;margin-bottom:16px">';
-  html += '<div style="display:flex;justify-content:space-between;align-items:center"><label style="font-size:13px;font-weight:700">Age</label><span id="pb-age-label" style="font-size:12px;color:var(--primary);font-weight:700">Random</span></div>';
-  html += '<input type="range" min="0" max="5" value="0" class="pb-slider" id="pb-age-slider" oninput="updatePBSlider(\'age\',this.value)">';
-  html += '<div class="pb-slider-labels"><span>Random</span><span>Child</span><span>Teen</span><span>18-30</span><span>30-60</span><span>60+</span></div>';
-  html += '</div>';
+  // ── Age Range (actual min-max, not buckets) ──
+  html += '<div class="form-group" style="text-align:left;margin-bottom:14px">';
+  html += '<label style="font-size:13px;font-weight:700">Age Range <span id="pb-age-range-label" style="color:var(--primary);font-weight:700">Random</span></label>';
+  html += '<div style="display:flex;gap:8px;align-items:center;margin-top:6px">';
+  html += '<input type="number" id="pb-age-min" min="1" max="99" placeholder="Min" style="width:72px;padding:7px 10px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:14px" oninput="updatePBAgeRange()">';
+  html += '<span style="color:var(--text-light);font-size:13px">to</span>';
+  html += '<input type="number" id="pb-age-max" min="1" max="99" placeholder="Max" style="width:72px;padding:7px 10px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:14px" oninput="updatePBAgeRange()">';
+  html += '<div class="quiz-count-btns" style="flex:1;margin-left:4px">';
+  html += '<button class="quiz-count-btn" onclick="setPBAgePreset(2,12,this)" style="font-size:11px">Child</button>';
+  html += '<button class="quiz-count-btn" onclick="setPBAgePreset(18,40,this)" style="font-size:11px">Young</button>';
+  html += '<button class="quiz-count-btn" onclick="setPBAgePreset(40,65,this)" style="font-size:11px">Middle</button>';
+  html += '<button class="quiz-count-btn" onclick="setPBAgePreset(65,95,this)" style="font-size:11px">Elderly</button>';
+  html += '</div></div></div>';
 
-  // Historian slider
-  html += '<div class="form-group" style="text-align:left;margin-bottom:16px">';
-  html += '<div style="display:flex;justify-content:space-between;align-items:center"><label style="font-size:13px;font-weight:700">Historian Quality</label><span id="pb-historian-label" style="font-size:12px;color:var(--primary);font-weight:700">Random</span></div>';
+  // ── Historian / Coop / Aggression sliders ──
+  html += '<div class="form-group" style="text-align:left;margin-bottom:14px">';
+  html += '<div style="display:flex;justify-content:space-between"><label style="font-size:13px;font-weight:700">Historian Quality</label><span id="pb-historian-label" style="font-size:12px;color:var(--primary);font-weight:700">Random</span></div>';
   html += '<input type="range" min="0" max="3" value="0" class="pb-slider" id="pb-historian-slider" oninput="updatePBSlider(\'historian\',this.value)">';
-  html += '<div class="pb-slider-labels"><span>Random</span><span>Good</span><span>Poor</span><span>Vague</span></div>';
-  html += '</div>';
+  html += '<div class="pb-slider-labels"><span>Random</span><span>Good</span><span>Poor</span><span>Vague</span></div></div>';
 
-  // Cooperativeness slider
-  html += '<div class="form-group" style="text-align:left;margin-bottom:16px">';
-  html += '<div style="display:flex;justify-content:space-between;align-items:center"><label style="font-size:13px;font-weight:700">Cooperativeness</label><span id="pb-coop-label" style="font-size:12px;color:var(--primary);font-weight:700">Random</span></div>';
+  html += '<div class="form-group" style="text-align:left;margin-bottom:14px">';
+  html += '<div style="display:flex;justify-content:space-between"><label style="font-size:13px;font-weight:700">Cooperativeness</label><span id="pb-coop-label" style="font-size:12px;color:var(--primary);font-weight:700">Random</span></div>';
   html += '<input type="range" min="0" max="3" value="0" class="pb-slider" id="pb-coop-slider" oninput="updatePBSlider(\'coop\',this.value)">';
-  html += '<div class="pb-slider-labels"><span>Random</span><span>Cooperative</span><span>Reluctant</span><span>Hostile</span></div>';
-  html += '</div>';
+  html += '<div class="pb-slider-labels"><span>Random</span><span>Cooperative</span><span>Reluctant</span><span>Hostile</span></div></div>';
 
-  // Aggression slider
-  html += '<div class="form-group" style="text-align:left;margin-bottom:0">';
-  html += '<div style="display:flex;justify-content:space-between;align-items:center"><label style="font-size:13px;font-weight:700">Aggression</label><span id="pb-aggression-label" style="font-size:12px;color:var(--primary);font-weight:700">Random</span></div>';
+  html += '<div class="form-group" style="text-align:left;margin-bottom:14px">';
+  html += '<div style="display:flex;justify-content:space-between"><label style="font-size:13px;font-weight:700">Aggression</label><span id="pb-aggression-label" style="font-size:12px;color:var(--primary);font-weight:700">Random</span></div>';
   html += '<input type="range" min="0" max="3" value="0" class="pb-slider" id="pb-aggression-slider" oninput="updatePBSlider(\'aggression\',this.value)">';
-  html += '<div class="pb-slider-labels"><span>Random</span><span>None</span><span>Mild</span><span>Aggressive</span></div>';
-  html += '</div>';
+  html += '<div class="pb-slider-labels"><span>Random</span><span>None</span><span>Mild</span><span>Aggressive</span></div></div>';
+
+  // ── Psychological Archetype ──
+  html += '<div class="form-group" style="text-align:left;margin-bottom:14px">';
+  html += '<label style="font-size:13px;font-weight:700">Psychological Archetype</label>';
+  html += '<div style="font-size:11px;color:var(--text-light);margin-bottom:6px">What\'s going on under the surface</div>';
+  html += '<div class="quiz-count-btns" style="flex-wrap:wrap">';
+  var archetypes = [
+    ['random','&#x1F3B2; Random'],['denier','&#x1F644; Denier'],['catastrophizer','&#x1F630; Catastrophizer'],
+    ['hidden_agenda','&#x1F575;&#xFE0F; Hidden Agenda'],['secondary_gain','&#x1F4B0; Secondary Gain'],['health_anxiety','&#x1F4F1; Dr. Google']
+  ];
+  for (var ai = 0; ai < archetypes.length; ai++) {
+    html += '<button class="quiz-count-btn' + (archetypes[ai][0]==='random'?' active':'') + '" onclick="setPBArchetype(\'' + archetypes[ai][0] + '\',this)" style="font-size:12px">' + archetypes[ai][1] + '</button>';
+  }
+  html += '</div></div>';
+
+  // ── Special Circumstances (multi-toggle) ──
+  html += '<div class="form-group" style="text-align:left;margin-bottom:0">';
+  html += '<label style="font-size:13px;font-weight:700">Special Circumstances <span style="font-size:11px;color:var(--text-light);font-weight:400">(select any)</span></label>';
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">';
+  var circumstances = [
+    ['language_barrier','&#x1F5E3; Language barrier'],
+    ['accompanied','&#x1F46A; Accompanied (family answers)'],
+    ['non_compliant','&#x1F48A; Stopped their meds'],
+    ['prior_misdiagnosis','&#x1F621; Prior misdiagnosis'],
+    ['substance_use','&#x1F37A; Substance use'],
+    ['self_diagnosing','&#x1F4BB; Self-diagnosed (Dr. Google)'],
+    ['financial_barrier','&#x1F4B8; Can\'t afford care'],
+    ['cultural_modesty','&#x1F9CE; Cultural modesty'],
+    ['somatization','&#x1F4C8; Multiple vague complaints'],
+    ['acute_deterioration','&#x26A1; Deteriorates mid-encounter']
+  ];
+  for (var ci = 0; ci < circumstances.length; ci++) {
+    html += '<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;padding:5px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg)">';
+    html += '<input type="checkbox" id="pb-circ-' + circumstances[ci][0] + '" onchange="togglePBCircumstance(\'' + circumstances[ci][0] + '\',this.checked)" style="accent-color:var(--primary)">';
+    html += circumstances[ci][1] + '</label>';
+  }
+  html += '</div></div>';
 
   html += '</div></div>';
 
@@ -5978,13 +6038,11 @@ function setPBSex(value, btn) {
 function updatePBSlider(field, val) {
   if (!App.pbCustom) App.pbCustom = {};
   var maps = {
-    age: ['random', 'child', 'pediatric', 'young', 'middle', 'elderly'],
     historian: ['random', 'good', 'poor', 'vague'],
     coop: ['random', 'cooperative', 'reluctant', 'hostile'],
     aggression: ['random', 'none', 'mild', 'aggressive']
   };
   var labels = {
-    age: ['Random', 'Child (2-12)', 'Teen (13-17)', '18-30', '30-60', '60+'],
     historian: ['Random', 'Good', 'Poor', 'Vague'],
     coop: ['Random', 'Cooperative', 'Reluctant', 'Hostile'],
     aggression: ['Random', 'None', 'Mild', 'Aggressive']
@@ -5994,6 +6052,56 @@ function updatePBSlider(field, val) {
   App.pbCustom[field] = mapped === 'random' ? null : mapped;
   var labelEl = document.getElementById('pb-' + field + '-label');
   if (labelEl) labelEl.textContent = labels[field] ? labels[field][v] : mapped;
+}
+
+function updatePBAgeRange() {
+  if (!App.pbCustom) App.pbCustom = {};
+  var minEl = document.getElementById('pb-age-min');
+  var maxEl = document.getElementById('pb-age-max');
+  var min = minEl ? parseInt(minEl.value) : NaN;
+  var max = maxEl ? parseInt(maxEl.value) : NaN;
+  var label = document.getElementById('pb-age-range-label');
+  if (!isNaN(min) || !isNaN(max)) {
+    App.pbCustom.ageMin = isNaN(min) ? 1 : Math.min(min, 99);
+    App.pbCustom.ageMax = isNaN(max) ? 99 : Math.max(max, App.pbCustom.ageMin);
+    if (label) label.textContent = App.pbCustom.ageMin + '–' + App.pbCustom.ageMax + ' yrs';
+  } else {
+    App.pbCustom.ageMin = null; App.pbCustom.ageMax = null;
+    if (label) label.textContent = 'Random';
+  }
+}
+
+function setPBAgePreset(min, max, btn) {
+  if (!App.pbCustom) App.pbCustom = {};
+  App.pbCustom.ageMin = min; App.pbCustom.ageMax = max;
+  var minEl = document.getElementById('pb-age-min');
+  var maxEl = document.getElementById('pb-age-max');
+  if (minEl) minEl.value = min;
+  if (maxEl) maxEl.value = max;
+  var label = document.getElementById('pb-age-range-label');
+  if (label) label.textContent = min + '–' + max + ' yrs';
+  // Highlight preset button
+  var siblings = btn.parentNode.querySelectorAll('.quiz-count-btn');
+  for (var i = 0; i < siblings.length; i++) siblings[i].classList.remove('active');
+  btn.classList.add('active');
+}
+
+function setPBArchetype(value, btn) {
+  if (!App.pbCustom) App.pbCustom = {};
+  App.pbCustom.archetype = value === 'random' ? null : value;
+  var siblings = btn.parentNode.querySelectorAll('.quiz-count-btn');
+  for (var i = 0; i < siblings.length; i++) siblings[i].classList.remove('active');
+  btn.classList.add('active');
+}
+
+function togglePBCircumstance(key, checked) {
+  if (!App.pbCustom) App.pbCustom = {};
+  if (!App.pbCustom.circumstances) App.pbCustom.circumstances = [];
+  if (checked) {
+    if (App.pbCustom.circumstances.indexOf(key) === -1) App.pbCustom.circumstances.push(key);
+  } else {
+    App.pbCustom.circumstances = App.pbCustom.circumstances.filter(function(c) { return c !== key; });
+  }
 }
 
 function startPBSession() {

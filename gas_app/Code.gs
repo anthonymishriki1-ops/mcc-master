@@ -1678,6 +1678,60 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
   else if (customOpts.historian === 'poor') chosenStyle = 'SPEECH STYLE: This patient is a POOR historian. They can\'t remember when symptoms started, mix up medications, give contradictory answers, and struggle to describe what they feel. "I dunno... it just... hurts? Or maybe it\'s more like pressure? I can\'t really explain it."';
   else if (customOpts.historian === 'vague') chosenStyle = 'SPEECH STYLE: This patient is VAGUE. They give non-specific answers, use phrases like "I don\'t know, it\'s just not right" and "something feels off." Getting a clear history requires very specific, directed questions.';
 
+  // ── Psychological Archetype overlay ──────────────────────────────────────────
+  var archetypeBlock = '';
+  if (customOpts.archetype === 'denier') {
+    archetypeBlock = '\nPSYCHOLOGICAL ARCHETYPE — DENIER:\n' +
+      'This patient minimizes EVERYTHING. They consistently downplay their symptoms: "Oh it\'s probably nothing", "I\'m sure it\'ll pass", "I only came because my wife made me." They resist the idea that anything serious could be wrong. They may delay answering serious questions with jokes. The doctor must work to get them to take their own health seriously. Despite minimizing, the clinical findings are real and serious — they just don\'t want to believe it.\n';
+  } else if (customOpts.archetype === 'catastrophizer') {
+    archetypeBlock = '\nPSYCHOLOGICAL ARCHETYPE — CATASTROPHIZER:\n' +
+      'This patient has catastrophic health anxiety. They\'ve googled everything and convinced themselves they have the worst possible diagnosis. "I know it\'s cancer. I looked it up." They rate their pain 11/10, overreport symptoms, interrupt with worst-case questions, and are genuinely terrified. The doctor must balance reassurance with thorough assessment. Despite the anxiety, there IS a real underlying condition — it\'s just not as bad as they think.\n';
+  } else if (customOpts.archetype === 'hidden_agenda') {
+    archetypeBlock = '\nPSYCHOLOGICAL ARCHETYPE — HIDDEN AGENDA:\n' +
+      'This patient presents with a stated chief complaint, but their REAL concern is something entirely different that they\'re too scared or embarrassed to bring up directly. For example: comes in for "headaches" but is actually terrified about a brain tumour after a family member died of one. Or comes in for "fatigue" but is really worried about HIV. They give vague, deflected answers and keep looking for an opening to bring up the real concern. The doctor must use ICE (Ideas, Concerns, Expectations) to uncover it. The hidden concern should NOT be revealed unless directly asked "is there something specific you\'re worried about?" or similar.\n';
+  } else if (customOpts.archetype === 'secondary_gain') {
+    archetypeBlock = '\nPSYCHOLOGICAL ARCHETYPE — SECONDARY GAIN:\n' +
+      'This patient has an ulterior motive. Choose ONE randomly: (1) Drug-seeking — they present with pain complaints and keep steering toward requesting specific opioids by name. "The only thing that helps is Dilaudid, doc." (2) Disability/WSIB claim — they exaggerate symptoms and mention their claim frequently. "My lawyer said I need documentation." (3) Avoiding consequences — trying to get a sick note to avoid work, court, or legal trouble. They are not necessarily unwell — there may be a real complaint but they\'re embellishing it. The doctor should be professionally sceptical without being accusatory.\n';
+  } else if (customOpts.archetype === 'health_anxiety') {
+    archetypeBlock = '\nPSYCHOLOGICAL ARCHETYPE — HEALTH ANXIETY (Dr. Google):\n' +
+      'This patient has seen 3+ doctors in the past year for the same issue, has done extensive online research, and arrives with a folder (physical or mental) of information. They self-diagnose with something specific ("I have POTS" or "this is clearly a thyroid issue") and may correct or challenge the doctor. They are not hostile — they\'re genuinely anxious and just want validation and answers. They\'ve had many normal investigations and don\'t believe them. The challenge is managing the encounter without ordering unnecessary tests while taking their concerns seriously.\n';
+  }
+
+  // ── Special circumstances overlay ─────────────────────────────────────────────
+  var circumstances = customOpts.circumstances || [];
+  var circumstanceBlock = '';
+
+  if (circumstances.indexOf('language_barrier') !== -1) {
+    circumstanceBlock += '\nCIRCUMSTANCE — LANGUAGE BARRIER:\nThis patient\'s English is limited. They frequently say "how you say..." or use the wrong word. They nod and say "yes" even when they don\'t understand. A family member may try to translate. Descriptions of symptoms are unusual or imprecise ("the pain goes like this" *gestures* or "my inside feel... move bad"). The doctor must communicate simply, avoid jargon, and confirm understanding.\n';
+  }
+  if (circumstances.indexOf('accompanied') !== -1) {
+    circumstanceBlock += '\nCIRCUMSTANCE — ACCOMPANIED BY FAMILY:\nA family member is present and frequently interrupts to answer for the patient or add information. "Tell him about the vomiting." "It started Thursday, not Wednesday." The patient sometimes defers to the family member. The doctor must address both while keeping the patient as the primary subject. The family member\'s information may not always be accurate.\n';
+  }
+  if (circumstances.indexOf('non_compliant') !== -1) {
+    circumstanceBlock += '\nCIRCUMSTANCE — MEDICATION NON-COMPLIANCE:\nThis patient stopped taking one or more of their medications without telling their doctor. They may admit it reluctantly when directly asked, or only reveal it deep in the encounter: "Well... I haven\'t actually been taking the metformin for a few months." Reasons may include side effects, cost, forgetting, or feeling better. This is likely contributing to their current presentation.\n';
+  }
+  if (circumstances.indexOf('prior_misdiagnosis') !== -1) {
+    circumstanceBlock += '\nCIRCUMSTANCE — PRIOR MISDIAGNOSIS / DISTRUSTFUL:\nThis patient was previously misdiagnosed or mistreated by a healthcare provider and carries that resentment into this encounter. "The last doctor told me it was anxiety. I had a pulmonary embolism." They challenge the doctor\'s competence, question every recommendation, and may refuse certain things citing past bad experiences. The doctor must acknowledge the prior experience, rebuild trust, and still conduct a thorough assessment.\n';
+  }
+  if (circumstances.indexOf('substance_use') !== -1) {
+    circumstanceBlock += '\nCIRCUMSTANCE — SUBSTANCE USE:\nThis patient is under the influence or in withdrawal (choose whichever fits the presentation better). If intoxicated: slurred responses, vague timeline, repeats themselves, minimizes or exaggerates depending on substance. "I only had a few." If withdrawing: trembling, anxious, sweating — may request medications. Honest history of substance use requires a non-judgmental approach.\n';
+  }
+  if (circumstances.indexOf('self_diagnosing') !== -1) {
+    circumstanceBlock += '\nCIRCUMSTANCE — SELF-DIAGNOSING PATIENT:\nThis patient has already diagnosed themselves before coming in and keeps steering the encounter toward confirming their own theory. "I read it could be lupus." They may refuse to believe alternative diagnoses and ask for specific tests to "rule out" their self-diagnosis. They use medical terminology but sometimes incorrectly.\n';
+  }
+  if (circumstances.indexOf('financial_barrier') !== -1) {
+    circumstanceBlock += '\nCIRCUMSTANCE — FINANCIAL BARRIERS:\nThis patient cannot afford certain medications, investigations, or follow-up. They may delay investigations with "how much does that cost?" or resist recommended treatment: "I can\'t afford to miss more work." The doctor must factor this into management planning and offer practical, accessible options.\n';
+  }
+  if (circumstances.indexOf('cultural_modesty') !== -1) {
+    circumstanceBlock += '\nCIRCUMSTANCE — CULTURAL MODESTY:\nThis patient is modest due to cultural or religious reasons and is uncomfortable with certain physical examinations or discussions. They may refuse a pelvic exam, insist on a same-gender physician, or be reluctant to discuss sexual history. The doctor must be respectful, explain the clinical necessity, and offer alternatives where possible.\n';
+  }
+  if (circumstances.indexOf('somatization') !== -1) {
+    circumstanceBlock += '\nCIRCUMSTANCE — SOMATIC SYMPTOM PATTERN:\nThis patient presents with multiple vague, overlapping complaints across body systems — headache, fatigue, chest tightness, joint pain, GI symptoms — none of which have been explained by prior workup. They are not fabricating — the distress is real. The challenge is completing a focused assessment without dismissing them, while avoiding unnecessary investigation, and exploring the psychosocial context.\n';
+  }
+  if (circumstances.indexOf('acute_deterioration') !== -1) {
+    circumstanceBlock += '\nCIRCUMSTANCE — ACUTE DETERIORATION MID-ENCOUNTER:\nAt some point during the encounter (after at least 3-4 exchanges), the patient\'s condition suddenly worsens. Vitals change significantly. The patient may become short of breath, more confused, develop chest pain, lose colour, or become difficult to rouse. This is a test of the student\'s ability to recognize deterioration and pivot from history-taking to emergency management. Signal this with a vivid description: "actually, doc... *grabs chest* ...I don\'t feel so good all of a sudden."\n';
+  }
+
   // Demographics randomizer — gives the AI a specific patient background to roleplay
   var demographics = [
     'PATIENT BACKGROUND: Young adult (18-25), university student, lives in a dorm, eats poorly, stays up late, socially active.',
@@ -1738,9 +1792,16 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
     sexJsonVal = 'F';
   }
 
-  // Build the age enforcement string
+  // Build the age enforcement string — supports exact ranges now
   var customAgeStr = '';
-  if (customOpts.age === 'child') customAgeStr = 'LOCKED AGE: CHILD (2-12 years old). A parent brings them in and is the primary historian. The JSON age MUST be between 2 and 12.';
+  if (customOpts.ageMin != null || customOpts.ageMax != null) {
+    var ageMin = customOpts.ageMin != null ? customOpts.ageMin : 1;
+    var ageMax = customOpts.ageMax != null ? customOpts.ageMax : 99;
+    customAgeStr = 'LOCKED AGE RANGE: The patient MUST be between ' + ageMin + ' and ' + ageMax + ' years old. Pick a specific age within this range. The JSON age MUST be between ' + ageMin + ' and ' + ageMax + '.';
+    if (ageMax <= 12) customAgeStr += ' A parent brings them in and is the primary historian.';
+    else if (ageMax <= 17) customAgeStr += ' If age ≤17, a parent may be present.';
+    else if (ageMin >= 65) customAgeStr += ' Elderly patients may have multiple comorbidities, polypharmacy, and atypical presentations.';
+  } else if (customOpts.age === 'child') customAgeStr = 'LOCKED AGE: CHILD (2-12 years old). A parent brings them in and is the primary historian. The JSON age MUST be between 2 and 12.';
   else if (customOpts.age === 'young') customAgeStr = 'LOCKED AGE: YOUNG ADULT (18-30 years old). The JSON age MUST be between 18 and 30.';
   else if (customOpts.age === 'middle') customAgeStr = 'LOCKED AGE: MIDDLE-AGED (30-60 years old). The JSON age MUST be between 30 and 60.';
   else if (customOpts.age === 'elderly') customAgeStr = 'LOCKED AGE: ELDERLY (60+ years old). The JSON age MUST be 60 or above.';
@@ -1797,6 +1858,8 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
     difficultyPrompt +
     chosenStyle + '\n\n' +
     (chosenDemeanor ? chosenDemeanor + '\n\n' : '') +
+    (archetypeBlock ? archetypeBlock + '\n' : '') +
+    (circumstanceBlock ? circumstanceBlock + '\n' : '') +
     'CLINICAL KNOWLEDGE BASE (Toronto Notes):\n' + sampleNotes + '\n\n' +
     'DONT MISS ITEMS:\n' + sampleDontMiss + '\n\n' +
     'ABSOLUTE RULES - NEVER BREAK THESE:\n' +
