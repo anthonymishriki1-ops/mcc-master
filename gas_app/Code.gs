@@ -480,6 +480,16 @@ function getMCQQuiz(specialty, version, count) {
   data = data.filter(function(r) {
     var q = (r.Question || '').trim();
     if (!q || q.length < 10) return false; // No question stem or too short
+
+    // Reject stub questions where vignette was dropped during generation.
+    // Valid MCCQE-style questions have a clinical vignette (age, presentation) + stem.
+    // Stubs like "Which one of the following is the best next step?" are ≤100 chars
+    // with no patient scenario — these are hard failures, not valid questions.
+    if (q.length < 150) return false;
+    // Must contain a patient reference (age, gender, or clinical term)
+    var hasPatient = /\d{1,3}[- ]year|patient|woman|man|girl|boy|infant|child|presents|complains/i.test(q);
+    if (!hasPatient) return false;
+
     var optA = (r.Option_A || '').trim();
     var optB = (r.Option_B || '').trim();
     if (!optA || !optB) return false; // Need at least 2 real options
