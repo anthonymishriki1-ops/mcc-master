@@ -2209,6 +2209,43 @@ label {
 }
 
 /* ===== FLAG / REPORT ISSUE ===== */
+/* ===== CHANGELOG BUTTON (persistent) ===== */
+.changelog-btn {
+  position: fixed; bottom: 72px; right: 16px; z-index: 800;
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 5px 12px; font-size: 11px; font-weight: 700; color: var(--text-light);
+  cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  transition: all 0.15s; display: flex; align-items: center; gap: 4px;
+}
+.changelog-btn:hover { color: var(--primary); border-color: var(--primary); }
+.changelog-modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9997;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.changelog-modal {
+  background: var(--card); border-radius: 16px; width: 100%; max-width: 520px;
+  max-height: 80vh; overflow-y: auto; box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+}
+.changelog-modal-header {
+  position: sticky; top: 0; background: var(--card); padding: 20px 24px 12px;
+  border-bottom: 1px solid var(--border); z-index: 1;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.changelog-modal-body { padding: 16px 24px 24px; }
+.changelog-entry { margin-bottom: 20px; }
+.changelog-entry h4 { margin: 0 0 4px; font-size: 15px; }
+.changelog-entry .cl-label { font-size: 11px; color: var(--text-light); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+.changelog-entry ul { padding-left: 18px; margin: 8px 0 0; }
+.changelog-entry li { font-size: 13px; line-height: 1.6; margin: 4px 0; color: var(--text); }
+.changelog-entry li:before { content: none; }
+.cl-bugfix { color: var(--error); font-weight: 700; font-size: 11px; }
+.cl-content { color: #ff9800; font-weight: 700; font-size: 11px; }
+.cl-new { color: var(--success); font-weight: 700; font-size: 11px; }
+
+@media (max-width: 768px) {
+  .changelog-btn { bottom: 68px; right: 8px; padding: 4px 8px; font-size: 10px; }
+}
+
 .flag-btn {
   display: inline-flex; align-items: center; gap: 4px;
   background: none; border: 1px solid var(--border); border-radius: 8px;
@@ -2711,11 +2748,52 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '2.1';
+var APP_VERSION = '2.2';
 var APP_CHANGELOG = [
-  { version: '2.1', date: 'Mar 2026', items: ['GitHub Pages deployment (works without Netlify)', 'Screen zoom controls (+/-)', 'Medical term highlighting — tap blue words for definitions', 'Weekly AI progress report every Saturday', 'First-name login with saved progress', 'Dev mode for admin users', 'Compact PatientBot vitals monitor', 'Faster loading with background preload'] },
-  { version: '2.0', date: 'Mar 2026', items: ['Duolingo-style skill map dashboard', 'Mastery tracking per specialty', 'PatientBot with MCCQE clinical presentations', 'OSCE scorecard', 'Partial credit diagnosis', 'Management actions (discharge, prescribe, refer)', 'Library ebook viewer', 'Medical term translations (Persian/Arabic)', 'Colorful action palette'] },
-  { version: '1.0', date: 'Mar 2026', items: ['Initial release', 'Flashcards, Quiz, PatientBot, Daily Challenge', 'Leaderboard and achievements', 'Search and Dr. Data AI'] }
+  { version: '2.2', date: 'Mar 23 2026', label: 'Bug Fixes & Transparency', items: [
+    'FLAG SYSTEM: Users can now flag incorrect, unclear, or outdated content on flashcards, quiz, notes, and PatientBot — flags are logged for review',
+    'BUG FIX: 14 quiz questions were missing their clinical vignettes (showed only "Which of the following..." with no patient scenario) — these are now filtered out automatically',
+    'BUG FIX: Quiz history was not saving because the user profile was not being passed to the backend — fixed',
+    'BUG FIX: Notes page would not expand when clicking a specialty — caused by an inline CSS override — fixed',
+    'CONTENT FIX: Nasal midline dermoid cyst flashcard incorrectly said "hamartoma" — corrected to "choristoma"',
+    'CONTENT FIX: CKD/naproxen pain question had opioids as first-line answer — corrected to acetaminophen per Canadian guidelines, relabeled from Neurology to Nephrology',
+    'CONTENT FIX: Erythroplakia question was pure percentage recall — rewritten as a clinical vignette with management decision',
+    'CONTENT FIX: Questions with only 4 answer options now get a 5th distractor to match MCCQE format',
+    'Pass threshold note added: "Set above the estimated ~70% MCCQE cut score to push you harder"',
+    'Flashcard progress now saves per-profile (multiple users on same device keep separate positions)',
+    'Jump to any card number + shareable links so study groups can sync to the same card',
+    'Session-based login — closing the tab logs you out, but refreshing stays logged in',
+    'All heavy data preloads during login screen — dashboard, flashcards, notes, key topics load instantly after login',
+    'Desktop clock with alarm (top-right corner, desktop only)',
+    'Late-night study nudge: witty AI popups at 3h/4h/6h between 11pm–4am',
+    'PatientBot vitals monitor shrunk from 480px to 340px for less screen clutter'
+  ]},
+  { version: '2.1', date: 'Mar 2026', label: 'GitHub Pages & Polish', items: [
+    'GitHub Pages deployment (works without Netlify)',
+    'Screen zoom controls (+/-)',
+    'Medical term highlighting — tap blue words for definitions',
+    'Weekly AI progress report every Saturday',
+    'First-name login with saved progress',
+    'Dev mode for admin users',
+    'Compact PatientBot vitals monitor',
+    'Faster loading with background preload'
+  ]},
+  { version: '2.0', date: 'Mar 2026', label: 'Major Overhaul', items: [
+    'Duolingo-style skill map dashboard',
+    'Mastery tracking per specialty',
+    'PatientBot with MCCQE clinical presentations',
+    'OSCE scorecard',
+    'Partial credit diagnosis',
+    'Management actions (discharge, prescribe, refer)',
+    'Library ebook viewer',
+    'Medical term translations (Persian/Arabic)',
+    'Colorful action palette'
+  ]},
+  { version: '1.0', date: 'Mar 2026', label: 'Initial Release', items: [
+    'Flashcards, Quiz, PatientBot, Daily Challenge',
+    'Leaderboard and achievements',
+    'Search and Dr. Data AI'
+  ]}
 ];
 
 var SKILL_MAP = [
@@ -6610,6 +6688,57 @@ document.addEventListener('keydown', function(e) {
     }
   }
 });
+
+// =============================================
+// CHANGELOG BUTTON (persistent on every page)
+// =============================================
+(function() {
+  var btn = document.createElement('button');
+  btn.className = 'changelog-btn';
+  btn.innerHTML = '&#x1F4CB; v' + APP_VERSION;
+  btn.title = 'View changelog & bug fixes';
+  btn.onclick = showChangelogModal;
+  document.body.appendChild(btn);
+})();
+
+function showChangelogModal() {
+  var existing = document.getElementById('changelog-modal-overlay');
+  if (existing) { existing.remove(); return; }
+
+  var overlay = document.createElement('div');
+  overlay.id = 'changelog-modal-overlay';
+  overlay.className = 'changelog-modal-overlay';
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+
+  var html = '<div class="changelog-modal">';
+  html += '<div class="changelog-modal-header"><h3 style="margin:0">Changelog & Bug Fixes</h3>';
+  html += '<button onclick="document.getElementById(\'changelog-modal-overlay\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-light)">&#x2715;</button></div>';
+  html += '<div class="changelog-modal-body">';
+
+  for (var c = 0; c < APP_CHANGELOG.length; c++) {
+    var entry = APP_CHANGELOG[c];
+    html += '<div class="changelog-entry">';
+    html += '<h4>v' + escapeHtml(entry.version) + ' <span style="font-weight:400;color:var(--text-light);font-size:13px">&mdash; ' + escapeHtml(entry.date) + '</span></h4>';
+    if (entry.label) html += '<div class="cl-label">' + escapeHtml(entry.label) + '</div>';
+    html += '<ul>';
+    for (var i = 0; i < entry.items.length; i++) {
+      var item = entry.items[i];
+      var tag = '';
+      if (item.indexOf('BUG FIX:') === 0) { tag = '<span class="cl-bugfix">BUG FIX</span> '; item = item.replace('BUG FIX: ', ''); }
+      else if (item.indexOf('CONTENT FIX:') === 0) { tag = '<span class="cl-content">CONTENT FIX</span> '; item = item.replace('CONTENT FIX: ', ''); }
+      else if (item.indexOf('FLAG SYSTEM:') === 0) { tag = '<span class="cl-new">NEW</span> '; item = item.replace('FLAG SYSTEM: ', ''); }
+      html += '<li>' + tag + escapeHtml(item) + '</li>';
+    }
+    html += '</ul></div>';
+  }
+
+  html += '<div style="padding-top:12px;border-top:1px solid var(--border);font-size:12px;color:var(--text-light);line-height:1.6">';
+  html += 'We\'re committed to accuracy and transparency. If you find an issue, use the &#x1F6A9; Flag button on any content page to report it. Every flag is reviewed and addressed.';
+  html += '</div></div></div>';
+
+  overlay.innerHTML = html;
+  document.body.appendChild(overlay);
+}
 
 // =============================================
 // FLAG / REPORT ISSUE SYSTEM
