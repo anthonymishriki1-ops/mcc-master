@@ -1513,6 +1513,10 @@ label {
   font-weight: 600;
 }
 
+/* Hide the mobile bottom nav while the soft keyboard is open so it
+   doesn't float above the keyboard or obscure content */
+body.kb-open #bottom-nav { display: none !important; }
+
 #bottom-nav button .nav-emoji {
   font-size: 22px;
   line-height: 1;
@@ -3773,6 +3777,39 @@ var VitalsEngine = {
     toggleAlert('ve-bp-cell', bpAlert);
   },
 };
+
+// ── Mobile keyboard detection ─────────────────────────────────────────────
+// Hides the fixed bottom nav while the soft keyboard is open so it doesn't
+// float above the keyboard and obscure content on iOS/Android.
+(function() {
+  var BASE_HEIGHT = window.innerHeight;
+  function setKbOpen(open) { document.body.classList.toggle('kb-open', open); }
+
+  if (window.visualViewport) {
+    // visualViewport.height shrinks when the keyboard opens — most reliable method
+    window.visualViewport.addEventListener('resize', function() {
+      setKbOpen(window.visualViewport.height < BASE_HEIGHT - 150);
+    });
+  } else {
+    // Fallback: focus/blur on inputs and textareas
+    document.addEventListener('focusin', function(e) {
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+        setKbOpen(true);
+      }
+    });
+    document.addEventListener('focusout', function(e) {
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+        // Small delay so tapping a button in the bar doesn't briefly show then hide it
+        setTimeout(function() {
+          if (!document.activeElement || (document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA')) {
+            setKbOpen(false);
+          }
+        }, 100);
+      }
+    });
+  }
+})();
+// ─────────────────────────────────────────────────────────────────────────
 
 function init() {
   // Check if profile is selected
