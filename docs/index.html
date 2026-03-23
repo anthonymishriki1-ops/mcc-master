@@ -3304,6 +3304,7 @@ function finishInit() {
   }
 
   loadDashboard();
+  checkLangPrompt_();
 
   // If shared flashcard link, navigate directly to that card
   if (App.sharedFlashcard) {
@@ -6584,10 +6585,43 @@ function formatPBInput(text) {
 function setLanguage(lang) {
   App.glossaryLang = lang;
   localStorage.setItem('mcc_lang', lang);
-  // Reload glossary if we have one and switching languages
+  var sel = document.getElementById('lang-select');
+  if (sel) sel.value = lang;
   if (lang && !App.glossary) {
     loadGlossary();
   }
+}
+
+function checkLangPrompt_() {
+  if (localStorage.getItem('mcc_lang_prompted')) return; // already asked
+  if (localStorage.getItem('mcc_lang')) return; // already set by old user
+
+  // Show after a short delay so the dashboard renders first
+  setTimeout(function() {
+    var overlay = document.createElement('div');
+    overlay.id = 'lang-prompt-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn 0.3s ease;backdrop-filter:blur(4px)';
+    overlay.innerHTML =
+      '<div style="background:var(--card);border-radius:20px;padding:32px;max-width:420px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,0.4)">' +
+      '<div style="font-size:32px;text-align:center;margin-bottom:12px">&#x1F310;</div>' +
+      '<h3 style="margin:0 0 8px;text-align:center">Medical Term Translations</h3>' +
+      '<p style="margin:0 0 24px;color:var(--text-light);font-size:14px;text-align:center;line-height:1.6">Hover over highlighted medical terms while studying to see translations. Pick your preferred language or skip.</p>' +
+      '<div style="display:flex;flex-direction:column;gap:10px">' +
+      '<button onclick="pickLang_(\'fa\')" style="padding:14px;border-radius:12px;border:2px solid var(--border);background:var(--bg);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;transition:all 0.15s" onmouseenter="this.style.borderColor=\'var(--primary)\'" onmouseleave="this.style.borderColor=\'var(--border)\'">&#x1F1EE;&#x1F1F7; فارسی (Persian)</button>' +
+      '<button onclick="pickLang_(\'ar\')" style="padding:14px;border-radius:12px;border:2px solid var(--border);background:var(--bg);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;transition:all 0.15s" onmouseenter="this.style.borderColor=\'var(--primary)\'" onmouseleave="this.style.borderColor=\'var(--border)\'">&#x1F1F8;&#x1F1E6; العربية (Arabic)</button>' +
+      '<button onclick="pickLang_(\'fr\')" style="padding:14px;border-radius:12px;border:2px solid var(--border);background:var(--bg);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;transition:all 0.15s" onmouseenter="this.style.borderColor=\'var(--primary)\'" onmouseleave="this.style.borderColor=\'var(--border)\'">&#x1F1EB;&#x1F1F7; Français (French)</button>' +
+      '<button onclick="pickLang_(\'zh\')" style="padding:14px;border-radius:12px;border:2px solid var(--border);background:var(--bg);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;transition:all 0.15s" onmouseenter="this.style.borderColor=\'var(--primary)\'" onmouseleave="this.style.borderColor=\'var(--border)\'">&#x1F1E8;&#x1F1F3; 中文 (Chinese)</button>' +
+      '<button onclick="pickLang_(\'\')" style="padding:12px;border-radius:12px;border:1px solid var(--border);background:none;color:var(--text-light);font-size:14px;cursor:pointer;margin-top:4px">No thanks, English only</button>' +
+      '</div></div>';
+    document.body.appendChild(overlay);
+  }, 800);
+}
+
+function pickLang_(lang) {
+  localStorage.setItem('mcc_lang_prompted', '1');
+  setLanguage(lang);
+  var overlay = document.getElementById('lang-prompt-overlay');
+  if (overlay) overlay.remove();
 }
 
 function loadGlossary() {
