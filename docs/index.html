@@ -2214,6 +2214,13 @@ label {
     </div>
   </nav>
 
+  <!-- Zoom Controls -->
+  <div id="zoom-controls" style="position:fixed;top:8px;right:12px;z-index:999;display:flex;align-items:center;gap:4px;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:3px 8px;box-shadow:0 1px 4px rgba(0,0,0,0.1);font-size:13px;opacity:0.7;transition:opacity 0.2s" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.7'">
+    <button onclick="adjustZoom(-10)" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 6px;color:var(--text);font-weight:700" title="Zoom out">-</button>
+    <span id="zoom-level" style="min-width:36px;text-align:center;font-size:11px;color:var(--text-light);cursor:pointer" onclick="resetZoom()" title="Click to reset">100%</span>
+    <button onclick="adjustZoom(10)" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 6px;color:var(--text);font-weight:700" title="Zoom in">+</button>
+  </div>
+
   <!-- Main Content -->
   <main id="content">
 
@@ -2717,6 +2724,28 @@ function navigateTo(page) {
 function toggleSidebar() {
   document.getElementById('sidebar').classList.toggle('open');
 }
+
+// ===== ZOOM CONTROLS =====
+function adjustZoom(delta) {
+  var current = parseInt(localStorage.getItem('mcc_zoom') || '100');
+  var next = Math.max(50, Math.min(150, current + delta));
+  localStorage.setItem('mcc_zoom', next);
+  document.documentElement.style.fontSize = next + '%';
+  document.getElementById('zoom-level').textContent = next + '%';
+}
+function resetZoom() {
+  localStorage.setItem('mcc_zoom', '100');
+  document.documentElement.style.fontSize = '100%';
+  document.getElementById('zoom-level').textContent = '100%';
+}
+(function() {
+  var saved = parseInt(localStorage.getItem('mcc_zoom') || '100');
+  if (saved !== 100) {
+    document.documentElement.style.fontSize = saved + '%';
+    var el = document.getElementById('zoom-level');
+    if (el) el.textContent = saved + '%';
+  }
+})();
 
 function toggleDarkMode() {
   var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
