@@ -2801,6 +2801,15 @@ var App = {
   dontMissItems: [],
   dmQuizMode: false,
   dmMCQ: null,
+  pbMonitorAttached: false,
+  pbDrDataEval: null,
+  pbDrDataEvalLoading: false,
+  pbDrDataEvalError: false,
+  pbDrDataConvHistory: [],
+  pbMode: 'mccqe',
+  pbHouseCase: null,
+  pbHouseConvHistory: [],
+  pbHouseScore: null,
   dmQuizIndex: 0,
   dmQuizFlipped: false,
   dmQuizKnew: 0,
@@ -2868,8 +2877,21 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '2.9';
+var APP_VERSION = '3.0';
 var APP_CHANGELOG = [
+  { version: '3.0', date: 'Mar 23 2026', label: 'PatientBot Overhaul: VitalsEngine, Dr. Data Review, Dr. House Mode', items: [
+    'VitalsEngine: real-time fluctuating vitals (HR ±3 bpm, SpO2 ±1%) — no monitor by default',
+    'Attach Monitor: vitals appear only after clicking + Attach Monitor in the Exam palette',
+    'BP cycles like a real NIBP cuff: Measuring... → reading every 20s',
+    '40+ drugs/procedures mapped to vital sign effects (epinephrine, morphine, fluids, O2, intubation, chest tube, etc.)',
+    'Dr. Data Post-Case Review: automatic case analysis after diagnosis, follow-up Q&A',
+    'Dr. House Mode: reverse role-play — you are the patient, House is skeptical/sarcastic doctor',
+    '25 conditions from common (UTI, pneumonia) to exotic (Behçet, kala-azar, Pott\'s spine, falciparum malaria)',
+    'House difficulty levels: Easy = common conditions, Expert = tropical/rare + gaslighting',
+    'Speech buttons repositioned next to English term (not translation); TTS resume fix',
+    'Dashboard auto-navigates on login (navigateTo fix)',
+    'Tutorial stripped to 2 lean sentences. No marketing.',
+  ]},
   { version: '2.9', date: 'Mar 23 2026', label: 'Key Topics MCQ + Login Preloading + Tutorial Rewrite', items: [
     'Key Topics "Quiz Me" now generates real A/B/C/D multiple-choice questions with correct/incorrect feedback',
     'Login screen shows loading spinner while data preloads — no more blank flash after tapping Enter',
@@ -3385,28 +3407,13 @@ function afterLogin_(displayName) {
 function startTutorial() {
   var steps = [
     {
-      title: '🌐 Pronunciation & Translation — New!',
-      text: 'MCC Master now highlights medical terms throughout the app. Tap any <span style="background:#6366f1;color:#fff;padding:2px 7px;border-radius:4px;font-size:13px;font-weight:600">highlighted term</span> to hear it pronounced and see its translation. Built for <strong>IMGs</strong> preparing for the MCCQE in Canada.',
+      title: 'Blue Terms: Tap for Pronunciation',
+      text: 'Medical terms throughout the app are <span style="border-bottom:2px solid var(--accent);color:var(--accent);font-weight:600">underlined</span>. Tap one → 🔊 Normal speed, 🐌 Slow. Always pronounces in English.',
       target: null
     },
     {
-      title: '🔵 Tap Any Blue Term',
-      text: 'Throughout flashcards, notes, and Key Topics, medical terms are <span style="border-bottom:2px solid #6366f1;color:var(--accent);font-weight:600;cursor:pointer">underlined in blue</span>. <strong>Tap any highlighted term</strong> to expand an inline pill showing its definition and pronunciation buttons. Tap again to close.',
-      target: null
-    },
-    {
-      title: '🔊 Hear It Pronounced',
-      text: 'Inside the pill, tap <strong>🔊 Normal</strong> to hear the English pronunciation at full speed, or <strong>🐌 Slow</strong> to hear it broken down slowly. Pronunciation is always in <strong>English</strong> — the language of the MCCQE. This helps you say it confidently out loud.',
-      target: null
-    },
-    {
-      title: '🌍 Choose Your Language',
-      text: 'Select a secondary language from the <strong>sidebar menu</strong> (bottom-left). Choose from French 🇫🇷, Persian 🇮🇷, or Arabic 🇸🇦. Your choice saves between sessions. Once selected, each term pill shows the <strong>translation in your language</strong> alongside the English pronunciation.',
-      target: null
-    },
-    {
-      title: '✅ You\'re All Set!',
-      text: 'Over 115 medical terms across all specialties are mapped with translations. Open any <strong>Flashcard</strong> and tap a blue term to try it out. You can replay this guide anytime from the <strong>❓ Help</strong> button in the sidebar.',
+      title: 'Translations',
+      text: 'Pick French, Persian, or Arabic from the sidebar. The translation shows inline next to the term. That\'s it.',
       target: null
     }
   ];
@@ -3465,6 +3472,256 @@ function endTutorial() {
   var overlay = document.getElementById('tutorial-overlay');
   if (overlay) overlay.remove();
 }
+
+// ── VitalsEngine ─────────────────────────────────────────────────────────────
+// Real-time vital signs engine: handles drug effects, fluctuation, BP cycling
+var VitalsEngine = {
+  _base: { hr: 80, sbp: 120, dbp: 80, spo2: 98, rr: 16, temp: 37.0 },
+  _display: { hr: 80, sbp: 120, dbp: 80, spo2: 98, rr: 16, temp: 37.0 },
+  _effects: [],
+  _tickId: null,
+  _bpId: null,
+  _bpReadings: [],
+  _bpMeasuring: false,
+
+  DRUG_EFFECTS: {
+    'epinephrine':     { hr:+40, sbp:+30, dbp:+10, spo2:+2, rr:+4,  temp:0,    onset:30  },
+    'epinephrine_im':  { hr:+25, sbp:+20, dbp:+5,  spo2:+2, rr:+2,  temp:0,    onset:90  },
+    'atropine':        { hr:+30, sbp:+5,  dbp:0,   spo2:0,  rr:0,   temp:0,    onset:60  },
+    'morphine':        { hr:-8,  sbp:-10, dbp:-5,  spo2:-2, rr:-4,  temp:0,    onset:120 },
+    'fentanyl':        { hr:-5,  sbp:-8,  dbp:-4,  spo2:-2, rr:-5,  temp:0,    onset:30  },
+    'hydromorphone':   { hr:-6,  sbp:-8,  dbp:-4,  spo2:-2, rr:-4,  temp:0,    onset:60  },
+    'metoprolol':      { hr:-20, sbp:-15, dbp:-8,  spo2:0,  rr:-2,  temp:0,    onset:300 },
+    'labetalol':       { hr:-15, sbp:-20, dbp:-10, spo2:0,  rr:-2,  temp:0,    onset:180 },
+    'atenolol':        { hr:-18, sbp:-14, dbp:-7,  spo2:0,  rr:-1,  temp:0,    onset:300 },
+    'nitroglycerin':   { hr:+10, sbp:-25, dbp:-10, spo2:0,  rr:0,   temp:0,    onset:60  },
+    'furosemide':      { hr:+5,  sbp:-10, dbp:-5,  spo2:0,  rr:0,   temp:0,    onset:600 },
+    'norepinephrine':  { hr:-5,  sbp:+30, dbp:+15, spo2:0,  rr:0,   temp:0,    onset:60  },
+    'dopamine':        { hr:+15, sbp:+20, dbp:+10, spo2:0,  rr:0,   temp:0,    onset:60  },
+    'phenylephrine':   { hr:-8,  sbp:+25, dbp:+12, spo2:0,  rr:0,   temp:0,    onset:60  },
+    'vasopressin':     { hr:-5,  sbp:+20, dbp:+10, spo2:0,  rr:0,   temp:0,    onset:60  },
+    'midazolam':       { hr:-8,  sbp:-15, dbp:-8,  spo2:-3, rr:-6,  temp:0,    onset:60  },
+    'propofol':        { hr:-10, sbp:-20, dbp:-10, spo2:-4, rr:-8,  temp:0,    onset:30  },
+    'ketamine':        { hr:+15, sbp:+15, dbp:+8,  spo2:0,  rr:-2,  temp:0,    onset:60  },
+    'lorazepam':       { hr:-5,  sbp:-10, dbp:-5,  spo2:-2, rr:-4,  temp:0,    onset:120 },
+    'diazepam':        { hr:-5,  sbp:-10, dbp:-5,  spo2:-2, rr:-3,  temp:0,    onset:120 },
+    'acetaminophen':   { hr:0,   sbp:0,   dbp:0,   spo2:0,  rr:0,   temp:-0.5, onset:900 },
+    'ibuprofen':       { hr:0,   sbp:-3,  dbp:-2,  spo2:0,  rr:0,   temp:-0.4, onset:900 },
+    'ketorolac':       { hr:0,   sbp:-3,  dbp:-2,  spo2:0,  rr:0,   temp:-0.4, onset:300 },
+    'adenosine':       { hr:-40, sbp:-10, dbp:-5,  spo2:0,  rr:0,   temp:0,    onset:10, duration:15 },
+    'amiodarone':      { hr:-15, sbp:-10, dbp:-5,  spo2:0,  rr:0,   temp:0,    onset:300 },
+    'digoxin':         { hr:-15, sbp:-5,  dbp:-3,  spo2:0,  rr:0,   temp:0,    onset:600 },
+    'heparin':         { hr:0,   sbp:0,   dbp:0,   spo2:0,  rr:0,   temp:0,    onset:0   },
+    'alteplase':       { hr:-5,  sbp:-5,  dbp:-3,  spo2:+3, rr:-2,  temp:0,    onset:900 },
+    'insulin':         { hr:0,   sbp:-3,  dbp:-2,  spo2:0,  rr:0,   temp:0,    onset:900 },
+    'dextrose':        { hr:0,   sbp:+5,  dbp:+3,  spo2:0,  rr:0,   temp:0,    onset:120 },
+    'naloxone':        { hr:+15, sbp:+15, dbp:+8,  spo2:+8, rr:+8,  temp:0,    onset:60  },
+    'flumazenil':      { hr:+10, sbp:+10, dbp:+5,  spo2:+5, rr:+5,  temp:0,    onset:60  },
+    'normal_saline':   { hr:-8,  sbp:+15, dbp:+8,  spo2:+1, rr:-1,  temp:0,    onset:300 },
+    'lactated_ringer': { hr:-8,  sbp:+15, dbp:+8,  spo2:+1, rr:-1,  temp:0,    onset:300 },
+    'albumin':         { hr:-5,  sbp:+12, dbp:+6,  spo2:+1, rr:-1,  temp:0,    onset:600 },
+    'prbcs':           { hr:-10, sbp:+20, dbp:+10, spo2:+3, rr:-2,  temp:0,    onset:900 },
+    'salbutamol':      { hr:+15, sbp:+5,  dbp:+3,  spo2:+5, rr:-4,  temp:0,    onset:60  },
+    'ipratropium':     { hr:+5,  sbp:+3,  dbp:+2,  spo2:+3, rr:-3,  temp:0,    onset:120 },
+    'oxygen_nc':       { hr:-3,  sbp:0,   dbp:0,   spo2:+4, rr:-2,  temp:0,    onset:120 },
+    'oxygen_mask':     { hr:-3,  sbp:0,   dbp:0,   spo2:+6, rr:-3,  temp:0,    onset:60  },
+    'oxygen_nrb':      { hr:-5,  sbp:0,   dbp:0,   spo2:+10,rr:-4,  temp:0,    onset:60  },
+    'intubation':      { hr:-15, sbp:-5,  dbp:-3,  spo2:+12,rr:0,   temp:0,    onset:120 },
+    'chest_tube':      { hr:-10, sbp:+10, dbp:+5,  spo2:+12,rr:-6,  temp:0,    onset:300 },
+    'iv_bolus':        { hr:-10, sbp:+20, dbp:+10, spo2:+1, rr:-1,  temp:0,    onset:300 },
+    'trendelenburg':   { hr:-5,  sbp:+10, dbp:+5,  spo2:0,  rr:0,   temp:0,    onset:30  },
+    'cpr':             { hr:0,   sbp:+30, dbp:0,   spo2:+5, rr:0,   temp:0,    onset:30  },
+    'defibrillation':  { hr:-30, sbp:+10, dbp:+5,  spo2:+2, rr:0,   temp:0,    onset:10  },
+  },
+
+  DRUG_KEYWORDS: [
+    [/\bepinephrine\b|\bepi\b(?!.*\bIM\b)/i, 'epinephrine'],
+    [/\bepinephrine.*\bIM\b|\bIM.*epinephrine\b/i, 'epinephrine_im'],
+    [/\batropine\b/i, 'atropine'],
+    [/\bmorphine\b/i, 'morphine'],
+    [/\bfentanyl\b/i, 'fentanyl'],
+    [/\bhydromorphone\b|\bdilaudid\b/i, 'hydromorphone'],
+    [/\bmetoprolol\b/i, 'metoprolol'],
+    [/\blabetalol\b/i, 'labetalol'],
+    [/\batenolol\b/i, 'atenolol'],
+    [/\bnitroglycerin\b|\bnitro\b(?!\s*glycerin)/i, 'nitroglycerin'],
+    [/\bfurosemide\b|\blasix\b/i, 'furosemide'],
+    [/\bnorepinephrine\b|\bnoradrenaline\b|\blevophed\b/i, 'norepinephrine'],
+    [/\bdopamine\b/i, 'dopamine'],
+    [/\bphenylephrine\b/i, 'phenylephrine'],
+    [/\bvasopressin\b/i, 'vasopressin'],
+    [/\bmidazolam\b|\bversed\b/i, 'midazolam'],
+    [/\bpropofol\b|\bdiprivan\b/i, 'propofol'],
+    [/\bketamine\b/i, 'ketamine'],
+    [/\blorazepam\b|\bativan\b/i, 'lorazepam'],
+    [/\bdiazepam\b|\bvalium\b/i, 'diazepam'],
+    [/\bacetaminophen\b|\btylenol\b|\bparacetamol\b/i, 'acetaminophen'],
+    [/\bibuprofen\b|\badvil\b/i, 'ibuprofen'],
+    [/\bketorolac\b|\btoradol\b/i, 'ketorolac'],
+    [/\badenosine\b/i, 'adenosine'],
+    [/\bamiodarone\b/i, 'amiodarone'],
+    [/\bdigoxin\b/i, 'digoxin'],
+    [/\bheparin\b/i, 'heparin'],
+    [/\balteplase\b|\btPA\b/i, 'alteplase'],
+    [/\binsulin\b/i, 'insulin'],
+    [/\bdextrose\b|\bD50\b/i, 'dextrose'],
+    [/\bnaloxone\b|\bnarcan\b/i, 'naloxone'],
+    [/\bflumazenil\b/i, 'flumazenil'],
+    [/\bnormal saline\b|\b0\.9.*NaCl\b|\bNS\b(?!\w)/i, 'normal_saline'],
+    [/\blactated ringer\b|\bringer.s\b|\bLR\b(?!\w)/i, 'lactated_ringer'],
+    [/\balbumin\b/i, 'albumin'],
+    [/\bpacked red\b|\bpRBC\b|\bblood transfu/i, 'prbcs'],
+    [/\bsalbutamol\b|\bventolin\b|\balbuterol\b/i, 'salbutamol'],
+    [/\bipratropium\b|\batrovent\b/i, 'ipratropium'],
+    [/nasal cannula|2L.*O2|oxygen.*NC/i, 'oxygen_nc'],
+    [/face mask|simple.*mask|4L.*O2|6L.*O2/i, 'oxygen_mask'],
+    [/non.rebreathe|NRB|15L.*O2/i, 'oxygen_nrb'],
+    [/\bintubat|\bRSI\b|rapid sequence/i, 'intubation'],
+    [/chest tube|thoracostom/i, 'chest_tube'],
+    [/bolus.*fluid|fluid.*bolus|500.*ml|1L.*NS|1L.*LR/i, 'iv_bolus'],
+    [/trendelenburg/i, 'trendelenburg'],
+    [/\bCPR\b|chest compress/i, 'cpr'],
+    [/defibri|cardiovert/i, 'defibrillation'],
+  ],
+
+  init: function(serverVitals) {
+    var v = serverVitals || {};
+    this._base = {
+      hr:   v.hr || v.heartRate || 80,
+      sbp:  v.systolic || 120,
+      dbp:  v.diastolic || 80,
+      spo2: v.spo2 || v.o2sat || 98,
+      rr:   v.rr || v.respiratoryRate || 16,
+      temp: v.temp || v.temperature || 37.0,
+    };
+    this._display = Object.assign({}, this._base);
+    this._effects = [];
+    this._bpReadings = [];
+    this._bpMeasuring = false;
+    this.stop();
+  },
+
+  start: function() {
+    var self = this;
+    this.stop();
+    this._tickId = setInterval(function() { self._tick(); }, 2000);
+    this._bpMeasuring = true;
+    this._updateDOM();
+    setTimeout(function() {
+      self._takeBPReading();
+      self._bpId = setInterval(function() {
+        self._bpMeasuring = true;
+        self._updateDOM();
+        setTimeout(function() { self._takeBPReading(); }, 3500);
+      }, 20000);
+    }, 5000);
+  },
+
+  stop: function() {
+    if (this._tickId) { clearInterval(this._tickId); this._tickId = null; }
+    if (this._bpId)   { clearInterval(this._bpId);   this._bpId = null; }
+  },
+
+  applyEffect: function(key) {
+    var eff = this.DRUG_EFFECTS[key];
+    if (!eff) return;
+    this._effects.push({
+      key: key,
+      delta: { hr: eff.hr||0, sbp: eff.sbp||0, dbp: eff.dbp||0, spo2: eff.spo2||0, rr: eff.rr||0, temp: eff.temp||0 },
+      onset: (eff.onset || 60) * 1000,
+      duration: (eff.duration || 0) * 1000,
+      elapsed: 0,
+    });
+  },
+
+  detectAndApply: function(msg) {
+    var applied = [];
+    for (var i = 0; i < this.DRUG_KEYWORDS.length; i++) {
+      var pair = this.DRUG_KEYWORDS[i];
+      if (pair[0].test(msg) && applied.indexOf(pair[1]) === -1) {
+        this.applyEffect(pair[1]);
+        applied.push(pair[1]);
+      }
+    }
+  },
+
+  sync: function(sv) {
+    if (!sv) return;
+    if (sv.hr || sv.heartRate)     this._base.hr   = sv.hr || sv.heartRate;
+    if (sv.systolic)               this._base.sbp  = sv.systolic;
+    if (sv.diastolic)              this._base.dbp  = sv.diastolic;
+    if (sv.spo2 || sv.o2sat)       this._base.spo2 = sv.spo2 || sv.o2sat;
+    if (sv.rr || sv.respiratoryRate) this._base.rr = sv.rr || sv.respiratoryRate;
+    if (sv.temp || sv.temperature) this._base.temp = sv.temp || sv.temperature;
+  },
+
+  getLatestBP: function() {
+    return this._bpReadings.length > 0 ? this._bpReadings[this._bpReadings.length-1] : null;
+  },
+
+  _tick: function() {
+    var rn = function(r) { return (Math.random()-0.5)*r; };
+    var hr = this._base.hr, sbp = this._base.sbp, dbp = this._base.dbp;
+    var spo2 = this._base.spo2, rr = this._base.rr, temp = this._base.temp;
+    for (var i = this._effects.length-1; i >= 0; i--) {
+      var eff = this._effects[i];
+      eff.elapsed += 2000;
+      var ease = Math.min(1, eff.elapsed / eff.onset); ease = ease*ease;
+      hr += eff.delta.hr*ease; sbp += eff.delta.sbp*ease; dbp += eff.delta.dbp*ease;
+      spo2 += eff.delta.spo2*ease; rr += eff.delta.rr*ease; temp += eff.delta.temp*ease;
+      if (eff.duration > 0 && eff.elapsed >= eff.onset + eff.duration) this._effects.splice(i,1);
+    }
+    this._display.hr   = Math.max(0, Math.min(300, Math.round(hr + rn(3))));
+    this._display.spo2 = Math.max(0, Math.min(100, Math.round(spo2 + rn(1))));
+    this._display.rr   = Math.max(0, Math.min(80,  Math.round(rr + rn(2))));
+    this._display.temp = +((temp + rn(0.1)).toFixed(1));
+    this._display.sbp  = Math.max(0, Math.round(sbp + rn(2)));
+    this._display.dbp  = Math.max(0, Math.round(dbp + rn(2)));
+    this._updateDOM();
+  },
+
+  _takeBPReading: function() {
+    var s = this._display.sbp + Math.round((Math.random()-0.5)*6);
+    var d = this._display.dbp + Math.round((Math.random()-0.5)*4);
+    this._bpReadings.push({ sbp: s, dbp: d });
+    if (this._bpReadings.length > 5) this._bpReadings.shift();
+    this._bpMeasuring = false;
+    this._updateDOM();
+  },
+
+  _updateDOM: function() {
+    var d = this._display;
+    var set = function(id, val) { var el = document.getElementById(id); if (el) el.textContent = val; };
+    var setHTML = function(id, val) { var el = document.getElementById(id); if (el) el.innerHTML = val; };
+    set('ve-hr', d.hr || '--');
+    set('ve-spo2', (d.spo2 != null ? d.spo2 : '--') + '%');
+    set('ve-rr', d.rr || '--');
+    set('ve-temp', (d.temp != null ? d.temp : '--') + '\u00B0C');
+    var bp = this.getLatestBP();
+    if (this._bpMeasuring) {
+      setHTML('ve-bp', '<span style="font-size:10px;animation:pulse 1.2s infinite">Measuring...</span>');
+    } else {
+      set('ve-bp', bp ? (bp.sbp + '/' + bp.dbp) : '--/--');
+    }
+    var dot = document.getElementById('ve-hr-dot');
+    if (dot) {
+      var bi = d.hr > 0 ? (60/d.hr).toFixed(2) : 1;
+      dot.style.setProperty('--beat-interval', bi+'s');
+      if (d.hr > 0) dot.classList.add('beating'); else dot.classList.remove('beating');
+    }
+    var ecg = document.getElementById('pb-ecg-canvas');
+    if (ecg) ecg.dataset.hr = d.hr;
+    var pleth = document.getElementById('pb-pleth-canvas');
+    if (pleth) pleth.dataset.hr = d.hr;
+    var toggleAlert = function(id, on) { var el = document.getElementById(id); if (el) el.classList.toggle('pb-mon-alert', !!on); };
+    toggleAlert('ve-hr-cell',   d.hr > 120 || d.hr < 50);
+    toggleAlert('ve-spo2-cell', d.spo2 < 92);
+    toggleAlert('ve-rr-cell',   d.rr > 24 || d.rr < 8);
+    toggleAlert('ve-temp-cell', d.temp > 38.5 || d.temp < 35.5);
+    var bpAlert = bp ? (bp.sbp > 180 || bp.sbp < 90 || bp.dbp > 120 || bp.dbp < 60) : false;
+    toggleAlert('ve-bp-cell', bpAlert);
+  },
+};
 
 function init() {
   // Check if profile is selected
@@ -3534,6 +3791,7 @@ function finishInit() {
     window.history.replaceState({}, '', window.location.pathname);
   }
 
+  navigateTo('dashboard');
   loadDashboard();
   checkLangPrompt_();
 
@@ -6136,6 +6394,7 @@ function showPatientBotSetup() {
   html += '<div class="form-group" style="text-align:left"><label>Mode</label>';
   html += '<select id="pb-specialty" style="width:100%">';
   html += '<option value="Random">&#x1F3AF; MCCQE Exam Mode (Random Presentation)</option>';
+  html += '<option value="house">&#x1F9E0; Dr. House Mode — You Are the Patient</option>';
   html += '<optgroup label="By Specialty">';
   var groupedSpecs = ['Cardiology','Respirology','GI / Hepatology','Neurology','Psychiatry','MSK / Rheumatology','Nephrology / Urology','Endocrinology','Hematology / Oncology','Dermatology','OB/GYN','Pediatrics','Emergency Medicine','Infectious Disease','Surgery','Ophthalmology / ENT','Family Medicine'];
   for (var g = 0; g < groupedSpecs.length; g++) html += '<option value="' + escapeHtml(groupedSpecs[g]) + '">' + escapeHtml(groupedSpecs[g]) + '</option>';
@@ -6397,6 +6656,7 @@ function startPBSession() {
   App.pbCheatMode = document.getElementById('pb-cheat').checked;
   App.pbCurrentCase = 0; App.pbCaseScores = [];
   App.pbSetupSpecialty = document.getElementById('pb-specialty').value;
+  if (App.pbSetupSpecialty === 'house') { startHouseMode(); return; }
   startNextPBCase();
 }
 
@@ -6409,6 +6669,9 @@ function startNextPBCase() {
     App.pbCaseId = result.caseId; App.pbSpecialty = result.specialty; App.pbPresentation = result.presentation || '';
     App.pbDiagnosis = null; App.pbPatientInfo = null; App.pbDiagnosing = false; App.pbDiagAttempts = 0; App.pbDiagResolved = false;
     App.pbPartialUsed = false; App.pbPartialFeedback = null; App.pbPartialScore = null; App.pbScorecard = null; App.pbScorecardLoading = false; App.pbScorecardError = false;
+    App.pbDrDataEval = null; App.pbDrDataEvalLoading = false; App.pbDrDataEvalError = false; App.pbDrDataConvHistory = [];
+    App.pbMonitorAttached = false;
+    VitalsEngine.init(result.vitals || result.patient || {});
 
     var msg = stripPatientJSON(result.initialMessage);
     if (result.patientInfo) { App.pbPatientInfo = result.patientInfo; App.pbDiagnosis = result.patientInfo.diagnosis; }
@@ -6471,7 +6734,9 @@ function sendPBMessage() {
       App.pbHistory.push({ role: 'results', content: result.testResults });
     }
     // Update vitals display
-    if (result.vitals) App.pbVitals = result.vitals;
+    if (result.vitals) { App.pbVitals = result.vitals; VitalsEngine.sync(result.vitals); }
+    // Detect drug/procedure effects from user message
+    VitalsEngine.detectAndApply(message);
     App.pbHistory.push({ role: 'assistant', content: result.response });
     target(); input.disabled = false; input.focus();
   }).catch(function(e) {
@@ -6501,6 +6766,235 @@ function triggerPBDebrief() {
     App.pbHistory.push({ role: 'system', content: 'Debrief error: ' + (e.message || String(e)) });
     target();
   });
+}
+
+// ── Dr. House Mode ────────────────────────────────────────────────────────────
+var HOUSE_CONDITIONS = [
+  // COMMON (easy)
+  { id:'uti', level:'easy', name:'Urinary Tract Infection', spec:'Urology/FM', symptoms:['burning with urination','frequent urge to pee','cloudy or foul-smelling urine','pelvic discomfort'], history:['sexually active woman, 25','no fever','started 2 days ago'], push_for:['urinalysis','urine culture and sensitivity'], red_herrings:['STI','interstitial cystitis'], clues:['dysuria + frequency + no fever = uncomplicated UTI'] },
+  { id:'pneumonia', level:'easy', name:'Community-Acquired Pneumonia', spec:'Respirology', symptoms:['productive cough with yellow sputum','fever 38.8°C','right-sided chest pain worse with breathing','feeling short of breath with exertion'], history:['50-year-old smoker','symptoms for 5 days','works in an office'], push_for:['chest X-ray','sputum culture','CBC'], red_herrings:['bronchitis','pulmonary embolism','lung cancer'], clues:['fever + productive cough + lobar infiltrate = CAP'] },
+  { id:'gerd', level:'easy', name:'GERD', spec:'Gastroenterology', symptoms:['burning in chest after meals','worse lying down at night','sour taste in mouth','occasional regurgitation'], history:['overweight 45-year-old','drinks coffee every morning','symptoms for months'], push_for:['clinical diagnosis','trial of PPI','upper endoscopy if alarm features'], red_herrings:['cardiac angina','esophageal spasm','peptic ulcer'], clues:['heartburn + regurgitation + worse lying down'] },
+  { id:'iron_def', level:'easy', name:'Iron Deficiency Anemia', spec:'Hematology/FM', symptoms:['fatigue for months','pale skin','shortness of breath climbing stairs','craving ice and dirt (pica)'], history:['heavy menstrual periods','vegetarian diet','has had 3 pregnancies'], push_for:['CBC','ferritin','iron studies','peripheral blood smear'], red_herrings:['B12 deficiency','chronic disease anemia','hypothyroidism'], clues:['microcytic anemia + low ferritin + pica + heavy periods'] },
+  { id:'otitis', level:'easy', name:'Acute Otitis Media', spec:'Pediatrics/FM', symptoms:['ear pain','tugging at ear','fever','hearing muffled','irritable and not sleeping'], history:['4-year-old child','recent cold last week','goes to daycare'], push_for:['otoscope exam','tympanometry'], red_herrings:['otitis externa','TMJ pain','mastoiditis'], clues:['otalgia + preceding URI + bulging erythematous TM on otoscope'] },
+  // MODERATE
+  { id:'dvt', level:'medium', name:'Deep Vein Thrombosis', spec:'Vascular/Emergency', symptoms:['calf pain and swelling','warmth and redness in left leg','pain worse walking','mild shortness of breath'], history:['just returned from 14-hour flight','on oral contraceptive pill','35-year-old woman'], push_for:['lower extremity Doppler ultrasound','D-dimer','Wells score calculation'], red_herrings:['muscle strain','cellulitis','Baker\'s cyst rupture'], clues:['recent travel + OCP + unilateral leg swelling = high Wells score'] },
+  { id:'pe', level:'medium', name:'Pulmonary Embolism', spec:'Respirology/Emergency', symptoms:['sudden shortness of breath','pleuritic chest pain','coughing up blood','racing heart'], history:['2 weeks post ankle surgery and immobilized','BMI 35','family history of clotting disorder'], push_for:['CT pulmonary angiography','D-dimer','V/Q scan','lower extremity Doppler'], red_herrings:['pneumonia','costochondritis','anxiety attack'], clues:['immobilization + pleuritic chest pain + hemoptysis + tachycardia = PE until proven otherwise'] },
+  { id:'addison', level:'medium', name:'Addison Disease', spec:'Endocrinology', symptoms:['profound fatigue that has gotten worse over months','darkening of skin in skin creases','weight loss of 12 lbs','dizzy when standing','craving salt'], history:['28-year-old woman','symptoms progressing over 6 months','started a new diet but the fatigue isn\'t from that'], push_for:['morning cortisol','ACTH stimulation test','electrolytes (hyponatremia + hyperkalemia)'], red_herrings:['depression','anemia','celiac disease'], clues:['hyperpigmentation + fatigue + postural hypotension + hyponatremia + hyperkalemia'] },
+  { id:'celiac', level:'medium', name:'Celiac Disease', spec:'Gastroenterology', symptoms:['chronic diarrhea','bloating after eating bread or pasta','unintentional 15 lb weight loss','mouth ulcers that come and go'], history:['30-year-old man','iron deficiency found on blood work','sister was recently diagnosed with celiac'], push_for:['tTG-IgA antibody','total IgA','small bowel biopsy via endoscopy'], red_herrings:['IBS','Crohn\'s disease','lactose intolerance'], clues:['family history + iron deficiency + diarrhea + tTG-IgA is the screening test'] },
+  { id:'graves', level:'medium', name:'Graves Disease', spec:'Endocrinology', symptoms:['losing weight despite eating more','heart pounding','heat intolerance','hands trembling','eyes feeling like they\'re bulging out'], history:['29-year-old woman','recent stressful year','mother has hypothyroidism'], push_for:['TSH','free T4','thyroid-stimulating immunoglobulins (TSI)','thyroid ultrasound'], red_herrings:['anxiety disorder','pheochromocytoma'], clues:['exophthalmos + goiter + suppressed TSH + elevated T4 = Graves'] },
+  // UNCOMMON / ZEBRAS
+  { id:'pheo', level:'hard', name:'Pheochromocytoma', spec:'Endocrinology', symptoms:['episodic severe headaches','palpitations during episodes','profuse sweating in attacks','blood pressure spiking to 200/110 during episodes'], history:['35-year-old man','episodes triggered by stress','no heart disease but BP very difficult to control','father had something similar'], push_for:['24-hour urine catecholamines','plasma metanephrines','adrenal CT or MRI'], red_herrings:['anxiety disorder','essential hypertension','panic attacks'], clues:['episodic triad: headache + palpitations + sweating = pheo until proven otherwise'] },
+  { id:'goodpasture', level:'hard', name:'Goodpasture Syndrome', spec:'Nephrology/Respirology', symptoms:['coughing up blood','shortness of breath','blood in urine','swelling in legs'], history:['22-year-old male smoker','recent flu-like illness','family history of kidney disease'], push_for:['anti-GBM antibody','urinalysis with RBC casts','renal biopsy','CXR (pulmonary hemorrhage)'], red_herrings:['Wegener\'s granulomatosis','lupus nephritis','IgA nephropathy'], clues:['pulmonary hemorrhage + glomerulonephritis + anti-GBM antibody = Goodpasture'] },
+  { id:'gbs', level:'hard', name:'Guillain-Barré Syndrome', spec:'Neurology', symptoms:['weakness in legs that started 3 days ago and is climbing up','tingling in fingers and feet','back pain','difficulty taking deep breaths'], history:['2 weeks after having gastroenteritis (Campylobacter)','previously healthy 40-year-old'], push_for:['nerve conduction studies','lumbar puncture (albuminocytologic dissociation)','respiratory function tests (FVC)'], red_herrings:['multiple sclerosis','transverse myelitis','stroke'], clues:['ascending weakness after GI illness + areflexia + LP showing protein without cells = GBS'] },
+  { id:'wegener', level:'hard', name:'Granulomatosis with Polyangiitis (GPA/Wegener\'s)', spec:'Rheumatology', symptoms:['chronic nosebleeds and nasal crusting','saddle nose deformity developing','blood in urine','joint pain','shortness of breath'], history:['45-year-old','sinus problems for 2 years assumed to be chronic sinusitis','recent lab showing kidney abnormalities'], push_for:['c-ANCA (PR3-ANCA)','urinalysis with RBC casts','chest CT','renal biopsy'], red_herrings:['chronic sinusitis','lupus','Goodpasture'], clues:['upper + lower respiratory + renal triad + c-ANCA = GPA'] },
+  // EXOTIC / TROPICAL
+  { id:'malaria_falciparum', level:'hard', name:'Falciparum Malaria', spec:'Infectious Disease', symptoms:['high fever 40°C','rigors and sweating in cycles','severe headache','confusion beginning to develop','jaundice'], history:['returned from sub-Saharan Africa 10 days ago','took no prophylaxis','32-year-old'], push_for:['thick and thin blood smear','malaria rapid antigen test (RDT)','CBC (thrombocytopenia)','blood glucose'], red_herrings:['viral hepatitis','typhoid fever','dengue'], clues:['travel to Africa + cyclic fever + confusion + thrombocytopenia + no prophylaxis = falciparum malaria'] },
+  { id:'dengue', level:'medium', name:'Dengue Fever', spec:'Infectious Disease', symptoms:['sudden high fever','severe bone and muscle pain (feels like bones breaking)','rash appearing after 3-4 days','bleeding gums','pain behind the eyes'], history:['returned from Thailand 5 days ago','no vaccinations','27-year-old backpacker'], push_for:['dengue NS1 antigen (early)','dengue IgM/IgG','CBC (leukopenia + thrombocytopenia)','liver enzymes'], red_herrings:['influenza','leptospirosis','typhoid'], clues:['travel to tropics + breakbone fever + retro-orbital pain + thrombocytopenia + dengue antigen'] },
+  { id:'leishmania', level:'hard', name:'Visceral Leishmaniasis (Kala-azar)', spec:'Infectious Disease', symptoms:['fever that has been going on for months','massively enlarged spleen and liver','weight loss','darkening of skin','weakness'], history:['immigrant from Bihar, India','moved to Canada 8 months ago','symptoms starting 3 months after arrival'], push_for:['splenic aspiration or bone marrow biopsy','rK39 rapid test','serology','CBC (pancytopenia)'], red_herrings:['lymphoma','malaria','tuberculosis'], clues:['months of fever + massive splenomegaly + pancytopenia + travel from endemic area = kala-azar'] },
+  { id:'behcet', level:'expert', name:'Behçet Disease', spec:'Rheumatology', symptoms:['painful mouth ulcers recurring every month','genital ulcers that are very embarrassing to mention','eye redness and blurry vision','skin nodules on legs (erythema nodosum)','joint pain'], history:['28-year-old from Turkey','has been told it\'s just canker sores and HSV for years','uveitis found by ophthalmologist'], push_for:['clinical diagnosis based on International Criteria','ophthalmology referral','HLA-B51','pathergy test'], red_herrings:['recurrent HSV','inflammatory bowel disease','reactive arthritis'], clues:['recurrent oral + genital ulcers + uveitis + skin lesions + Middle Eastern background = Behçet'] },
+  { id:'fmf', level:'expert', name:'Familial Mediterranean Fever', spec:'Rheumatology', symptoms:['attacks of high fever that last 1-3 days and then completely resolve','severe abdominal pain during attacks','chest pain during episodes','no illness between attacks'], history:['20-year-old from Lebanon','attacks since childhood, but diagnosed as "appendicitis scares"','multiple family members have same problem'], push_for:['MEFV gene mutation testing','acute phase reactants during episode','exclude other causes of periodic fever'], red_herrings:['recurrent appendicitis','IBS','familial cold autoinflammatory syndrome'], clues:['Mediterranean ancestry + recurrent self-limiting fever + serositis + positive MEFV mutation = FMF'] },
+  { id:'tb_pott', level:'expert', name:'Pott\'s Disease (Spinal TB)', spec:'Infectious Disease', symptoms:['back pain that has been worsening for months','night sweats','weight loss','weakness in both legs recently developing'], history:['35-year-old originally from Somalia','immigrated 2 years ago','had BCG vaccine as child'], push_for:['spinal MRI (paravertebral abscess + vertebral destruction)','TB culture and PCR from biopsy','TST/IGRA','chest CT'], red_herrings:['lumbar disc herniation','metastatic cancer','bacterial osteomyelitis'], clues:['immigrant from high-burden country + chronic back pain + constitutional symptoms + spine destruction on MRI = Pott\'s disease'] },
+  { id:'sickle_crisis', level:'medium', name:'Sickle Cell Vaso-Occlusive Crisis', spec:'Hematology', symptoms:['severe pain in bones, chest, and abdomen','history of similar crises in the past','shortness of breath this time (new)','fever 38.5°C'], history:['25-year-old from Nigeria','known sickle cell disease','has been to ED 4 times this year for pain crises'], push_for:['CBC (hemoglobin)','chest X-ray (acute chest syndrome?)','blood cultures','oxygen saturation','type and screen'], red_herrings:['opioid-seeking behavior','pneumonia alone','pulmonary embolism'], clues:['known SCD + bone pain crisis + chest symptoms + low O2 = acute chest syndrome — most dangerous complication'] },
+  { id:'ludwig', level:'hard', name:'Ludwig\'s Angina', spec:'Emergency/ENT', symptoms:['severe throat and neck pain','difficulty swallowing','jaw stiffness','swelling under the chin and neck','muffled voice','drooling'], history:['42-year-old with poor dental hygiene','had a tooth abscess last week — not treated','now looks toxic'], push_for:['CT neck with contrast','surgical airway assessment','blood cultures','IV antibiotics immediately'], red_herrings:['peritonsillar abscess','simple dental abscess','epiglottitis'], clues:['dental source + bilateral submandibular + sublingual + submental space involvement + airway threat = Ludwig\'s angina — this is a SURGICAL EMERGENCY'] },
+  { id:'g6pd', level:'medium', name:'G6PD Deficiency — Hemolytic Crisis', spec:'Hematology', symptoms:['sudden jaundice','dark cola-coloured urine','fatigue and weakness','back pain'], history:['24-year-old man from Mediterranean','took dapsone for malaria prophylaxis 3 days ago','family history of "blood problems"'], push_for:['G6PD enzyme assay (after acute phase)','CBC (hemoglobin drop)','peripheral blood smear (Heinz bodies)','direct Coombs test (negative)'], red_herrings:['autoimmune hemolytic anemia','hepatitis','Gilbert syndrome'], clues:['Mediterranean/African background + oxidant drug exposure + non-immune hemolysis = G6PD deficiency'] },
+  { id:'leptospirosis', level:'hard', name:'Leptospirosis', spec:'Infectious Disease', symptoms:['fever and severe muscle pain especially calves','jaundice and yellow eyes','conjunctival suffusion (red eyes without discharge)','headache','decreased urine output'], history:['30-year-old farmer who works with cattle','fell into a river last week','now has kidney involvement on labs'], push_for:['leptospira serology (MAT)','blood culture','urinalysis (RBCs, casts)','liver function tests'], red_herrings:['viral hepatitis','leptospirosis confusion with dengue','hantavirus'], clues:['animal/water exposure + fever + myalgia + jaundice + renal failure = Weil\'s disease (severe leptospirosis)'] },
+  { id:'hiv_new', level:'medium', name:'HIV — New Diagnosis', spec:'Infectious Disease', symptoms:['fatigue for 3 months and it\'s not getting better','lost 20 lbs without trying','white patches in my mouth and throat that keep coming back','fever every couple of weeks for no reason','swollen lymph nodes in my neck and groin'], history:['35-year-old man','had unprotected sex with a new partner 6 months ago','never been tested for HIV','had two chest infections this year treated as bronchitis by another doctor'], push_for:['HIV 4th generation Ag/Ab test','CD4 count and viral load if positive','STI full panel','chest X-ray'], red_herrings:['lymphoma','tuberculosis','infectious mononucleosis'], clues:['constitutional symptoms + oral candidiasis + recurrent infections + risk exposure = HIV until proven otherwise — test first, everything else second'] },
+  { id:'unstable_angina', level:'medium', name:'Unstable Angina', spec:'Cardiology/Emergency', symptoms:['chest pressure at rest — just sitting watching TV, came out of nowhere','pain goes up to my left jaw and down my left arm','last episode lasted 20 minutes and I thought I was dying','this has happened three times this week and it\'s getting worse','not worse with breathing, no fever'], history:['58-year-old man','smoked a pack a day for 30 years','known hypertension and high cholesterol on medication','father had a heart attack at 62'], push_for:['12-lead ECG immediately','serial troponins','aspirin right now','urgent cardiology referral for catheterization'], red_herrings:['GERD','costochondritis','stable exertional angina'], clues:['rest chest pain + crescendo pattern + jaw/arm radiation + multiple cardiac risk factors = unstable angina — this is ACS until proven otherwise, activate the protocol NOW'] },
+  { id:'filariasis', level:'hard', name:'Lymphatic Filariasis (Elephantiasis)', spec:'Infectious Disease', symptoms:['my right leg has been swelling for two years — it\'s massive, much bigger than the other leg','the skin is thickened and rough like bark','I\'ve had fevers with the swelling episodes','my groin swells up sometimes too','it started small and just kept growing'], history:['40-year-old originally from Mozambique','grew up in a rural area near marshes','moved to Canada 3 years ago','was told it was "chronic infection of the leg" and given antibiotics many times'], push_for:['filarial serology IgG4 ELISA','nocturnal blood smear for microfilariae','lymph node ultrasound','skin snip or lymph node biopsy'], red_herrings:['chronic venous insufficiency','cellulitis','DVT','lymphedema secondary to cancer'], clues:['origin from endemic region (sub-Saharan Africa/South Asia) + progressive unilateral lymphedema + elephantiasis stage = lymphatic filariasis (Wuchereria bancrofti) — treat with diethylcarbamazine'] },
+  { id:'first_psychosis', level:'medium', name:'First-Episode Psychosis', spec:'Psychiatry', symptoms:['I\'ve been hearing voices for four months — they comment on what I\'m doing','I stopped going to university because the voices won\'t stop','I believe my neighbors are monitoring me through my phone','I haven\'t been sleeping or eating properly','my family says I\'m a completely different person from 6 months ago'], history:['21-year-old university student','no previous psychiatric history','smokes cannabis on weekends for 2 years','father has schizophrenia'], push_for:['urgent psychiatric assessment','urine drug screen','TSH, B12, glucose, metabolic panel to rule out organic cause','brain MRI to rule out structural lesion'], red_herrings:['cannabis-induced psychosis alone','bipolar disorder with psychotic features','brain tumor'], clues:['auditory hallucinations + paranoid delusions + 6+ months duration + social deterioration + first-degree relative with schizophrenia = first-episode schizophrenia — early intervention dramatically changes prognosis'] },
+];
+
+function startHouseMode() {
+  var el = document.getElementById('patientbot-content');
+  var difficulty = App.pbDifficulty || 'medium';
+  var levelMap = { easy: ['easy'], medium: ['easy','medium'], hard: ['medium','hard'], hardest: ['hard','expert'] };
+  var allowed = levelMap[difficulty] || ['medium','hard'];
+  var pool = HOUSE_CONDITIONS.filter(function(c) { return allowed.indexOf(c.level) !== -1; });
+  if (pool.length === 0) pool = HOUSE_CONDITIONS;
+  var cond = pool[Math.floor(Math.random() * pool.length)];
+  App.pbHouseCase = cond;
+  App.pbHouseConvHistory = [];
+  App.pbHouseScore = { symptoms_mentioned: 0, tests_pushed: 0, turns: 0, clues_hit: [] };
+  renderHouseBriefing();
+}
+
+function renderHouseBriefing() {
+  var el = document.getElementById('patientbot-content');
+  var cond = App.pbHouseCase;
+  if (!cond) return;
+  var html = '<div style="max-width:640px;margin:0 auto;padding:20px">';
+  html += '<div style="background:linear-gradient(135deg,#1a1a2e,#2d1b69);color:white;border-radius:16px;padding:28px;margin-bottom:20px;box-shadow:0 8px 32px rgba(0,0,0,0.3)">';
+  html += '<div style="font-size:14px;font-weight:700;opacity:0.6;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">&#x1F3E5; Patient Briefing — CONFIDENTIAL</div>';
+  html += '<div style="font-size:24px;font-weight:900;margin-bottom:4px">' + escapeHtml(cond.name) + '</div>';
+  html += '<div style="font-size:13px;opacity:0.7;margin-bottom:24px">' + escapeHtml(cond.spec) + ' &bull; Difficulty: ' + escapeHtml(App.pbDifficulty || 'medium') + '</div>';
+  html += '<div style="background:rgba(255,255,255,0.08);border-radius:10px;padding:16px;margin-bottom:16px">';
+  html += '<div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;opacity:0.7">Your Symptoms to Mention</div>';
+  for (var i = 0; i < cond.symptoms.length; i++) html += '<div style="padding:4px 0;font-size:14px">&#x2022; ' + escapeHtml(cond.symptoms[i]) + '</div>';
+  html += '</div>';
+  html += '<div style="background:rgba(255,255,255,0.08);border-radius:10px;padding:16px;margin-bottom:16px">';
+  html += '<div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;opacity:0.7">Your Background (Use This)</div>';
+  for (var i = 0; i < cond.history.length; i++) html += '<div style="padding:4px 0;font-size:14px">&#x2022; ' + escapeHtml(cond.history[i]) + '</div>';
+  html += '</div>';
+  html += '<div style="background:rgba(255,165,0,0.12);border:1px solid rgba(255,165,0,0.3);border-radius:10px;padding:16px">';
+  html += '<div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;color:#ffa500">&#x1F3AF; Push For These Tests</div>';
+  for (var i = 0; i < cond.push_for.length; i++) html += '<div style="padding:4px 0;font-size:14px;color:#ffd580">&#x2022; ' + escapeHtml(cond.push_for[i]) + '</div>';
+  html += '</div>';
+  html += '</div>';
+  html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px">';
+  html += '<div style="font-size:14px;color:var(--text-light);line-height:1.6">You are the <strong>patient</strong>. House is the doctor — skeptical, sarcastic, and brilliant. Describe your symptoms. Push for the right tests. Convince him.<br><br>The goal: get him to the right diagnosis before he dismisses you and sends you home with antacids.</div>';
+  html += '</div>';
+  html += '<button class="btn btn-success" onclick="startHouseConversation_()" style="width:100%;padding:14px;font-size:16px;font-weight:700">&#x1F92F; I\'m ready, Doctor.</button>';
+  html += '<button class="btn btn-outline" onclick="showPatientBotSetup()" style="width:100%;padding:12px;font-size:14px;margin-top:10px">&#x2190; Back to Setup</button>';
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function startHouseConversation_() {
+  var el = document.getElementById('patientbot-content');
+  App.pbHouseConvHistory = [];
+  renderHouseChat();
+}
+
+function buildHousePrompt_(cond, difficulty) {
+  var openers = [
+    '"You\'re either dying or deeply boring. I\'m rooting for dying — more interesting for both of us."',
+    '"Sit. Or don\'t. Either way, I\'ve already formed a diagnosis and it\'s disappointing."',
+    '"You have thirty seconds. I\'ve already decided it\'s anxiety. Surprise me."',
+    '"You look terrible. I mean that clinically, not personally. Well. Both."',
+    '"What is it? And before you say \'it started gradually\' — I\'ve already stopped caring about gradually."',
+    '"My leg hurts. Your problems are worse. We\'ll see about that. Go."'
+  ];
+  var opener = openers[Math.floor(Math.random() * openers.length)];
+  var diffInstructions = {
+    easy: 'EASY MODE (relatively good day): You\'re still sarcastic, still House, but you actually listen. You pivot to the right diagnosis in 5-7 exchanges. You\'re quietly impressed when the patient mentions a smart symptom — you\'d never say so, but you\'ll mutter something like "...fine, that\'s not completely useless."',
+    medium: 'MEDIUM MODE (typical Tuesday): You\'ve decided it\'s dehydration and/or anxiety before they finish their first sentence. You\'ll suggest both of those first. You make the patient repeat themselves. You look at your phone once. You come around in 8-12 exchanges when the symptom pattern becomes undeniable.',
+    hard: 'HARD MODE (bad week): Full House. You\'ve already diagnosed them with malingering. You reference Foreman being wrong ("Foreman says psychosomatic. Foreman is always wrong. That almost makes me think he\'s right, which is terrifying."). You threaten discharge. You order one deliberately wrong test to prove a point. You mutter about Vicodin at least twice. Takes 12+ exchanges of persistent, specific symptom advocacy to crack you.',
+    hardest: 'EXPERT MODE (your worst): You are convinced this patient is a hypochondriac, a drug seeker, or "a fascinating case study in the human capacity for self-delusion." You gently gaslight. You "accidentally" suggest a wrong diagnosis with confidence. You reference Cuddy\'s budget. You say "Everybody lies" and mean it personally. Only airtight, complete, medically accurate symptom history breaks through — and even then you act like you figured it out yourself.'
+  };
+  return 'You are Dr. Gregory House MD, Princeton-Plainsboro Teaching Hospital. You are allowed to swear — House swears. Keep it real.\n\nA patient just walked in. You do NOT know their diagnosis. You figure it out through the conversation.\n\nYOUR OPENING LINE — use this EXACTLY to start:\n' + opener + '\n\n' + (diffInstructions[difficulty || 'medium'] || diffInstructions.medium) + '\n\nCOMEDY RULES — these are MANDATORY. House without comedy is just a mean GP with a limp:\n\n1. TEAM REFERENCES — drag your fellows in, constantly and incorrectly:\n   "Chase bet twenty bucks it\'s viral. He\'s going to lose twenty bucks."\n   "Foreman says psychosomatic. Foreman says everything is psychosomatic. He once called my leg psychosomatic."\n   "Thirteen would\'ve had this in four exchanges. Thirteen isn\'t here. Lucky her, honestly."\n   "Cameron would\'ve already sent you home with a hug and a pamphlet. That\'s why Cameron doesn\'t work here anymore."\n\n2. WILSON TANGENTS:\n   "Wilson called this morning. Something about \'healthy communication.\' I hung up. Write a differential, Wilson."\n   "Wilson thinks I should apologize to patients. Wilson also thinks egg salad is a viable life choice."\n   "My best friend is an oncologist who eats lunch alone. Think about what that says about the rest of us."\n\n3. VICODIN LINES:\n   "You\'re giving me a headache that my existing headache is afraid of."\n   "I need two Vicodin and a whiteboard to process what you just said."\n   "My leg hurts. Somehow your symptoms are making it worse."\n   "I\'m running out of pills and patience in equal measure."\n\n4. THE DRAMATIC PIVOT — when patient mentions something actually diagnostic:\n   Hard stop. "Wait. Say that again." Long pause. "Everyone. OUT. Not you. You\'re staying."\n   "I hate it when patients are right. It happens twice a year and it\'s always inconvenient."\n\n5. WRONG FIRST — always suggest the stupid diagnosis before the right one:\n   "Classic anxiety. Or dehydration. Or both. Have you tried water? I\'m serious. Have you tried water?"\n   "Statistically, you\'re fine. Statistically, I\'m also wrong once per case. So."\n\n6. WHEN YOU\'RE WRONG:\n   "I was wrong. I hate that. That\'s my one wrong for this case, we\'ve used it, moving the hell on."\n   Never apologize. Ever.\n\n7. GOOGLE SHOTS:\n   "You described the first three pages of WebMD. Congratulations, you\'re dying of everything and also nothing."\n   "Did you WebMD yourself before coming here? Because that explains the look on your face."\n\n8. THE RARE GENUINE MOMENT (once per session, max):\n   "...that\'s actually a useful detail. I\'m annoyed that you mentioned it correctly."\n   Say it like it physically hurts you.\n\n9. RELUCTANT ACKNOWLEDGMENT as evidence builds:\n   "Fine." [beat] "FINE. That\'s... not nothing."\n   "I hate this. I hate this and I\'m ordering the test."\n   "You\'re annoyingly right. That\'s the worst kind of right."\n\n10. SWEARING:\n    Light swearing is fine and in character. "Damn," "hell," "crap," "bastard," "ass" — use them naturally.\n    "Oh for the love of — fine. Fine. Run the damn panel."\n\nRESPONSE FORMAT:\n- 2-4 sentences max. Sharp, punchy, specific.\n- STAY IN CHARACTER. No meta commentary, no "as an AI," nothing.\n- Max one follow-up question per turn.\n- When patient demands the right test: make them earn it. Then: "Why would I— ...actually, damn it, why wouldn\'t I. Fine."\n- Brilliant and dismissive, not cruel.\n\nThe patient is NOT lying or exaggerating. They\'re a real person trying to get a real diagnosis from a doctor who has already decided they\'re fine. That\'s the game. Play it straight.\n\nYou are the DOCTOR. They are the PATIENT. Stay in character.';
+}
+
+function renderHouseChat() {
+  var el = document.getElementById('patientbot-content');
+  var cond = App.pbHouseCase;
+  if (!cond) return;
+  var history = App.pbHouseConvHistory;
+  var html = '<div style="max-width:700px;margin:0 auto">';
+  // Header
+  html += '<div class="pb-top-bar"><div class="pb-top-left"><h3>&#x1F9E0; Dr. House Mode &mdash; ' + escapeHtml(cond.name) + '</h3></div>';
+  html += '<div class="pb-top-right"><span style="font-size:13px;color:var(--text-light)">Turn ' + App.pbHouseScore.turns + '</span>';
+  html += '<button class="btn btn-sm btn-outline" onclick="endHouseMode_()" style="margin-left:8px">End Session</button></div></div>';
+  // Patient info reminder (collapsed)
+  html += '<div style="background:rgba(45,27,105,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:10px;margin:12px 16px;padding:10px 16px;font-size:12px;color:var(--text-light);cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'\':\'none\'">';
+  html += '&#x1F4CB; Your condition: <strong>' + escapeHtml(cond.name) + '</strong> &mdash; tap to see your briefing';
+  html += '</div>';
+  html += '<div style="display:none;background:rgba(45,27,105,0.06);border-radius:10px;margin:-8px 16px 12px;padding:12px 16px;font-size:13px">';
+  html += '<strong>Symptoms:</strong> ' + cond.symptoms.join(', ') + '<br><strong>Push for:</strong> ' + cond.push_for.join(', ');
+  html += '</div>';
+  // Chat messages
+  html += '<div class="chat-container"><div class="chat-messages" id="pb-messages" style="min-height:300px">';
+  if (history.length === 0) {
+    html += '<div class="chat-message assistant" style="font-style:italic;border-left:3px solid #7c3aed;padding-left:12px">';
+    html += '<strong>Dr. House</strong> leans back, barely looking up from his whiteboard.<br>"What is it? Make it quick."';
+    html += '</div>';
+  }
+  for (var i = 0; i < history.length; i++) {
+    var m = history[i];
+    if (m.role === 'user') {
+      html += '<div class="chat-message user">' + escapeHtml(m.content) + '</div>';
+    } else if (m.role === 'assistant') {
+      html += '<div class="chat-message assistant" style="border-left:3px solid #7c3aed;padding-left:12px"><strong>Dr. House:</strong> ' + formatMarkdown(m.content) + '</div>';
+    } else if (m.role === 'typing') {
+      html += '<div class="chat-message assistant typing" id="pb-typing">House is thinking... or ignoring you. Hard to tell.</div>';
+    }
+  }
+  html += '</div></div>';
+  // Input area
+  html += '<div class="chat-input-area">';
+  html += '<textarea id="pb-input" placeholder="Describe your symptoms..." rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendHouseMessage()}"></textarea>';
+  html += '<button class="btn btn-primary" onclick="sendHouseMessage()">Send</button>';
+  html += '</div></div>';
+  el.innerHTML = html;
+  var msgs = document.getElementById('pb-messages');
+  if (msgs) msgs.scrollTop = msgs.scrollHeight;
+}
+
+function sendHouseMessage() {
+  var input = document.getElementById('pb-input');
+  var message = input ? input.value.trim() : '';
+  if (!message) return;
+  if (input) input.value = '';
+  App.pbHouseConvHistory.push({ role: 'user', content: message });
+  App.pbHouseScore.turns++;
+  renderHouseChat();
+  // Score: check if key clues mentioned
+  var cond = App.pbHouseCase;
+  var msgLower = message.toLowerCase();
+  for (var ci = 0; ci < cond.symptoms.length; ci++) {
+    var symptomWords = cond.symptoms[ci].toLowerCase().split(' ').slice(0, 2).join(' ');
+    if (msgLower.indexOf(symptomWords) !== -1 && App.pbHouseScore.clues_hit.indexOf(ci) === -1) {
+      App.pbHouseScore.clues_hit.push(ci); App.pbHouseScore.symptoms_mentioned++;
+    }
+  }
+  for (var ti = 0; ti < cond.push_for.length; ti++) {
+    var testWord = cond.push_for[ti].toLowerCase().split(' ')[0];
+    if (msgLower.indexOf(testWord) !== -1) App.pbHouseScore.tests_pushed++;
+  }
+  // Show typing indicator
+  App.pbHouseConvHistory.push({ role: 'typing', content: '' });
+  renderHouseChat();
+  // Build House system prompt (injected as first assistant turn)
+  var sysPrompt = buildHousePrompt_(cond, App.pbDifficulty);
+  var apiHistory = [{ role: 'assistant', content: sysPrompt }].concat(
+    App.pbHouseConvHistory.filter(function(m) { return m.role !== 'typing'; }).slice(-16)
+  );
+  serverCall('askDrData', message, apiHistory).then(function(result) {
+    App.pbHouseConvHistory = App.pbHouseConvHistory.filter(function(m) { return m.role !== 'typing'; });
+    var response = result.response || result;
+    App.pbHouseConvHistory.push({ role: 'assistant', content: response });
+    renderHouseChat();
+  }).catch(function(e) {
+    App.pbHouseConvHistory = App.pbHouseConvHistory.filter(function(m) { return m.role !== 'typing'; });
+    App.pbHouseConvHistory.push({ role: 'assistant', content: '...House stares at you. His phone rang. He\'s gone.' });
+    renderHouseChat();
+  });
+}
+
+function endHouseMode_() {
+  var el = document.getElementById('patientbot-content');
+  var cond = App.pbHouseCase;
+  var score = App.pbHouseScore;
+  var total_symptoms = cond.symptoms.length;
+  var sym_pct = total_symptoms > 0 ? Math.round((score.symptoms_mentioned / total_symptoms) * 100) : 0;
+  var grade = sym_pct >= 80 ? 'A' : sym_pct >= 65 ? 'B' : sym_pct >= 50 ? 'C' : sym_pct >= 35 ? 'D' : 'F';
+  var gradeColor = sym_pct >= 65 ? '#22c55e' : sym_pct >= 50 ? '#f59e0b' : '#ef4444';
+  var html = '<div style="max-width:640px;margin:0 auto;padding:20px">';
+  html += '<div class="card" style="padding:32px;text-align:center">';
+  html += '<h3 style="margin:0 0 8px">Session Complete</h3>';
+  html += '<p style="color:var(--text-light);font-size:14px;margin:0 0 24px">' + escapeHtml(cond.name) + '</p>';
+  html += '<div class="daily-card-score-ring"><div class="daily-card-score-number" style="color:' + gradeColor + '">' + grade + '</div><div class="daily-card-score-label">' + sym_pct + '%</div></div>';
+  html += '<p style="margin:16px 0;font-weight:700">' + score.symptoms_mentioned + '/' + total_symptoms + ' key symptoms mentioned &bull; ' + score.turns + ' turns</p>';
+  html += '<div style="background:rgba(99,102,241,0.08);border-radius:10px;padding:16px;text-align:left;margin:16px 0">';
+  html += '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;opacity:0.6">Clinical Pearl</div>';
+  html += '<span style="font-size:14px;line-height:1.6">' + escapeHtml(cond.clues.join(' ')) + '</span></div>';
+  // Patient advocacy lesson
+  var advocacyLines = {
+    A: 'You advocated well. You gave House everything he needed and he had no excuse to dismiss you. This is what good patient communication looks like.',
+    B: 'Solid. You got most of it across. In real life, being persistent and specific about symptoms — especially the weird ones — is what catches diagnoses early.',
+    C: 'You got some key symptoms out. Real patients with this condition often get missed for months or years because they only mention the obvious symptoms. The specific ones matter.',
+    D: 'House would\'ve sent you home with antacids. In real medicine, patients who can\'t articulate their full symptom picture — timeline, specifics, context — get missed. Practice the language.',
+    F: 'You got dismissed. This happens constantly to real patients, especially with complex diagnoses. The lesson: every symptom is data. Describe all of it, in sequence, with timing. Doctors who dismiss you are the ones who\'ll miss something.'
+  };
+  html += '<div style="background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.18);border-radius:10px;padding:16px;text-align:left;margin:12px 0">';
+  html += '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;color:#ef4444">&#x1F3AF; The Real Lesson</div>';
+  html += '<div style="font-size:13px;line-height:1.7;color:var(--text)">' + (advocacyLines[grade] || advocacyLines.C) + ' ';
+  html += 'As a <strong>future doctor</strong>: every time you\'re about to dismiss a patient, remember this game. The ones who "seem fine" are sometimes the ones with kala-azar.</div>';
+  html += '</div>';
+  html += '<div style="display:flex;gap:12px;justify-content:center;margin-top:20px;flex-wrap:wrap">';
+  html += '<button class="btn btn-primary" onclick="startHouseMode()" style="padding:12px 24px">&#x1F504; Play Again</button>';
+  html += '<button class="btn btn-outline" onclick="showPatientBotSetup()">&#x2190; Back to Setup</button>';
+  html += '</div></div></div>';
+  el.innerHTML = html;
 }
 
 function quickNewPBCase() {
@@ -6633,6 +7127,13 @@ var pbActionSpecs = {
 };
 
 function insertPBAction(text) {
+  // Special: attach monitor
+  if (text.toLowerCase().replace(/\*/g,'').trim() === 'attach monitor') {
+    attachPBMonitor_();
+    var panel = document.getElementById('pb-actions-panel');
+    if (panel) panel.style.display = 'none';
+    return;
+  }
   // Check if this action needs a specification
   if (pbActionSpecs[text]) {
     showActionSpecPrompt(text, pbActionSpecs[text]);
@@ -6824,7 +7325,63 @@ function loadOSCEScorecard() {
   });
 }
 
-function endPBCase() { App.pbCaseId = null; App.pbHistory = []; App.pbSpecialty = null; App.pbPartialUsed = false; App.pbPartialFeedback = null; App.pbPartialScore = null; App.pbScorecard = null; App.pbScorecardLoading = false; App.pbScorecardError = false; showPatientBotSetup(); }
+function endPBCase() { VitalsEngine.stop(); App.pbMonitorAttached = false; App.pbCaseId = null; App.pbHistory = []; App.pbSpecialty = null; App.pbPartialUsed = false; App.pbPartialFeedback = null; App.pbPartialScore = null; App.pbScorecard = null; App.pbScorecardLoading = false; App.pbScorecardError = false; App.pbDrDataEval = null; App.pbDrDataEvalLoading = false; App.pbDrDataEvalError = false; App.pbDrDataConvHistory = []; showPatientBotSetup(); }
+
+function attachPBMonitor_() {
+  App.pbMonitorAttached = true;
+  VitalsEngine.start();
+  var renderFn = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
+  renderFn();
+}
+
+function loadPBDrDataEval_() {
+  if (App.pbDrDataEvalLoading || App.pbDrDataEval) return;
+  App.pbDrDataEvalLoading = true;
+  var renderFn = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
+  var transcript = '';
+  for (var i = 0; i < App.pbHistory.length; i++) {
+    var m = App.pbHistory[i];
+    var c = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+    if (m.role === 'user') transcript += 'Student: ' + c.substring(0, 300) + '\n';
+    else if (m.role === 'assistant') transcript += 'Patient: ' + c.substring(0, 200) + '\n';
+    else if (m.role === 'system') transcript += '[Action: ' + c.substring(0, 150) + ']\n';
+    else if (m.role === 'diagnosis_result') { var d = m.content || {}; transcript += '[Diagnosis submitted: ' + (d.answer||'') + ' — ' + (d.correct?'CORRECT':'INCORRECT') + ', score: ' + (d.score||0) + ']\n'; }
+  }
+  var lastScore = App.pbCaseScores.length > 0 ? App.pbCaseScores[App.pbCaseScores.length-1] : {};
+  var prompt = 'You are a clinical educator reviewing a PatientBot encounter. Evaluate the student\'s clinical reasoning.\n\nSpecialty: ' + (App.pbSpecialty||'?') + '\nCorrect diagnosis: ' + (App.pbDiagnosis||'?') + '\nResult: ' + (lastScore.correct ? 'Correct' : 'Incorrect') + (lastScore.fatal ? ' (patient died)' : '') + '\n\nEncounter:\n' + transcript + '\n\nProvide:\n1. What they did well (be specific)\n2. What they missed or should improve\n3. One key clinical pearl for the MCCQE\n\nIf they ordered irrelevant tests or seemed to be guessing randomly, mention it with a touch of dry humor. Keep it to 3 concise paragraphs. No fluff.';
+  serverCall('askDrData', prompt, []).then(function(result) {
+    App.pbDrDataEval = result.response || result;
+    App.pbDrDataEvalLoading = false;
+    App.pbDrDataConvHistory = [{ role: 'assistant', content: App.pbDrDataEval }];
+    renderFn();
+  }).catch(function(e) {
+    App.pbDrDataEvalLoading = false;
+    App.pbDrDataEvalError = true;
+    renderFn();
+  });
+}
+
+function sendPBDrDataMessage() {
+  var input = document.getElementById('pb-drdata-input');
+  var message = input ? input.value.trim() : '';
+  if (!message) return;
+  if (input) input.value = '';
+  App.pbDrDataConvHistory.push({ role: 'user', content: message });
+  var renderFn = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
+  renderFn();
+  var ctx = 'Case: ' + (App.pbSpecialty||'') + ', Diagnosis: ' + (App.pbDiagnosis||'') + '.';
+  var apiHistory = [{ role: 'assistant', content: ctx + '\n\n' + (App.pbDrDataEval||'') }].concat(App.pbDrDataConvHistory.slice(-14));
+  if (input) input.disabled = true;
+  serverCall('askDrData', message, apiHistory).then(function(result) {
+    App.pbDrDataConvHistory.push({ role: 'assistant', content: result.response || result });
+    if (input) input.disabled = false;
+    renderFn();
+  }).catch(function(e) {
+    App.pbDrDataConvHistory.push({ role: 'assistant', content: 'Error: ' + (e.message||String(e)) });
+    if (input) input.disabled = false;
+    renderFn();
+  });
+}
 
 function renderPBChat() {
   var el = document.getElementById('patientbot-content');
@@ -6987,39 +7544,41 @@ function renderPBChatInner() {
     html += '<div class="pb-dm-holes pb-dm-holes-right"></div>';
     html += '</div>';
 
-    // Bedside monitor — live vitals with animated ECG
-    var isFlatline = v.hr === 0 || v.spo2 === 0;
-    var beatInterval = v.hr > 0 ? (60 / v.hr) : 0;
-    html += '<div class="pb-monitor' + (isFlatline ? ' pb-mon-flatline' : '') + '" id="pb-live-monitor">';
-    if (!App.pbMRN) App.pbMRN = Math.floor(Math.random()*900000+100000);
-    html += '<div class="pb-mon-header"><span class="pb-mon-title"><span class="pb-mon-live"></span>BEDSIDE MONITOR</span><span class="pb-mon-id">MRN ' + App.pbMRN + '</span></div>';
-    // ECG trace row — live canvas
-    html += '<div class="pb-mon-ecg"><canvas class="pb-ecg-canvas" id="pb-ecg-canvas" data-hr="' + (v.hr || 0) + '"></canvas></div>';
-    // SpO2 pleth wave
-    html += '<div style="padding:0 8px;height:20px;overflow:hidden;background:#0a0a0a;border-bottom:1px solid #1a1a1a"><canvas class="pb-ecg-canvas" id="pb-pleth-canvas" data-hr="' + (v.hr || 0) + '" style="height:20px"></canvas></div>';
-    // Vitals grid
-    html += '<div class="pb-mon-grid">';
-    // HR with beating dot
-    html += '<div class="pb-mon-cell pb-mon-hr' + (hrAlert ? ' pb-mon-alert' : '') + '">';
-    html += '<div class="pb-mon-cell-label">HR <span class="pb-mon-unit">bpm</span></div>';
-    html += '<div class="pb-mon-cell-value">' + (v.hr || '?') + '<span class="pb-mon-hr-dot' + (v.hr > 0 ? ' beating' : '') + '" style="--beat-interval:' + (beatInterval > 0 ? beatInterval.toFixed(2) : 1) + 's"></span></div></div>';
-    // BP
-    html += '<div class="pb-mon-cell pb-mon-bp' + (bpAlert ? ' pb-mon-alert' : '') + '">';
-    html += '<div class="pb-mon-cell-label">NIBP <span class="pb-mon-unit">mmHg</span></div>';
-    html += '<div class="pb-mon-cell-value">' + (v.bp || '?') + '</div></div>';
-    // SpO2
-    html += '<div class="pb-mon-cell pb-mon-spo2' + (spo2Alert ? ' pb-mon-alert' : '') + '">';
-    html += '<div class="pb-mon-cell-label">SpO2 <span class="pb-mon-unit">%</span></div>';
-    html += '<div class="pb-mon-cell-value">' + (v.spo2 || '?') + '</div></div>';
-    // RR
-    html += '<div class="pb-mon-cell pb-mon-rr' + (rrAlert ? ' pb-mon-alert' : '') + '">';
-    html += '<div class="pb-mon-cell-label">RR <span class="pb-mon-unit">/min</span></div>';
-    html += '<div class="pb-mon-cell-value">' + (v.rr || '?') + '</div></div>';
-    // Temp
-    html += '<div class="pb-mon-cell pb-mon-temp' + (tempAlert ? ' pb-mon-alert' : '') + '">';
-    html += '<div class="pb-mon-cell-label">TEMP <span class="pb-mon-unit">&deg;C</span></div>';
-    html += '<div class="pb-mon-cell-value">' + (v.temp || '?') + '</div></div>';
-    html += '</div></div>';
+    // Bedside monitor — only shown after user attaches it
+    if (!App.pbMonitorAttached) {
+      html += '<div style="background:rgba(0,0,0,0.55);color:#888;text-align:center;padding:8px 16px;font-size:12px;letter-spacing:0.5px;display:flex;align-items:center;justify-content:center;gap:10px">';
+      html += '<span style="font-family:monospace">NO MONITOR ATTACHED</span>';
+      html += '<button onclick="attachPBMonitor_()" style="padding:4px 12px;font-size:11px;background:rgba(255,255,255,0.1);color:#aaa;border:1px solid rgba(255,255,255,0.25);border-radius:6px;cursor:pointer;font-weight:600">+ Attach Monitor</button>';
+      html += '</div>';
+    } else {
+      var vd = VitalsEngine._display;
+      var isFlatline = vd.hr === 0 || vd.spo2 === 0;
+      var beatInterval = vd.hr > 0 ? (60 / vd.hr) : 0;
+      if (!App.pbMRN) App.pbMRN = Math.floor(Math.random()*900000+100000);
+      html += '<div class="pb-monitor' + (isFlatline ? ' pb-mon-flatline' : '') + '" id="pb-live-monitor">';
+      html += '<div class="pb-mon-header"><span class="pb-mon-title"><span class="pb-mon-live"></span>BEDSIDE MONITOR</span><span class="pb-mon-id">MRN ' + App.pbMRN + '</span></div>';
+      html += '<div class="pb-mon-ecg"><canvas class="pb-ecg-canvas" id="pb-ecg-canvas" data-hr="' + (vd.hr || 0) + '"></canvas></div>';
+      html += '<div style="padding:0 8px;height:20px;overflow:hidden;background:#0a0a0a;border-bottom:1px solid #1a1a1a"><canvas class="pb-ecg-canvas" id="pb-pleth-canvas" data-hr="' + (vd.hr || 0) + '" style="height:20px"></canvas></div>';
+      html += '<div class="pb-mon-grid">';
+      html += '<div class="pb-mon-cell pb-mon-hr" id="ve-hr-cell">';
+      html += '<div class="pb-mon-cell-label">HR <span class="pb-mon-unit">bpm</span></div>';
+      html += '<div class="pb-mon-cell-value"><span id="ve-hr">' + (vd.hr || '--') + '</span><span class="pb-mon-hr-dot' + (vd.hr > 0 ? ' beating' : '') + '" id="ve-hr-dot" style="--beat-interval:' + (beatInterval > 0 ? beatInterval.toFixed(2) : 1) + 's"></span></div></div>';
+      var latBP = VitalsEngine.getLatestBP();
+      var bpHTML = VitalsEngine._bpMeasuring ? '<span style="font-size:10px">Measuring...</span>' : (latBP ? latBP.sbp+'/'+latBP.dbp : '--/--');
+      html += '<div class="pb-mon-cell pb-mon-bp" id="ve-bp-cell">';
+      html += '<div class="pb-mon-cell-label">NIBP <span class="pb-mon-unit">mmHg</span></div>';
+      html += '<div class="pb-mon-cell-value" id="ve-bp">' + bpHTML + '</div></div>';
+      html += '<div class="pb-mon-cell pb-mon-spo2" id="ve-spo2-cell">';
+      html += '<div class="pb-mon-cell-label">SpO2 <span class="pb-mon-unit">%</span></div>';
+      html += '<div class="pb-mon-cell-value"><span id="ve-spo2">' + (vd.spo2 || '--') + '</span>%</div></div>';
+      html += '<div class="pb-mon-cell pb-mon-rr" id="ve-rr-cell">';
+      html += '<div class="pb-mon-cell-label">RR <span class="pb-mon-unit">/min</span></div>';
+      html += '<div class="pb-mon-cell-value"><span id="ve-rr">' + (vd.rr || '--') + '</span></div></div>';
+      html += '<div class="pb-mon-cell pb-mon-temp" id="ve-temp-cell">';
+      html += '<div class="pb-mon-cell-label">TEMP <span class="pb-mon-unit">&deg;C</span></div>';
+      html += '<div class="pb-mon-cell-value"><span id="ve-temp">' + (vd.temp || '--') + '</span></div></div>';
+      html += '</div></div>';
+    }
   }
 
   if (App.pbCheatMode && !App.pbDiagResolved) {
@@ -7127,7 +7686,7 @@ function renderPBChatInner() {
   if (!App.pbDiagResolved) {
     var categories = [
       { icon: '&#x1FA7A;', name: 'Exam', items: [
-        '---General---','*check vitals*','*general inspection*','*check pupils (PERRL)*','*check reflexes (DTRs)*','*mental status exam*','*GCS assessment*','*assess hydration status*','*check capillary refill*','*check temperature*',
+        '---General---','*attach monitor*','*check vitals*','*general inspection*','*check pupils (PERRL)*','*check reflexes (DTRs)*','*mental status exam*','*GCS assessment*','*assess hydration status*','*check capillary refill*','*check temperature*',
         '---HEENT---','*inspect throat/oropharynx*','*otoscope exam (bilateral)*','*fundoscopy*','*palpate cervical lymph nodes*','*palpate all lymph node chains*','*palpate thyroid*','*check JVP*','*inspect oral mucosa/tongue*','*inspect tympanic membrane*','*check visual acuity*','*check visual fields*','*test extraocular movements*','*check for nystagmus*','*inspect nasal septum*','*palpate sinuses*','*palpate TMJ*','*check hearing (whisper test)*','*Weber and Rinne test*',
         '---Chest---','*auscultate lungs (all fields)*','*auscultate heart (4 areas)*','*percuss chest*','*inspect chest wall*','*check for chest wall tenderness*','*check for tactile fremitus*','*check for egophony*','*palpate trachea (midline)*',
         '---Abdomen---','*palpate abdomen (all 4 quadrants)*','*deep palpation abdomen*','*percuss abdomen*','*auscultate bowel sounds*','*check for rebound tenderness*','*check for guarding*','*Murphy sign*','*Rovsing sign*','*McBurney point tenderness*','*check for shifting dullness*','*check for hepatomegaly*','*check for splenomegaly*','*check for CVA tenderness*','*check for inguinal hernia*','*check for ascites (fluid wave)*','*psoas sign*','*obturator sign*','*Carnett sign*',
@@ -7360,6 +7919,39 @@ function renderPBChatInner() {
       }
 
       html += '</div>';
+    }
+
+    // Dr. Data Post-Case Evaluation
+    if (!App.pbDrDataEval && !App.pbDrDataEvalLoading && !App.pbDrDataEvalError) {
+      App.pbDrDataEvalLoading = true;
+      setTimeout(function() { loadPBDrDataEval_(); }, 1200);
+    }
+    if (App.pbDrDataEvalLoading && !App.pbDrDataEval) {
+      html += '<div style="text-align:center;padding:20px;color:var(--text-light)"><div class="spinner" style="margin:0 auto 10px;width:28px;height:28px;border-width:3px"></div><div style="font-size:13px">Dr. Data is reviewing your case...</div></div>';
+    }
+    if (App.pbDrDataEvalError && !App.pbDrDataEval) {
+      html += '<div style="text-align:center;padding:14px;font-size:14px;color:var(--text-light)">&#x26A0;&#xFE0F; Dr. Data review failed. <button class="btn btn-outline btn-sm" onclick="App.pbDrDataEvalError=false;loadPBDrDataEval_()" style="margin-left:8px">Retry</button></div>';
+    }
+    if (App.pbDrDataEval) {
+      html += '<div style="background:linear-gradient(135deg,#0d1442 0%,#1a237e 100%);color:white;border-radius:16px;margin:16px;padding:24px;box-shadow:0 4px 20px rgba(0,0,0,0.2)">';
+      html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">';
+      html += '<div style="font-size:28px">&#x1F916;</div>';
+      html += '<div><div style="font-size:17px;font-weight:800">Dr. Data — Case Review</div>';
+      html += '<div style="font-size:12px;opacity:0.65">' + escapeHtml(App.pbSpecialty||'') + ' &bull; ' + escapeHtml(App.pbDiagnosis||'') + '</div></div></div>';
+      html += '<div style="font-size:14px;line-height:1.7;opacity:0.95">' + formatMarkdown(App.pbDrDataEval) + '</div>';
+      if (App.pbDrDataConvHistory.length > 1) {
+        html += '<div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.12)">';
+        for (var dci = 1; dci < App.pbDrDataConvHistory.length; dci++) {
+          var dcm = App.pbDrDataConvHistory[dci];
+          if (dcm.role === 'user') html += '<div style="background:rgba(255,255,255,0.12);border-radius:10px;padding:10px 14px;margin:8px 0;font-size:14px">' + escapeHtml(dcm.content) + '</div>';
+          else html += '<div style="margin:8px 0;font-size:14px;line-height:1.6;opacity:0.9">' + formatMarkdown(dcm.content) + '</div>';
+        }
+        html += '</div>';
+      }
+      html += '<div style="display:flex;gap:8px;margin-top:16px">';
+      html += '<input type="text" id="pb-drdata-input" placeholder="Ask about this case..." style="flex:1;padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.1);color:white;font-size:14px" onkeydown="if(event.key===\'Enter\')sendPBDrDataMessage()" ' + (App.pbDrDataConvHistory.length > 1 && App.pbDrDataConvHistory[App.pbDrDataConvHistory.length-1].role === 'user' ? 'disabled' : '') + '>';
+      html += '<button onclick="sendPBDrDataMessage()" style="padding:10px 18px;border-radius:10px;background:rgba(255,255,255,0.18);border:none;color:white;cursor:pointer;font-size:14px;font-weight:700">Ask</button>';
+      html += '</div></div>';
     }
   }
   html += '</div>';
@@ -7668,12 +8260,12 @@ function toggleMedPanel(e) {
   pill.setAttribute('data-for', termKey);
 
   var inner = '';
-  if (translation) {
-    inner += '<span class="med-inline-trans' + (isRTL ? '' : ' ltr-t') + '">' + escapeHtml(translation) + '</span>';
-    inner += '<span aria-hidden="true" style="opacity:0.25;font-size:9px;margin:0 1px">&#x2502;</span>';
-  }
   inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(dispTerm) + ',1.0)" title="Pronounce (normal speed)">&#x1F50A;</button>';
   inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(dispTerm) + ',0.45)" title="Pronounce (slow — hear every syllable)">&#x1F40C;</button>';
+  if (translation) {
+    inner += '<span aria-hidden="true" style="opacity:0.25;font-size:9px;margin:0 1px">&#x2502;</span>';
+    inner += '<span class="med-inline-trans' + (isRTL ? '' : ' ltr-t') + '">' + escapeHtml(translation) + '</span>';
+  }
 
   pill.innerHTML = inner;
   span.classList.add('active');
@@ -7702,11 +8294,15 @@ function dismissMedHint() {
 function pronounceMedTerm(term, rate) {
   if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
-  var utt = new SpeechSynthesisUtterance(term);
-  utt.lang  = 'en-US';
-  utt.rate  = rate;
-  utt.pitch = 1.0;
-  window.speechSynthesis.speak(utt);
+  setTimeout(function() {
+    if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+    var utt = new SpeechSynthesisUtterance(term);
+    utt.lang  = 'en-US';
+    utt.rate  = rate || 1.0;
+    utt.pitch = 1.0;
+    utt.volume = 1.0;
+    window.speechSynthesis.speak(utt);
+  }, 120);
 }
 
 // =============================================
