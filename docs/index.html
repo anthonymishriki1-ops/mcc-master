@@ -2202,6 +2202,7 @@ label {
 
 @media (max-width: 768px) {
   .clock-widget, .clock-expanded { display: none !important; }
+  #zoom-controls { display: none !important; }
   .pb-monitor { max-width: 100%; }
   .pb-mon-cell-value { font-size: 12px; }
   .pb-mon-cell-label { font-size: 7px; }
@@ -2344,7 +2345,7 @@ label {
   </nav>
 
   <!-- Zoom Controls -->
-  <div id="zoom-controls" style="position:fixed;top:8px;right:12px;z-index:999;display:flex;align-items:center;gap:4px;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:3px 8px;box-shadow:0 1px 4px rgba(0,0,0,0.1);font-size:13px;opacity:0.7;transition:opacity 0.2s" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.7'">
+  <div id="zoom-controls" style="position:fixed;top:12px;right:110px;z-index:999;display:flex;align-items:center;gap:4px;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:3px 8px;box-shadow:0 1px 4px rgba(0,0,0,0.1);font-size:13px;opacity:0.7;transition:opacity 0.2s" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.7'">
     <button onclick="adjustZoom(-10)" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 6px;color:var(--text);font-weight:700" title="Zoom out">-</button>
     <span id="zoom-level" style="min-width:36px;text-align:center;font-size:11px;color:var(--text-light);cursor:pointer" onclick="resetZoom()" title="Click to reset">100%</span>
     <button onclick="adjustZoom(10)" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 6px;color:var(--text);font-weight:700" title="Zoom in">+</button>
