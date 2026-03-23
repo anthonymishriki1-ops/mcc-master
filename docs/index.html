@@ -2856,8 +2856,56 @@ function serverCall(funcName) {
   })
   .then(function(data) {
     if (data.error) throw new Error(data.error);
-    return data.result;
+    return patchApiResult_(funcName, data.result);
   });
+}
+
+// Client-side patches — no Apps Script redeploy needed
+function patchApiResult_(fn, result) {
+  if (fn === 'getMCQQuiz' && Array.isArray(result)) {
+    result = result.filter(function(q) {
+      // Reject stub questions where vignette was dropped (bare stems < 150 chars)
+      if (!q.question || q.question.length < 150) return false;
+      if (!/\d{1,3}[- ]year|patient|woman|man|girl|boy|infant|child|presents|complains/i.test(q.question)) return false;
+      return true;
+    });
+    result.forEach(function(q) {
+      // Fix Q3: CKD/naproxen — relabel to Nephrology, fix answer to acetaminophen-first
+      if (/naproxen/i.test(q.question) && /ckd|chronic kidney/i.test(q.question)) {
+        q.specialty = 'Nephrology';
+        var hasAcetOnly = false;
+        Object.keys(q.options).forEach(function(k) {
+          if (/acetaminophen/i.test(q.options[k]) && !/opioid/i.test(q.options[k])) { hasAcetOnly = true; q.correct = k; }
+        });
+        if (!hasAcetOnly) {
+          q.options.E = 'Discontinue naproxen and initiate regular acetaminophen';
+          q.correct = 'E';
+        }
+        q.rationale = 'In CKD, NSAIDs are contraindicated due to nephrotoxicity. Per Canadian pain guidelines and the WHO analgesic ladder, optimize non-opioid analgesia first \u2014 regular acetaminophen (up to 3g/day in CKD). Opioids only if non-opioid measures fail, with caution in renal impairment due to active metabolite accumulation.';
+      }
+      // Fix Q6: erythroplakia recall → clinical vignette
+      if (/erythroplakia/i.test(q.question) && /percentage/i.test(q.question)) {
+        q.question = 'A 62-year-old man presents with a persistent, painless red patch on the floor of his mouth for 3 months. He has a 40-pack-year smoking history and drinks alcohol daily. Examination reveals a 2 cm velvety, erythematous lesion. Biopsy shows severe dysplasia with focal carcinoma in situ. What is the most appropriate next step in management?';
+        q.options = { A: 'Observation with repeat biopsy in 6 months', B: 'Wide surgical excision with clear margins', C: 'Topical antifungal therapy', D: 'Laser ablation of the lesion', E: 'Referral for radiation therapy' };
+        q.correct = 'B';
+        q.rationale = 'Erythroplakia carries high malignant potential \u2014 14\u201350% harbour carcinoma in situ or invasive carcinoma at biopsy. With confirmed severe dysplasia/CIS, wide surgical excision with clear margins is standard of care. Observation risks progression to invasive SCC. Laser ablation doesn\u2019t provide margins for histological assessment.';
+      }
+      // Ensure all questions have 5 options
+      if (q.options && !q.options.E && q.options.A && q.options.B && q.options.C && q.options.D) {
+        q.options.E = /investigat|diagnos/i.test(q.question) ? 'Serum alpha-fetoprotein level' :
+                      /management|treatment/i.test(q.question) ? 'Watchful waiting with reassessment in 3 months' : 'None of the above';
+      }
+    });
+  }
+  if (fn === 'getFlashcards' && Array.isArray(result)) {
+    result.forEach(function(c) {
+      // Fix dermoid cyst: choristoma, not hamartoma
+      if (/dermoid/i.test(c.front) && /hamartoma/i.test(c.back)) {
+        c.back = c.back.replace(/hamartoma/gi, 'choristoma');
+      }
+    });
+  }
+  return result;
 }
 
 // ===== PROFILE / LOGIN =====
