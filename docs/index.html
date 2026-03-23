@@ -2433,9 +2433,9 @@ label {
     <div class="sidebar-footer">
       <select class="sidebar-lang-select" id="lang-select" onchange="setLanguage(this.value)" title="Translation language for medical terms">
         <option value="">&#x1F310; Translations Off</option>
+        <option value="fr">&#x1F1EB;&#x1F1F7; Français (French)</option>
         <option value="fa">&#x1F1EE;&#x1F1F7; فارسی (Persian)</option>
         <option value="ar">&#x1F1F8;&#x1F1E6; العربية (Arabic)</option>
-        <option value="fr">&#x1F1EB;&#x1F1F7; Français (French)</option>
         <option value="zh">&#x1F1E8;&#x1F1F3; 中文 (Chinese)</option>
         <option value="hi">&#x1F1EE;&#x1F1F3; हिन्दी (Hindi)</option>
         <option value="es">&#x1F1EA;&#x1F1F8; Español (Spanish)</option>
@@ -2449,7 +2449,9 @@ label {
         <option value="tl">&#x1F1F5;&#x1F1ED; Filipino (Tagalog)</option>
       </select>
       <button class="dark-mode-toggle" onclick="toggleDarkMode()" id="dark-mode-btn" title="Toggle dark mode" style="margin-top:8px">&#x1F319; Dark Mode</button>
-      <button class="dark-mode-toggle" onclick="switchProfile()" style="margin-top:6px">&#x1F465; Switch Profile</button>
+      <button class="dark-mode-toggle" onclick="showNameEntry()" style="margin-top:6px">&#x1F465; Switch User</button>
+      <button class="dark-mode-toggle" onclick="startTutorial()" style="margin-top:6px" title="Replay the pronunciation &amp; translation guide">&#x2753; Help</button>
+      <button class="dark-mode-toggle" id="copy-link-btn" onclick="copyAppLink_()" style="margin-top:6px" title="Copy MCC Master link to share">&#x1F517; Copy Link</button>
     </div>
   </nav>
 
@@ -2798,6 +2800,7 @@ var App = {
   // Don't Miss
   dontMissItems: [],
   dmQuizMode: false,
+  dmMCQ: null,
   dmQuizIndex: 0,
   dmQuizFlipped: false,
   dmQuizKnew: 0,
@@ -2865,8 +2868,16 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '2.8';
+var APP_VERSION = '2.9';
 var APP_CHANGELOG = [
+  { version: '2.9', date: 'Mar 23 2026', label: 'Key Topics MCQ + Login Preloading + Tutorial Rewrite', items: [
+    'Key Topics "Quiz Me" now generates real A/B/C/D multiple-choice questions with correct/incorrect feedback',
+    'Login screen shows loading spinner while data preloads — no more blank flash after tapping Enter',
+    'Tutorial rewritten to focus on the new Pronunciation & Translation feature (5 focused steps)',
+    'Tutorial auto-shows once per user after login (mcc_tutorial_v3_ key)',
+    'Sidebar Copy Link button — share MCC Master URL with one tap',
+    'Dead code cleanup: removed dismissGuide() function',
+  ]},
   { version: '2.8', date: 'Mar 23 2026', label: 'Flashcard UI + Med Term Overhaul', items: [
     'FLASHCARD: Portrait mode — cards now fill ~52% of viewport height instead of a tiny fixed 220px box',
     'FLASHCARD: Landscape phone support — cards adapt to rotated orientation with compact layout',
@@ -3277,9 +3288,21 @@ function confirmNameEntry() {
 
 function loginAsReturningGuest(guestId, displayName) {
   sessionStorage.setItem('mcc_profile', guestId);
+  localStorage.setItem('mcc_last_name', guestId);
+  localStorage.setItem('mcc_last_display', displayName);
   App.guestId = 'profile_' + guestId;
   App.user = { name: displayName, email: displayName, isGuest: true };
-  afterLogin_(displayName);
+  showLoginLoading_();
+  var proceed = function() { afterLogin_(displayName); };
+  if (App._preloadDone) { proceed(); return; }
+  var warningTimer = setTimeout(function() {
+    var s = document.getElementById('login-loading-status');
+    if (s) s.textContent = 'Taking longer than usual... hang tight';
+  }, 8000);
+  Promise.race([
+    App._preloadPromise || Promise.resolve(),
+    new Promise(function(r) { setTimeout(r, 15000); })
+  ]).then(function() { clearTimeout(warningTimer); proceed(); });
 }
 
 function loginAsProfile(profileId) {
@@ -3289,13 +3312,49 @@ function loginAsProfile(profileId) {
   localStorage.setItem('mcc_last_display', displayName);
   App.guestId = 'profile_' + profileId;
   App.user = { name: displayName, email: displayName, isGuest: true };
-  afterLogin_(displayName);
+  showLoginLoading_();
+  var proceed = function() {
+    afterLogin_(displayName);
+    var tutorialSeen = localStorage.getItem('mcc_tutorial_v3_' + profileId);
+    if (!tutorialSeen) setTimeout(function() { startTutorial(); }, 1000);
+  };
+  if (App._preloadDone) { proceed(); return; }
+  var warningTimer = setTimeout(function() {
+    var s = document.getElementById('login-loading-status');
+    if (s) s.textContent = 'Taking longer than usual... hang tight';
+  }, 8000);
+  Promise.race([
+    App._preloadPromise || Promise.resolve(),
+    new Promise(function(r) { setTimeout(r, 15000); })
+  ]).then(function() { clearTimeout(warningTimer); proceed(); });
+}
 
-  // Show tutorial on first login
-  var tutorialSeen = localStorage.getItem('mcc_tutorial_v2_' + profileId);
-  if (!tutorialSeen) {
-    setTimeout(function() { startTutorial(); }, 800);
-  }
+function showLoginLoading_() {
+  var page = document.getElementById('profile-select-page');
+  if (!page) return;
+  page.innerHTML =
+    '<div style="max-width:400px;margin:0 auto;padding:80px 20px;text-align:center">' +
+    '<h1 style="font-size:28px;font-weight:900;color:var(--primary);margin-bottom:8px">MCC Master</h1>' +
+    '<div class="spinner" style="margin:40px auto 20px;width:44px;height:44px;border-width:4px"></div>' +
+    '<div id="login-loading-status" style="color:var(--text-light);font-size:15px;font-weight:500">Loading your study session...</div>' +
+    '</div>';
+}
+
+function copyAppLink_() {
+  var url = 'https://anthonyvince21.github.io/mcc-master/';
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(function() {
+      var btn = document.getElementById('copy-link-btn');
+      if (btn) { var orig = btn.innerHTML; btn.innerHTML = '&#x2705; Copied!'; setTimeout(function() { btn.innerHTML = orig; }, 2000); }
+    }).catch(function() { fallbackCopy_(url); });
+  } else { fallbackCopy_(url); }
+}
+function fallbackCopy_(text) {
+  var ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); var btn = document.getElementById('copy-link-btn'); if (btn) { var orig = btn.innerHTML; btn.innerHTML = '&#x2705; Copied!'; setTimeout(function() { btn.innerHTML = orig; }, 2000); } } catch(e) {}
+  document.body.removeChild(ta);
 }
 
 function afterLogin_(displayName) {
@@ -3325,15 +3384,31 @@ function afterLogin_(displayName) {
 
 function startTutorial() {
   var steps = [
-    { title: 'Welcome to MCC Master', text: 'Your all-in-one study tool for the MCCQE Part I. Everything here \u2014 the flashcards, quiz questions, clinical scenarios, lab values, and scoring criteria \u2014 is built from <strong>real medical references</strong> including Toronto Notes, Canadian clinical practice guidelines, and established MCCQE exam objectives. The content is accurate and evidence-based, not randomly generated.', target: null },
-    { title: 'Flashcards', text: 'Over 10,000 flashcards organized by specialty. Each card is written from verified medical content and cross-referenced with standard Canadian medical education sources. You flip each card, self-evaluate, and the app tracks which topics you\'re weak in to prioritize your review.', target: 'flashcards' },
-    { title: 'Practice Quiz', text: 'MCQ questions modeled on the real MCCQE format. Questions, answer choices, and explanations are grounded in established clinical guidelines and diagnostic criteria \u2014 not guesswork. After each quiz, you see exactly which areas need more work.', target: 'quiz' },
-    { title: 'PatientBot', text: 'AI-powered simulated patient encounters. Each case is built from real clinical presentations, with accurate vitals, lab results, imaging findings, and physical exam signs that match the underlying diagnosis. You take a history, examine the patient, order real tests (with realistic results), give actual medications with correct doses, and perform procedures \u2014 all with a clinical consequence engine that tracks what happens to the patient based on your actions.', target: 'patientbot' },
-    { title: 'PatientBot Scoring', text: 'After each case, you get an <strong>OSCE-style scorecard</strong> graded on 7 domains: History, Physical Exam, Investigations, Diagnosis, Management, Communication, and Patient Safety. The grading follows real MCCQE rubric standards with defined boundaries (A through F). Your actions have real consequences \u2014 give the wrong drug at the wrong dose and the patient\'s vitals will change accordingly.', target: 'patientbot' },
-    { title: 'Daily Challenge', text: 'A structured daily session: 20 flashcards, 10 quiz questions, and 2 patient cases. Covers material across all specialties to build well-rounded knowledge. Completing it each day keeps your streak going and earns XP toward your level.', target: 'daily' },
-    { title: 'Skill Map & Mastery', text: 'The dashboard tracks your mastery percentage for each specialty based on quiz scores and flashcard performance. Green means strong, yellow means decent, red means it needs work. Your weak areas get prioritized in Daily Challenges so you improve where it matters most.', target: 'dashboard' },
-    { title: 'About the Content', text: 'A note on accuracy: all clinical content, drug dosages, lab reference ranges, and scoring criteria are sourced from established medical references. When PatientBot gives you lab results or vital sign changes, those numbers reflect what would actually happen in a real clinical scenario with that diagnosis and those interventions. This isn\'t a chatbot making things up \u2014 it\'s a structured clinical simulator with guardrails.', target: null },
-    { title: 'Let\'s Get Started', text: 'Start with the <strong>Daily Challenge</strong> to try a bit of everything, or dive straight into <strong>Flashcards</strong> or <strong>PatientBot</strong>. Consistency beats intensity \u2014 even 20 minutes a day adds up fast.', target: null }
+    {
+      title: '🌐 Pronunciation & Translation — New!',
+      text: 'MCC Master now highlights medical terms throughout the app. Tap any <span style="background:#6366f1;color:#fff;padding:2px 7px;border-radius:4px;font-size:13px;font-weight:600">highlighted term</span> to hear it pronounced and see its translation. Built for <strong>IMGs</strong> preparing for the MCCQE in Canada.',
+      target: null
+    },
+    {
+      title: '🔵 Tap Any Blue Term',
+      text: 'Throughout flashcards, notes, and Key Topics, medical terms are <span style="border-bottom:2px solid #6366f1;color:var(--accent);font-weight:600;cursor:pointer">underlined in blue</span>. <strong>Tap any highlighted term</strong> to expand an inline pill showing its definition and pronunciation buttons. Tap again to close.',
+      target: null
+    },
+    {
+      title: '🔊 Hear It Pronounced',
+      text: 'Inside the pill, tap <strong>🔊 Normal</strong> to hear the English pronunciation at full speed, or <strong>🐌 Slow</strong> to hear it broken down slowly. Pronunciation is always in <strong>English</strong> — the language of the MCCQE. This helps you say it confidently out loud.',
+      target: null
+    },
+    {
+      title: '🌍 Choose Your Language',
+      text: 'Select a secondary language from the <strong>sidebar menu</strong> (bottom-left). Choose from French 🇫🇷, Persian 🇮🇷, or Arabic 🇸🇦. Your choice saves between sessions. Once selected, each term pill shows the <strong>translation in your language</strong> alongside the English pronunciation.',
+      target: null
+    },
+    {
+      title: '✅ You\'re All Set!',
+      text: 'Over 115 medical terms across all specialties are mapped with translations. Open any <strong>Flashcard</strong> and tap a blue term to try it out. You can replay this guide anytime from the <strong>❓ Help</strong> button in the sidebar.',
+      target: null
+    }
   ];
 
   App.tutorialSteps = steps;
@@ -3386,7 +3461,7 @@ function nextTutorialStep() {
 
 function endTutorial() {
   var profileId = sessionStorage.getItem('mcc_profile');
-  if (profileId) localStorage.setItem('mcc_tutorial_v2_' + profileId, '1');
+  if (profileId) localStorage.setItem('mcc_tutorial_v3_' + profileId, '1');
   var overlay = document.getElementById('tutorial-overlay');
   if (overlay) overlay.remove();
 }
@@ -3398,15 +3473,16 @@ function init() {
     showProfileSelect();
     // Preload everything heavy while user types their name
     // (everything except Toronto Notes / Library books)
-    serverCall('getSpecialties').then(function(specs) {
-      App.specialties = specs;
-      populateSpecialtyDropdowns();
-    });
+    var _p = function(pr) { return pr.catch(function() {}); };
+    App._preloadDone = false;
+    App._preloadPromise = Promise.all([
+      _p(serverCall('getSpecialties').then(function(specs) { App.specialties = specs; populateSpecialtyDropdowns(); })),
+      _p(serverCall('getUserStats').then(function(stats) { App.stats = stats; })),
+      _p(serverCall('getFlashcards', 'All').then(function(data) { App.preloadedFlashcards = data; })),
+      _p(serverCall('getBulletNotes', 'All').then(function(data) { App.bulletNotes = data; })),
+      _p(serverCall('getDontMiss', 'All').then(function(data) { App.dontMissItems = data; })),
+    ]).then(function() { App._preloadDone = true; });
     loadGlossary();
-    serverCall('getUserStats').then(function(stats) { App.stats = stats; });
-    serverCall('getFlashcards', 'All').then(function(data) { App.preloadedFlashcards = data; });
-    serverCall('getBulletNotes', 'All').then(function(data) { App.bulletNotes = data; });
-    serverCall('getDontMiss', 'All').then(function(data) { App.dontMissItems = data; });
     serverCall('getImageChapters').then(function(ch) { App.diagramChapters = ch; });
     return;
   }
@@ -3544,12 +3620,6 @@ function populateSpecialtyDropdowns() {
 // =============================================
 // DASHBOARD
 // =============================================
-
-function dismissGuide() {
-  localStorage.setItem('mcc_guide_dismissed', '1');
-  var g = document.getElementById('guide-card');
-  if (g) g.style.display = 'none';
-}
 
 function loadDashboard() {
   // Default stats for a brand-new user — dashboard renders instantly with these
@@ -5672,83 +5742,161 @@ function setKTPriority(priority) {
 // DON'T MISS QUIZ MODE
 // =============================================
 
+function generateDmMCQ_() {
+  var items = App.dontMissItems;
+  if (!items || items.length === 0) return [];
+  var bySpec = {};
+  for (var i = 0; i < items.length; i++) {
+    var spec = items[i].specialty || 'General';
+    if (!bySpec[spec]) bySpec[spec] = [];
+    bySpec[spec].push(items[i]);
+  }
+  var allItems = items.slice();
+  for (var i = allItems.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var tmp = allItems[i]; allItems[i] = allItems[j]; allItems[j] = tmp; }
+  var questions = [];
+  for (var qi = 0; qi < allItems.length && questions.length < 25; qi++) {
+    var item = allItems[qi];
+    var spec = item.specialty || 'General';
+    var specItems = bySpec[spec] || [];
+    if (specItems.length < 4) continue;
+    var stem = '', correctAnswer = '';
+    if (item.condensed && item.title && item.points) {
+      var pts = item.points.split('|').map(function(s) { return s.trim(); }).filter(Boolean);
+      if (pts.length === 0) continue;
+      stem = 'Regarding ' + item.title + ' — which of the following is a key clinical point?';
+      correctAnswer = pts[Math.floor(Math.random() * pts.length)];
+    } else if (item.item) {
+      var itemText = item.item;
+      if (itemText.indexOf('Q:') === 0 && itemText.indexOf('A:') !== -1) {
+        var parts = itemText.split('A:');
+        stem = parts[0].replace('Q:', '').trim();
+        if (stem.charAt(stem.length - 1) !== '?') stem += '?';
+        correctAnswer = parts[1].trim();
+      } else {
+        stem = 'Which of the following is a key fact in ' + spec + '?';
+        correctAnswer = itemText;
+      }
+    }
+    if (!stem || !correctAnswer || correctAnswer.length < 5 || correctAnswer.length > 220) continue;
+    var distractors = [];
+    var shuffled = specItems.filter(function(s) { return s !== item; });
+    for (var si = shuffled.length - 1; si > 0; si--) { var sj = Math.floor(Math.random() * (si + 1)); var st = shuffled[si]; shuffled[si] = shuffled[sj]; shuffled[sj] = st; }
+    for (var di = 0; di < shuffled.length && distractors.length < 3; di++) {
+      var d = shuffled[di]; var dText = '';
+      if (d.condensed && d.points) { var dPts = d.points.split('|').map(function(s) { return s.trim(); }).filter(Boolean); if (dPts.length > 0) dText = dPts[0]; }
+      else if (d.item) { var dItem = d.item; if (dItem.indexOf('A:') !== -1) dText = dItem.split('A:')[1].trim(); else dText = dItem; }
+      if (dText && dText.length >= 5 && dText.length <= 220 && dText !== correctAnswer) distractors.push(dText);
+    }
+    if (distractors.length < 3) continue;
+    var options = [correctAnswer].concat(distractors);
+    for (var oi = options.length - 1; oi > 0; oi--) { var oj = Math.floor(Math.random() * (oi + 1)); var ot = options[oi]; options[oi] = options[oj]; options[oj] = ot; }
+    questions.push({ stem: stem, specialty: spec, options: options, correct: options.indexOf(correctAnswer) });
+  }
+  return questions;
+}
+
 function toggleDontMissQuiz() {
   if (App.dontMissItems.length === 0) return;
   App.dmQuizMode = !App.dmQuizMode;
   if (App.dmQuizMode) {
-    // Shuffle items for quiz
-    App.dmQuizItems = App.dontMissItems.slice();
-    for (var i = App.dmQuizItems.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = App.dmQuizItems[i]; App.dmQuizItems[i] = App.dmQuizItems[j]; App.dmQuizItems[j] = t; }
-    App.dmQuizItems = App.dmQuizItems.slice(0, 30); // cap at 30 per round
-    App.dmQuizIndex = 0; App.dmQuizFlipped = false; App.dmQuizKnew = 0; App.dmQuizMissed = 0;
+    var qs = generateDmMCQ_();
+    if (qs.length === 0) { App.dmQuizMode = false; showToast_('Not enough items to build a quiz yet.'); return; }
+    App.dmMCQ = { questions: qs, index: 0, selected: null, submitted: false, correct: 0 };
     document.getElementById('dontmiss-quiz-btn').textContent = '📋 List Mode';
     renderDmQuiz();
   } else {
-    document.getElementById('dontmiss-quiz-btn').innerHTML = '&#x26A1; Quiz Mode';
+    document.getElementById('dontmiss-quiz-btn').innerHTML = '&#x26A1; Quiz Me';
     renderDontMiss();
   }
 }
 
 function renderDmQuiz() {
   var el = document.getElementById('dontmiss-content');
-  var items = App.dmQuizItems;
-  if (App.dmQuizIndex >= items.length) { renderDmQuizDone(); return; }
-  var item = items[App.dmQuizIndex];
-  var pct = ((App.dmQuizIndex / items.length) * 100).toFixed(0);
-
-  var html = '<div class="flashcard-meta">' + (App.dmQuizIndex + 1) + ' / ' + items.length + ' &bull; ' + escapeHtml(item.specialty) + '</div>';
+  var mcq = App.dmMCQ;
+  if (!mcq) { renderDontMiss(); return; }
+  if (mcq.index >= mcq.questions.length) { renderDmQuizDone(); return; }
+  var q = mcq.questions[mcq.index];
+  var pct = ((mcq.index / mcq.questions.length) * 100).toFixed(0);
+  var letters = ['A', 'B', 'C', 'D'];
+  var html = '<div class="flashcard-meta">Question ' + (mcq.index + 1) + ' / ' + mcq.questions.length + ' &bull; ' + escapeHtml(q.specialty);
+  if (mcq.index > 0) html += ' &bull; Score: ' + mcq.correct + '/' + mcq.index;
+  html += '</div>';
   html += '<div class="progress-bar" style="margin-bottom:20px"><div class="progress-fill" style="width:' + pct + '%"></div></div>';
-  html += '<div class="flashcard-container"><div class="flashcard' + (App.dmQuizFlipped ? ' flipped' : '') + '" onclick="flipDmQuizCard()">';
-  if (item.condensed && item.title) {
-    html += '<div class="flashcard-front"><div><strong>' + escapeHtml(item.title) + '</strong></div></div>';
-    var sections = (item.points || '').split('|').map(function(s) { return s.trim(); }).filter(Boolean);
-    html += '<div class="flashcard-back"><div style="text-align:left;font-size:14px;line-height:1.8">';
-    for (var si = 0; si < sections.length; si++) html += '<div>' + escapeHtml(sections[si]) + '</div>';
-    html += '</div></div>';
-  } else {
-    html += '<div class="flashcard-front"><div>' + escapeHtml(item.specialty) + '</div></div>';
-    html += '<div class="flashcard-back"><div>' + escapeHtml(item.item) + '</div></div>';
+  html += '<div class="card" style="margin-bottom:16px;padding:20px"><p style="font-size:16px;font-weight:600;line-height:1.5;margin:0">' + escapeHtml(q.stem) + '</p></div>';
+  html += '<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">';
+  for (var i = 0; i < q.options.length; i++) {
+    var letter = letters[i];
+    var isSelected = mcq.selected === i;
+    var borderColor = 'var(--border)'; var bg = 'var(--card)'; var extra = '';
+    if (mcq.submitted) {
+      if (i === q.correct) { borderColor = '#22c55e'; bg = 'rgba(34,197,94,0.1)'; }
+      else if (isSelected) { borderColor = '#ef4444'; bg = 'rgba(239,68,68,0.1)'; }
+    } else if (isSelected) { borderColor = 'var(--accent)'; bg = 'rgba(99,102,241,0.1)'; }
+    var clickAttr = mcq.submitted ? '' : ' onclick="selectDmAnswer(' + i + ')"';
+    html += '<button' + clickAttr + ' style="padding:14px 16px;border-radius:10px;border:2px solid ' + borderColor + ';background:' + bg + ';cursor:' + (mcq.submitted ? 'default' : 'pointer') + ';text-align:left;font-size:15px;font-weight:500;display:flex;gap:12px;align-items:flex-start;width:100%">';
+    html += '<span style="font-weight:700;min-width:20px;color:var(--accent)">' + letter + '.</span>';
+    html += '<span style="flex:1">' + escapeHtml(q.options[i]) + '</span>';
+    if (mcq.submitted && i === q.correct) html += '<span style="color:#22c55e;font-size:18px;flex-shrink:0">&#x2713;</span>';
+    if (mcq.submitted && isSelected && i !== q.correct) html += '<span style="color:#ef4444;font-size:18px;flex-shrink:0">&#x2717;</span>';
+    html += '</button>';
   }
-  html += '</div></div>';
-
-  if (App.dmQuizFlipped) {
-    html += '<div class="flashcard-nav">';
-    html += '<button class="btn btn-error" onclick="rateDmQuiz(false)" style="flex:1;padding:14px;font-size:15px">&#x2717; Didn\'t Know</button>';
-    html += '<button class="btn btn-success" onclick="rateDmQuiz(true)" style="flex:1;padding:14px;font-size:15px">&#x2713; Knew It</button>';
-    html += '</div>';
-    html += '<div style="text-align:center;margin-top:8px;color:var(--text-light);font-size:12px">Keyboard: 1 = Didn\'t Know &bull; 2 = Knew It</div>';
+  html += '</div>';
+  if (!mcq.submitted) {
+    var disabled = mcq.selected === null;
+    html += '<button class="btn btn-primary" onclick="submitDmAnswer()" style="width:100%;padding:14px;font-size:15px' + (disabled ? ';opacity:0.5' : '') + '"' + (disabled ? ' disabled' : '') + '>Submit Answer</button>';
+    html += '<div style="text-align:center;margin-top:8px;color:var(--text-light);font-size:12px">Press A/B/C/D or 1–4 to select &bull; Enter to submit</div>';
   } else {
-    html += '<div class="flashcard-nav">';
-    html += '<button class="btn btn-accent" onclick="flipDmQuizCard()" style="flex:1;padding:14px;font-size:15px">Tap to Flip</button>';
+    var isCorrect = mcq.selected === q.correct;
+    var isLast = mcq.index >= mcq.questions.length - 1;
+    html += '<div style="text-align:center;padding:12px;margin-bottom:12px;border-radius:10px;font-weight:700;font-size:16px;background:' + (isCorrect ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)') + ';color:' + (isCorrect ? '#22c55e' : '#ef4444') + '">';
+    html += isCorrect ? '&#x2713; Correct!' : '&#x2717; Incorrect — correct answer is ' + letters[q.correct];
     html += '</div>';
-    html += '<div style="text-align:center;margin-top:8px;color:var(--text-light);font-size:12px">Keyboard: Space to flip</div>';
+    html += '<button class="btn btn-primary" onclick="nextDmQuestion()" style="width:100%;padding:14px;font-size:15px">' + (isLast ? '&#x1F4CA; See Results' : 'Next Question &#x2192;') + '</button>';
+    html += '<div style="text-align:center;margin-top:8px;color:var(--text-light);font-size:12px">Press Enter or Space to continue</div>';
   }
   el.innerHTML = html;
 }
 
-function flipDmQuizCard() {
-  App.dmQuizFlipped = !App.dmQuizFlipped;
+function selectDmAnswer(idx) {
+  if (!App.dmMCQ || App.dmMCQ.submitted) return;
+  App.dmMCQ.selected = idx;
   renderDmQuiz();
 }
 
-function rateDmQuiz(knew) {
-  if (knew) App.dmQuizKnew++; else App.dmQuizMissed++;
-  App.dmQuizIndex++;
-  App.dmQuizFlipped = false;
+function submitDmAnswer() {
+  var mcq = App.dmMCQ;
+  if (!mcq || mcq.submitted || mcq.selected === null) return;
+  mcq.submitted = true;
+  if (mcq.selected === mcq.questions[mcq.index].correct) mcq.correct++;
+  renderDmQuiz();
+}
+
+function nextDmQuestion() {
+  var mcq = App.dmMCQ;
+  if (!mcq) return;
+  mcq.index++;
+  mcq.selected = null;
+  mcq.submitted = false;
   renderDmQuiz();
 }
 
 function renderDmQuizDone() {
   var el = document.getElementById('dontmiss-content');
-  var total = App.dmQuizItems.length;
-  var pct = total > 0 ? Math.round((App.dmQuizKnew / total) * 100) : 0;
+  var mcq = App.dmMCQ;
+  var total = mcq.questions.length;
+  var correct = mcq.correct;
+  var pct = total > 0 ? Math.round((correct / total) * 100) : 0;
+  var grade = pct >= 90 ? 'A' : pct >= 80 ? 'B' : pct >= 70 ? 'C' : pct >= 60 ? 'D' : 'F';
+  var gradeColor = pct >= 70 ? '#22c55e' : pct >= 60 ? '#f59e0b' : '#ef4444';
   var html = '<div class="card" style="text-align:center;padding:40px">';
-  html += '<h3>Don\'t Miss Quiz Complete!</h3>';
-  html += '<div class="daily-card-score-ring"><div class="daily-card-score-number">' + App.dmQuizKnew + '/' + total + '</div><div class="daily-card-score-label">' + pct + '% Knew</div></div>';
-  html += '<p style="margin:16px 0;color:var(--text-light)">' + App.dmQuizMissed + ' items to review</p>';
-  html += '<button class="btn btn-primary" onclick="toggleDontMissQuiz(); toggleDontMissQuiz();" style="margin:8px">Play Again</button>';
-  html += '<button class="btn" onclick="App.dmQuizMode=false; document.getElementById(\'dontmiss-quiz-btn\').innerHTML=\'&#x26A1; Quiz Mode\'; renderDontMiss();">Back to List</button>';
-  html += '</div>';
+  html += '<h3 style="margin:0 0 16px">Quiz Complete! &#x1F3AF;</h3>';
+  html += '<div class="daily-card-score-ring"><div class="daily-card-score-number" style="color:' + gradeColor + '">' + grade + '</div><div class="daily-card-score-label">' + pct + '%</div></div>';
+  html += '<p style="margin:16px 0;font-size:18px;font-weight:700">' + correct + ' / ' + total + ' correct</p>';
+  html += '<p style="margin:0 0 24px;color:var(--text-light);font-size:14px">' + (total - correct) + ' question' + (total - correct !== 1 ? 's' : '') + ' to review</p>';
+  html += '<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">';
+  html += '<button class="btn btn-primary" onclick="toggleDontMissQuiz(); toggleDontMissQuiz();" style="padding:12px 24px">&#x1F504; Play Again</button>';
+  html += '<button class="btn" onclick="App.dmQuizMode=false; document.getElementById(\'dontmiss-quiz-btn\').innerHTML=\'&#x26A1; Quiz Me\'; renderDontMiss();">&#x1F4CB; Back to List</button>';
+  html += '</div></div>';
   el.innerHTML = html;
 }
 
@@ -7639,11 +7787,15 @@ document.addEventListener('keydown', function(e) {
     }
   }
 
-  if (App.currentPage === 'dontmiss' && App.dmQuizMode && App.dmQuizIndex < (App.dmQuizItems || []).length) {
-    if (e.key === ' ') { e.preventDefault(); if (!App.dmQuizFlipped) flipDmQuizCard(); }
-    if (App.dmQuizFlipped) {
-      if (e.key === '1') { e.preventDefault(); rateDmQuiz(false); }
-      if (e.key === '2') { e.preventDefault(); rateDmQuiz(true); }
+  if (App.currentPage === 'dontmiss' && App.dmQuizMode && App.dmMCQ && App.dmMCQ.index < (App.dmMCQ.questions || []).length) {
+    if (!App.dmMCQ.submitted) {
+      if (e.key === 'a' || e.key === 'A' || e.key === '1') { e.preventDefault(); selectDmAnswer(0); }
+      if (e.key === 'b' || e.key === 'B' || e.key === '2') { e.preventDefault(); selectDmAnswer(1); }
+      if (e.key === 'c' || e.key === 'C' || e.key === '3') { e.preventDefault(); selectDmAnswer(2); }
+      if (e.key === 'd' || e.key === 'D' || e.key === '4') { e.preventDefault(); selectDmAnswer(3); }
+      if ((e.key === 'Enter' || e.key === ' ') && App.dmMCQ.selected !== null) { e.preventDefault(); submitDmAnswer(); }
+    } else {
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowRight') { e.preventDefault(); nextDmQuestion(); }
     }
   }
 
