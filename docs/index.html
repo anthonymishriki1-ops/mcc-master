@@ -2680,6 +2680,11 @@ var App = {
   quizResultDetails: [],
   quizSetupSpecialty: 'All',
   quizSetupVersion: 'Random',
+  quizSecondsPerQ: 0,
+  quizTimerTotal: 0,
+  quizTimerRemaining: 0,
+  quizTimerInterval: null,
+  quizTimeTaken: null,
 
   // Don't Miss
   dontMissItems: [],
@@ -2823,6 +2828,12 @@ var SKILL_MAP = [
 // =============================================
 
 function navigateTo(page) {
+  // Stop quiz timer if navigating away from quiz
+  if (page !== 'quiz' && App.quizTimerInterval) {
+    clearInterval(App.quizTimerInterval);
+    App.quizTimerInterval = null;
+  }
+
   var pages = document.querySelectorAll('.page');
   for (var i = 0; i < pages.length; i++) pages[i].classList.remove('active');
 
@@ -4658,6 +4669,15 @@ function showQuizSetup() {
   html += '<input type="number" id="quiz-count" placeholder="Or enter custom number..." value="10" min="1" max="999">';
   html += '</div>';
 
+  html += '<div class="form-group"><label>Timer <span style="font-size:11px;color:var(--text-light);font-weight:400">(real MCCQE = ~90s/question)</span></label>';
+  html += '<div class="quiz-count-btns">';
+  html += '<button class="quiz-count-btn active" id="timer-btn-0" onclick="setQuizTimer(0,this)">No Timer</button>';
+  html += '<button class="quiz-count-btn" id="timer-btn-90" onclick="setQuizTimer(90,this)">90s/q &mdash; MCCQE</button>';
+  html += '<button class="quiz-count-btn" id="timer-btn-60" onclick="setQuizTimer(60,this)">60s/q &mdash; Hard</button>';
+  html += '</div>';
+  html += '<input type="number" id="quiz-timer-custom" placeholder="Or custom total minutes..." min="1" max="300" style="margin-top:6px">';
+  html += '</div>';
+
   html += '<button class="btn btn-success" style="width:100%;padding:14px;font-size:16px;margin-top:8px" onclick="startQuiz()">Start Quiz</button>';
   html += '</div>';
   el.innerHTML = html;
@@ -4709,6 +4729,15 @@ function startQuiz() {
   var version = document.getElementById('quiz-version').value;
   var count = parseInt(document.getElementById('quiz-count').value) || 10;
   App.quizSetupSpecialty = specialty; App.quizSetupVersion = version;
+
+  // Timer setup
+  if (App.quizTimerInterval) { clearInterval(App.quizTimerInterval); App.quizTimerInterval = null; }
+  var customMin = parseInt((document.getElementById('quiz-timer-custom') || {}).value);
+  var totalSeconds = customMin > 0 ? customMin * 60 : (App.quizSecondsPerQ > 0 ? count * App.quizSecondsPerQ : 0);
+  App.quizTimerTotal = totalSeconds;
+  App.quizTimerRemaining = totalSeconds;
+  App.quizTimeTaken = null;
+
   var el = document.getElementById('quiz-content');
   el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
 
@@ -4716,6 +4745,17 @@ function startQuiz() {
     App.quizQuestions = data; App.quizAnswers = {}; App.quizCurrentIndex = 0; App.quizActive = true;
     if (data.length === 0) { el.innerHTML = '<div class="card" style="text-align:center;padding:40px"><h3>No questions found</h3><button class="btn btn-primary" onclick="showQuizSetup()">Back</button></div>'; return; }
     saveQuizState_();
+    if (App.quizTimerTotal > 0) {
+      App.quizTimerInterval = setInterval(function() {
+        App.quizTimerRemaining--;
+        updateQuizTimer_();
+        if (App.quizTimerRemaining <= 0) {
+          clearInterval(App.quizTimerInterval);
+          App.quizTimerInterval = null;
+          finishQuiz();
+        }
+      }, 1000);
+    }
     renderQuizQuestion();
   }).catch(function(e) { el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>'; });
 }
@@ -4728,7 +4768,13 @@ function renderQuizQuestion() {
 
   var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">';
   html += '<span style="font-weight:700">Question ' + current + ' of ' + total + '</span>';
-  html += '<span style="color:var(--text-light);font-size:13px">' + escapeHtml(q.specialty) + '</span></div>';
+  html += '<div style="display:flex;gap:14px;align-items:center">';
+  if (App.quizTimerTotal > 0) {
+    var tm = App.quizTimerRemaining, tmm = Math.floor(tm / 60), tms = tm % 60;
+    var tmColor = tm < 60 ? 'var(--error)' : tm < 180 ? 'var(--warning)' : 'var(--text-light)';
+    html += '<span id="quiz-timer-display" style="font-weight:700;font-size:14px;color:' + tmColor + '">&#x23F1; ' + tmm + ':' + (tms < 10 ? '0' : '') + tms + '</span>';
+  }
+  html += '<span style="color:var(--text-light);font-size:13px">' + escapeHtml(q.specialty) + '</span></div></div>';
   html += '<div class="progress-bar" style="margin-bottom:20px"><div class="progress-fill" style="width:' + ((current / total) * 100) + '%"></div></div>';
 
   html += '<div class="card"><p style="font-size:15px;line-height:1.7;margin-bottom:20px">' + escapeHtml(q.question) + '</p>';
@@ -4753,7 +4799,27 @@ function selectQuizAnswer(opt) { App.quizAnswers[App.quizCurrentIndex] = opt; sa
 function prevQuizQuestion() { if (App.quizCurrentIndex > 0) { App.quizCurrentIndex--; renderQuizQuestion(); } }
 function nextQuizQuestion() { if (App.quizCurrentIndex < App.quizQuestions.length - 1) { App.quizCurrentIndex++; renderQuizQuestion(); } }
 
+function setQuizTimer(secs, btn) {
+  App.quizSecondsPerQ = secs;
+  var btns = btn.parentElement.querySelectorAll('.quiz-count-btn');
+  for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+  btn.classList.add('active');
+  var customInput = document.getElementById('quiz-timer-custom');
+  if (customInput) customInput.value = '';
+}
+
+function updateQuizTimer_() {
+  var el = document.getElementById('quiz-timer-display');
+  if (!el) return;
+  var tm = App.quizTimerRemaining, tmm = Math.floor(tm / 60), tms = tm % 60;
+  el.textContent = '\u23F1 ' + tmm + ':' + (tms < 10 ? '0' : '') + tms;
+  el.style.color = tm < 60 ? 'var(--error)' : tm < 180 ? 'var(--warning)' : 'var(--text-light)';
+}
+
 function finishQuiz() {
+  if (App.quizTimerInterval) { clearInterval(App.quizTimerInterval); App.quizTimerInterval = null; }
+  if (App.quizTimerTotal > 0) App.quizTimeTaken = App.quizTimerTotal - App.quizTimerRemaining;
+
   var correct = 0; var details = [];
   for (var i = 0; i < App.quizQuestions.length; i++) {
     var q = App.quizQuestions[i]; var userAnswer = App.quizAnswers[i] || ''; var isCorrect = userAnswer === q.correct;
@@ -4798,6 +4864,11 @@ function showQuizResults(score, total, percentage, points) {
   html += '<p style="font-size:18px;color:var(--text-light)">' + score + ' correct out of ' + total + '</p>';
   html += '<p style="margin-top:4px;font-weight:700;color:' + passColor + '">' + passText + ' (pass: 73%)</p>';
   html += '<p style="font-size:11px;color:var(--text-light);margin-top:2px">Pass threshold set above the estimated ~70% MCCQE cut score to push you harder.</p>';
+  if (App.quizTimeTaken !== null) {
+    var ttm = Math.floor(App.quizTimeTaken / 60), tts = App.quizTimeTaken % 60;
+    var avgSec = Math.round(App.quizTimeTaken / total);
+    html += '<p style="font-size:13px;color:var(--text-light);margin-top:4px">&#x23F1; Time: ' + ttm + 'm ' + tts + 's &bull; avg ' + avgSec + 's/question</p>';
+  }
   html += '<p style="color:var(--accent);font-weight:700;margin-top:8px">+' + points + ' XP</p>';
   html += '</div>';
 
