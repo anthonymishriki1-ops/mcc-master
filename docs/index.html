@@ -9338,7 +9338,7 @@ function highlightMedTerms(html) {
 }
 
 // Detect medical terms by suffix/prefix/drug-name patterns for words NOT already in glossary
-var _MED_PATTERN_RE = /\b([a-z]{3,}(?:itis|osis|emia|ectomy|plasty|scopy|otomy|ostomy|tomy|graphy|ology|pathy|rrhea|algia|uria|megaly|philia|phobia|trophy|genesis|ectasis|stenosis))\b|\b(?:hyper|hypo|tachy|brady|poly|oligo|mono|hemi|hemo|leuko|erythro|cardio|neuro|nephro|hepato|pneumo|dermato|osteo|arthro)[a-z]{3,}\b|\b[a-z]{4,}(?:olol|pril|artan|statin|azole|mycin|cillin|mab|tinib|afib|rafib|tidine|oxacin|cycline|navir|prazole|dipine|fenac|phylline)\b/gi;
+var _MED_PATTERN_RE = /\b([a-z]{1,}(?:itis|osis|emia|ectomy|plasty|scopy|otomy|ostomy|tomy|graphy|ology|pathy|rrhea|algia|uria|megaly|philia|phobia|trophy|genesis|ectasis|stenosis|ema|esis|eus|oma|lus))\b|\b(?:hyper|hypo|tachy|brady|poly|oligo|mono|hemi|hemo|leuko|erythro|cardio|neuro|nephro|hepato|pneumo|dermato|osteo|arthro)[a-z]{3,}\b|\b[a-z]{4,}(?:olol|pril|artan|statin|azole|mycin|cillin|mab|tinib|afib|rafib|tidine|oxacin|cycline|navir|prazole|dipine|fenac|phylline)\b/gi;
 
 function highlightPatternTerms_(html) {
   return html.replace(/(<[^>]+>)|([^<]+)/g, function(m, tag, text) {
