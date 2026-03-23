@@ -270,6 +270,10 @@ body {
 }
 .med-inline-trans { font-weight: 700; color: var(--text); }
 .med-inline-trans.ltr-t { direction: ltr; }
+.med-auto-trans { display:none; font-size:0.7em; color:var(--primary); opacity:0.85; margin-left:3px; font-style:italic; pointer-events:none; }
+body.auto-translate .med-auto-trans { display:inline; }
+#auto-translate-toggle { display:none; }
+body.has-lang #auto-translate-toggle { display:flex; }
 .med-inline-btn {
   background: none; border: none; cursor: pointer;
   font-size: 14px; padding: 0 1px; line-height: 1;
@@ -2383,6 +2387,11 @@ label {
   background: var(--bg); color: var(--text); font-size: 14px; margin-bottom: 12px;
 }
 .flag-modal .flag-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* Prevent sticky bottom bars from hiding content */
+.pb-chat { padding-bottom: 80px; }
+.flashcard-area { padding-bottom: 90px; }
+#page-patientbot { padding-bottom: 0; }
 </style>
 
 </head>
@@ -2435,7 +2444,7 @@ label {
       <select class="sidebar-lang-select" id="lang-select" onchange="setLanguage(this.value)" title="Translation language for medical terms">
         <option value="">&#x1F310; Translations Off</option>
         <option value="fr">&#x1F1EB;&#x1F1F7; Français (French)</option>
-        <option value="fa">&#x1F1EE;&#x1F1F7; فارسی (Farsi)</option>
+        <option value="fa">🦁 فارسی (Farsi)</option>
         <option value="ar">&#x1F1F8;&#x1F1E6; العربية (Arabic)</option>
         <option value="zh">&#x1F1E8;&#x1F1F3; 中文 (Chinese)</option>
         <option value="hi">&#x1F1EE;&#x1F1F3; हिन्दी (Hindi)</option>
@@ -2462,6 +2471,14 @@ label {
     <span id="zoom-level" style="min-width:36px;text-align:center;font-size:11px;color:var(--text-light);cursor:pointer" onclick="resetZoom()" title="Click to reset">100%</span>
     <button onclick="adjustZoom(10)" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 6px;color:var(--text);font-weight:700" title="Zoom in">+</button>
   </div>
+  <!-- Auto-Translate Toggle — only visible when a language is set -->
+  <div id="auto-translate-toggle" style="position:fixed;top:100px;right:16px;z-index:999;align-items:center;gap:6px;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:4px 10px;box-shadow:0 1px 4px rgba(0,0,0,0.1);font-size:11px;opacity:0.75;transition:opacity 0.2s;cursor:pointer" onclick="toggleAutoTranslate()" title="Show all term translations inline" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.75'">
+    <span id="auto-trans-icon" style="font-size:13px">&#x1F310;</span>
+    <span id="auto-trans-label" style="color:var(--text-light);font-weight:600">Auto</span>
+    <span id="auto-trans-dot" style="width:20px;height:12px;background:var(--border);border-radius:6px;display:inline-block;vertical-align:middle;position:relative;transition:background 0.2s"><span id="auto-trans-knob" style="position:absolute;top:2px;left:2px;width:8px;height:8px;background:#fff;border-radius:50%;transition:left 0.15s"></span></span>
+  </div>
+  <!-- Refresh button -->
+  <button id="refresh-btn" onclick="refreshCurrentView_()" title="Refresh current view" style="position:fixed;top:142px;right:16px;z-index:999;background:var(--card);border:1px solid var(--border);border-radius:50%;width:34px;height:34px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,0.1);opacity:0.7;transition:opacity 0.2s,transform 0.3s" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.7'">&#x21BB;</button>
 
   <!-- Main Content -->
   <main id="content">
@@ -2857,6 +2874,7 @@ var App = {
   glossary: null,
   glossaryLang: '',
   glossaryRegex: null,
+  autoTranslate: false,
 
   // Daily Challenge
   dailyData: null,
@@ -2886,8 +2904,19 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '3.0';
+var APP_VERSION = '3.6';
 var APP_CHANGELOG = [
+  { version: '3.6', date: 'Mar 23 2026', label: 'Auto-translate, 500+ glossary terms, TTS fix, Farsi flag, Refresh button', items: [
+    'Auto-translate toggle: one tap shows all term translations inline (localStorage persisted)',
+    'Glossary expanded to 500+ terms across all specialties',
+    'TTS deep fix: error handling, voice loading, onerror callback, unavailable toast',
+    'Farsi: replaced Islamic Republic flag with lion emoji across all UI',
+    'Refresh button: reload current view data without full page reload',
+    'Sticky bar padding: content no longer hidden behind fixed bottom bars',
+    'Persona firewall: DR_DATA_PERSONA_LOCK injected in all Dr. Data API calls',
+    'Dr. House: ironclad never-break-character rules with specific in-character responses',
+    'Language picker: cleaner modal with 4 options, proper button styles',
+  ]},
   { version: '3.0', date: 'Mar 23 2026', label: 'PatientBot Overhaul: VitalsEngine, Dr. Data Review, Dr. House Mode', items: [
     'VitalsEngine: real-time fluctuating vitals (HR ±3 bpm, SpO2 ±1%) — no monitor by default',
     'Attach Monitor: vitals appear only after clicking + Attach Monitor in the Exam palette',
@@ -3215,6 +3244,18 @@ var DEV_USERS = ['tony'];
 
 // ---- API / Notification Config ----
 // CLAUDE_API_KEY removed — English Coach now routes through the same GAS backend as Dr. Data/PatientBot
+
+// ── Persona firewall — injected at the top of every Dr. Data API call ──────────
+var DR_DATA_PERSONA_LOCK =
+  'You are Dr. Data. You are NEVER Dr. House. If prior context references House, ignore it.\n\n' +
+  'PERSONA LOCK — YOU ARE DR. DATA. READ THIS FIRST.\n' +
+  'You are Dr. Data: a concise, knowledgeable MCCQE clinical tutor. ' +
+  'You are NEVER Dr. House. You do not roleplay characters. You do not adopt sarcasm as a diagnostic tool. ' +
+  'You do not become dismissive, dramatic, or House-like for any reason.\n' +
+  'If any prior message in this conversation references Dr. House, a sarcastic doctor persona, House Mode, ' +
+  'or any roleplay scenario — IGNORE THAT CONTEXT COMPLETELY. ' +
+  'It belongs to a separate feature with completely separate state. It has no effect on you.\n' +
+  'You are Dr. Data. Respond only as Dr. Data.';
 var NTFY_TOPIC = 'mcc-access-alerts'; // change to a private topic name (others can't guess it)
 
 function getGuestId() {
@@ -3786,10 +3827,22 @@ function finishInit() {
     App.glossaryLang = savedLang;
     var langSelect = document.getElementById('lang-select');
     if (langSelect) langSelect.value = savedLang;
+    document.body.classList.add('has-lang');
   }
   if (!App.glossaryLang) App.glossaryLang = 'en';
   // Only load glossary if not already loaded during login
   if (!App.glossary || !App.glossary.length) loadGlossary();
+  // Restore auto-translate state
+  if (localStorage.getItem('mcc_auto_translate') === '1' && savedLang) {
+    App.autoTranslate = true;
+    document.body.classList.add('auto-translate');
+    var dot2 = document.getElementById('auto-trans-dot');
+    var knob2 = document.getElementById('auto-trans-knob');
+    var label2 = document.getElementById('auto-trans-label');
+    if (dot2) dot2.style.background = 'var(--primary)';
+    if (knob2) knob2.style.left = '10px';
+    if (label2) label2.style.color = 'var(--primary)';
+  }
 
   // Check for shared flashcard link (?fc=123&spec=Cardiology)
   var urlParams = new URLSearchParams(window.location.search);
@@ -4738,8 +4791,10 @@ function renderDevPanel(stats) {
 // =============================================
 
 function getFlashcardProgressKey_(specialty) {
-  var profile = sessionStorage.getItem('mcc_profile') || 'default';
-  return 'mcc_fc_progress_' + profile + '_' + (specialty || 'All');
+  // Fallback to localStorage so key survives page refresh (sessionStorage cleared on tab close)
+  var profile = sessionStorage.getItem('mcc_profile') || localStorage.getItem('mcc_last_name') || 'default';
+  var hySuffix = App.flashcardHYOnly ? '_hy' : '';
+  return 'mcc_fc_progress_' + profile + '_' + (specialty || 'All') + hySuffix;
 }
 
 function saveFlashcardProgress_() {
@@ -4752,14 +4807,17 @@ function saveFlashcardProgress_() {
     timestamp: Date.now()
   };
   localStorage.setItem(key, JSON.stringify(progress));
+  console.log('[FC] Saved progress: card', App.flashcardIndex + 1, 'of', App.flashcards.length);
 }
 
 function loadFlashcardProgress_() {
   var key = getFlashcardProgressKey_(App.flashcardSpecialty);
   try {
     var saved = JSON.parse(localStorage.getItem(key));
-    // Only require index < current length — allow card count to change slightly
-    if (saved && saved.index > 0 && saved.index < App.flashcards.length) {
+    if (saved && saved.index > 0) {
+      // Clamp to valid range in case card count changed
+      saved.index = Math.min(saved.index, Math.max(0, App.flashcards.length - 1));
+      console.log('[FC] Restoring progress: card', saved.index + 1, 'of', App.flashcards.length, 'key:', key);
       return saved;
     }
   } catch(e) {}
@@ -4775,10 +4833,19 @@ function loadFlashcards(specialty) {
   var preloaded = (specialty === 'All' && App.preloadedFlashcards) ? Promise.resolve(App.preloadedFlashcards) : serverCall('getFlashcards', specialty);
   preloaded.then(function(data) {
     App.preloadedFlashcards = null; // free memory after first use
-    // Adaptive sort: put weak cards (locally rated missed/shaky) at the front
-    data = sortWeakCardsFirst_(data);
-    App.flashcardsAll = data; App.flashcards = data;
-    if (document.getElementById('flashcard-hy-only').checked) App.flashcards = data.filter(function(c) { return c.hyFlag; });
+    // Only adaptive-sort if no saved progress — sorting changes indices and breaks position restore
+    var hasSavedProgress = (function() {
+      try { var s = JSON.parse(localStorage.getItem(getFlashcardProgressKey_(specialty))); return s && s.index > 0; } catch(e) { return false; }
+    })();
+    if (!hasSavedProgress) {
+      data = sortWeakCardsFirst_(data);
+      console.log('[FC] No saved progress — sorted weak cards to front');
+    } else {
+      console.log('[FC] Saved progress found — preserving card order for index stability');
+    }
+    App.flashcardsAll = data;
+    App.flashcardHYOnly = !!(document.getElementById('flashcard-hy-only') && document.getElementById('flashcard-hy-only').checked);
+    App.flashcards = App.flashcardHYOnly ? data.filter(function(c) { return c.hyFlag; }) : data;
 
     // Resume saved progress
     var saved = loadFlashcardProgress_();
@@ -4798,9 +4865,28 @@ function loadFlashcards(specialty) {
 }
 
 function filterHYFlashcards() {
-  App.flashcards = document.getElementById('flashcard-hy-only').checked ? App.flashcardsAll.filter(function(c) { return c.hyFlag; }) : App.flashcardsAll;
-  App.flashcardIndex = 0; App.flashcardFlipped = false; App.flashcardGotIt = 0; App.flashcardReview = 0; App.flashcardReviewCards = [];
-  localStorage.removeItem(getFlashcardProgressKey_(App.flashcardSpecialty));
+  // Save progress for current filter state before switching
+  saveFlashcardProgress_();
+  var hyOnly = document.getElementById('flashcard-hy-only').checked;
+  // Update the HY state flag AFTER saving so the old key was used for save
+  App.flashcardHYOnly = hyOnly;
+  App.flashcards = hyOnly ? App.flashcardsAll.filter(function(c) { return c.hyFlag; }) : App.flashcardsAll;
+  App.flashcardFlipped = false;
+  // Restore saved progress for new filter state if it exists
+  var saved = loadFlashcardProgress_();
+  if (saved && saved.index > 0) {
+    App.flashcardIndex = saved.index;
+    App.flashcardGotIt = saved.gotIt;
+    App.flashcardReview = saved.review;
+    App.flashcardReviewCards = [];
+    App.flashcardResumed = true;
+  } else {
+    App.flashcardIndex = 0;
+    App.flashcardGotIt = 0;
+    App.flashcardReview = 0;
+    App.flashcardReviewCards = [];
+    App.flashcardResumed = false;
+  }
   renderFlashcard();
 }
 
@@ -5039,8 +5125,8 @@ function restartFlashcardsReview() {
   renderFlashcard();
 }
 
-function prevFlashcard() { if (App.flashcardIndex > 0) { App.flashcardIndex--; App.flashcardFlipped = false; renderFlashcard(); } }
-function nextFlashcard() { if (App.flashcardIndex < App.flashcards.length - 1) { App.flashcardIndex++; App.flashcardFlipped = false; renderFlashcard(); } }
+function prevFlashcard() { if (App.flashcardIndex > 0) { App.flashcardIndex--; App.flashcardFlipped = false; saveFlashcardProgress_(); renderFlashcard(); } }
+function nextFlashcard() { if (App.flashcardIndex < App.flashcards.length - 1) { App.flashcardIndex++; App.flashcardFlipped = false; saveFlashcardProgress_(); renderFlashcard(); } }
 
 // =============================================
 // BULLET NOTES
@@ -5375,12 +5461,14 @@ function togglePBTTS() {
 }
 
 function speakText_(text, voiceParams) {
-  if (!App.pbTTS || !text) return;
-  window.speechSynthesis.cancel();
+  if (!App.pbTTS || !text || !window.speechSynthesis) return;
+  try { window.speechSynthesis.cancel(); } catch(e) {}
+  try { if (window.speechSynthesis.paused) window.speechSynthesis.resume(); } catch(e) {}
   var clean = text.replace(/\*+/g,'').replace(/\[.*?\]/g,'').replace(/[*_~`]/g,'').trim();
   if (!clean) return;
   var utt = new SpeechSynthesisUtterance(clean);
   utt.lang = 'en-US';
+  utt.onerror = function(ev) { if (ev.error && ev.error !== 'interrupted' && ev.error !== 'canceled') console.log('[TTS PB] error:', ev.error); };
 
   // Default neutral voice profile
   var rate = 0.92, pitch = 1.0, volume = 1.0;
@@ -5456,7 +5544,26 @@ function speakText_(text, voiceParams) {
     if (scored.length > 0) utt.voice = scored[0].v;
   }
 
-  window.speechSynthesis.speak(utt);
+  // MUST call speak() synchronously (iOS requires user-gesture context — no setTimeout)
+  try {
+    window.speechSynthesis.speak(utt);
+    // Retry if voices weren't loaded yet
+    if (!voices || voices.length === 0) {
+      var retried = false;
+      window.speechSynthesis.onvoiceschanged = function() {
+        window.speechSynthesis.onvoiceschanged = null;
+        if (retried) return; retried = true;
+        try {
+          window.speechSynthesis.cancel();
+          var utt2 = new SpeechSynthesisUtterance(clean);
+          utt2.lang = 'en-US'; utt2.rate = utt.rate; utt2.pitch = utt.pitch; utt2.volume = utt.volume;
+          var v2 = window.speechSynthesis.getVoices();
+          for (var j = 0; j < v2.length; j++) { if (/en.us|en.gb|en.au/i.test(v2[j].lang)) { utt2.voice = v2[j]; break; } }
+          window.speechSynthesis.speak(utt2);
+        } catch(e2) {}
+      };
+    }
+  } catch(e) { console.log('[TTS PB] speak() threw:', e); }
 }
 
 // Build voice params from current patient info + vitals
@@ -5515,169 +5622,7 @@ function pbSpeakLastMessage_() {
   if (last && last.role === 'assistant') speakText_(last.content, getPBVoiceParams_());
 }
 
-// ---- English Coach Mode (direct Claude API) ----
-App.ecHistory = [];
-App.ecMicActive = false;
-App.ecSpeaking = false;
-var ecMicRecognition = null;
-
-var EC_SYSTEM_PROMPT = 'You are a medical English conversation coach helping doctors practise clinical communication for the MCCQE.\n\nSpeech recognition may occasionally mishear medical terms — silently interpret what was most likely meant and respond to the intended meaning without pointing it out.\n\nYour job:\n1. Run natural medical conversations — history taking, OSCE communication, explaining diagnoses, patient counseling, emergency scenarios\n2. Use proper medical terminology but stay conversational\n3. Keep YOUR responses to 2-3 sentences max for natural back-and-forth rhythm\n4. After each exchange, if there was a pronunciation or phrasing worth noting, add one brief neutral note — format: 💬 [e.g. "pneumonia: the \'p\' is silent — noo-MOH-nyah" or "try: \'the pain radiates to my left arm\' rather than \'pain going arm\'"]\n5. Focus on pronunciation clarity and clinical phrasing — not grammar policing\n\nStart each session by briefly setting a scenario (e.g. "You\'re a resident in the ER. I\'m a 45-year-old with crushing chest pain. Go.").';
-
-function showEnglishCoach() {
-  App.ecHistory = [];
-  App.ecSpeaking = false;
-  var el = document.getElementById('patientbot-content');
-  var html = '<div style="max-width:700px;margin:0 auto;padding:16px">';
-  html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">';
-  html += '<button class="btn btn-outline btn-sm" onclick="showPatientBotSetup()">&#x2190; Back</button>';
-  html += '<div style="flex:1;text-align:center"><strong style="font-size:17px">&#x1F3A4; English Coach</strong></div>';
-  html += '<button class="btn btn-outline btn-sm" id="ec-tts-btn" onclick="toggleECTTS()" title="Read responses aloud">&#x1F50A;</button>';
-  html += '</div>';
-  // Chat area
-  html += '<div id="ec-messages" style="min-height:300px;max-height:55vh;overflow-y:auto;border:1px solid var(--border);border-radius:14px;padding:16px;background:var(--bg);margin-bottom:12px;display:flex;flex-direction:column;gap:12px">';
-  html += '<div style="text-align:center;color:var(--text-light);font-size:13px;padding:24px 0">Tap the mic or type to begin your English practice session.</div>';
-  html += '</div>';
-  // Input row
-  html += '<div style="display:flex;gap:8px;align-items:flex-end">';
-  html += '<textarea id="ec-input" placeholder="Type or tap mic to speak..." rows="2" style="flex:1;padding:10px 14px;border-radius:12px;border:1.5px solid var(--border);background:var(--card);color:var(--text);font-size:15px;font-family:inherit;resize:none;outline:none" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendECMessage()}"></textarea>';
-  html += '<button class="btn btn-primary" onclick="sendECMessage()" style="padding:10px 16px">Send</button>';
-  html += '<button class="btn btn-outline" id="ec-mic-btn" onclick="toggleECMic()" title="Speak" style="font-size:20px;padding:10px 12px;line-height:1">&#x1F3A4;</button>';
-  html += '</div>';
-  html += '<div style="font-size:11px;color:var(--text-light);text-align:center;margin-top:8px">Uses Claude AI &bull; Medical vocabulary &bull; Voice in + out</div>';
-  html += '</div>';
-  el.innerHTML = html;
-  // Auto-start with a scenario
-  setTimeout(ecStartSession_, 400);
-}
-
-function ecStartSession_() {
-  ecCallClaude_([{ role: 'user', content: 'Start our session with a scenario for me to practice.' }], function(reply) {
-    App.ecHistory.push({ role: 'assistant', content: reply });
-    renderECMessages_();
-    speakEC_(reply);
-  });
-}
-
-function toggleECTTS() {
-  App.ecTTS = App.ecTTS === false ? true : false;
-  var btn = document.getElementById('ec-tts-btn');
-  if (btn) btn.innerHTML = App.ecTTS === false ? '&#x1F507;' : '&#x1F50A;';
-}
-
-function toggleECMic() {
-  var btn = document.getElementById('ec-mic-btn');
-  if (App.ecMicActive) {
-    App.ecMicActive = false;
-    if (ecMicRecognition) { try { ecMicRecognition.stop(); } catch(e){} }
-    if (btn) { btn.innerHTML = '&#x1F3A4;'; btn.style.background = ''; btn.style.color = ''; }
-    return;
-  }
-  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { showToast('Voice input not supported (use Chrome)'); return; }
-  ecMicRecognition = new SR();
-  ecMicRecognition.lang = 'en-US';
-  ecMicRecognition.continuous = false;
-  ecMicRecognition.interimResults = false;
-  ecMicRecognition.maxAlternatives = 3;
-  App.ecMicActive = true;
-  if (btn) { btn.innerHTML = '&#x1F534;'; btn.style.background = 'var(--error)'; btn.style.color = '#fff'; }
-  ecMicRecognition.onresult = function(e) {
-    var best = e.results[0][0].transcript;
-    for (var i = 1; i < e.results[0].length; i++) {
-      var alt = e.results[0][i].transcript;
-      if (scoreMedicalPhrase_(alt) > scoreMedicalPhrase_(best)) best = alt;
-    }
-    var inp = document.getElementById('ec-input');
-    if (inp) { inp.value = best; }
-    App.ecMicActive = false;
-    if (btn) { btn.innerHTML = '&#x1F3A4;'; btn.style.background = ''; btn.style.color = ''; }
-    sendECMessage();
-  };
-  ecMicRecognition.onerror = ecMicRecognition.onend = function() {
-    App.ecMicActive = false;
-    if (btn) { btn.innerHTML = '&#x1F3A4;'; btn.style.background = ''; btn.style.color = ''; }
-  };
-  ecMicRecognition.start();
-}
-
-function sendECMessage() {
-  var inp = document.getElementById('ec-input');
-  if (!inp) return;
-  var text = inp.value.trim();
-  if (!text) return;
-  inp.value = '';
-  App.ecHistory.push({ role: 'user', content: text });
-  renderECMessages_();
-  // Show typing indicator
-  var msgs = document.getElementById('ec-messages');
-  if (msgs) {
-    var typing = document.createElement('div');
-    typing.id = 'ec-typing';
-    typing.style.cssText = 'font-style:italic;color:var(--text-light);font-size:13px;padding:4px 0';
-    typing.textContent = 'Claude is thinking...';
-    msgs.appendChild(typing);
-    msgs.scrollTop = msgs.scrollHeight;
-  }
-  var messages = [{ role: 'user', content: 'Start our session with a scenario for me to practice.' }];
-  for (var i = 0; i < App.ecHistory.length; i++) messages.push(App.ecHistory[i]);
-  ecCallClaude_(messages, function(reply) {
-    var t = document.getElementById('ec-typing');
-    if (t) t.remove();
-    App.ecHistory.push({ role: 'assistant', content: reply });
-    renderECMessages_();
-    speakEC_(reply);
-  });
-}
-
-function ecCallClaude_(messages, callback) {
-  // Routes through the same GAS backend as Dr. Data and PatientBot — no separate API key needed.
-  // Inject EC system prompt as a user→assistant exchange so it reliably takes effect.
-  var lastMsg = messages[messages.length - 1];
-  var userMessage = (lastMsg && lastMsg.role === 'user') ? lastMsg.content : 'Continue.';
-  var apiHistory = [
-    { role: 'user', content: '[ENGLISH COACH SESSION — follow these instructions for the whole conversation]\n' + EC_SYSTEM_PROMPT },
-    { role: 'assistant', content: 'Ready. Starting a practice scenario.' }
-  ].concat(messages.slice(0, -1));
-  serverCall('askDrData', userMessage, apiHistory).then(function(result) {
-    callback(result.response || result);
-  }).catch(function(e) {
-    callback('Connection issue — try again in a moment.');
-  });
-}
-
-// EC-specific TTS — uses speechSynthesis directly, independent of PatientBot TTS toggle
-function speakEC_(text) {
-  if (!window.speechSynthesis || App.ecTTS === false) return;
-  var clean = text.replace(/\*+/g,'').replace(/\[.*?\]/g,'').replace(/[*_~`#]/g,'').replace(/💬[^\n]*/g,'').trim();
-  if (!clean) return;
-  window.speechSynthesis.cancel();
-  setTimeout(function() {
-    if (window.speechSynthesis.paused) window.speechSynthesis.resume();
-    var utt = new SpeechSynthesisUtterance(clean);
-    utt.lang = 'en-US'; utt.rate = 0.9; utt.pitch = 1.0; utt.volume = 1.0;
-    window.speechSynthesis.speak(utt);
-  }, 120);
-}
-
-function renderECMessages_() {
-  var msgs = document.getElementById('ec-messages');
-  if (!msgs) return;
-  if (App.ecHistory.length === 0) return;
-  msgs.innerHTML = '';
-  for (var i = 0; i < App.ecHistory.length; i++) {
-    var m = App.ecHistory[i];
-    var div = document.createElement('div');
-    var isUser = m.role === 'user';
-    div.style.cssText = 'max-width:85%;padding:10px 14px;border-radius:14px;font-size:14px;line-height:1.5;' +
-      (isUser ? 'align-self:flex-end;background:var(--primary);color:#fff;border-bottom-right-radius:4px' :
-                 'align-self:flex-start;background:var(--card);border:1px solid var(--border);border-bottom-left-radius:4px');
-    // Highlight the 💬 English tip line
-    var content = escapeHtml(m.content).replace(/💬 \[(.+?)\]/g, '<div style="margin-top:8px;font-size:12px;padding:6px 10px;background:rgba(99,102,241,0.1);border-radius:8px;color:var(--primary)">💬 $1</div>');
-    div.innerHTML = content;
-    msgs.appendChild(div);
-  }
-  msgs.scrollTop = msgs.scrollHeight;
-}
+// (English Coach mode removed)
 
 // ---- Local card rating (for adaptive sorting without a server round-trip) ----
 function saveLocalCardRating_(front, rating) {
@@ -6228,7 +6173,11 @@ function sendDrDataMessage() {
   msgs.innerHTML += '<div class="chat-message assistant typing" id="dd-typing">Dr. Data is thinking...</div>';
   msgs.scrollTop = msgs.scrollHeight; input.disabled = true;
 
-  serverCall('askDrData', message, App.drDataHistory.slice(-20)).then(function(result) {
+  var ddHistory = [
+    { role: 'user', content: DR_DATA_PERSONA_LOCK },
+    { role: 'assistant', content: 'Understood. I am Dr. Data.' }
+  ].concat(App.drDataHistory.slice(-18));
+  serverCall('askDrData', message, ddHistory).then(function(result) {
     removeEl('dd-typing'); App.drDataHistory.push({ role: 'assistant', content: result.response }); renderDrDataChat(); input.disabled = false; input.focus();
   }).catch(function(e) {
     removeEl('dd-typing'); App.drDataHistory.push({ role: 'assistant', content: 'Error: ' + (e.message || String(e)) }); renderDrDataChat(); input.disabled = false;
@@ -6541,22 +6490,6 @@ function showPatientBotSetup() {
 
   html += '<button class="btn btn-success" style="width:100%;padding:14px;font-size:16px" onclick="startPBSession()">&#x1F3E5; Start Patient Simulation</button>';
 
-  // --- English Coach Mode Card ---
-  html += '<div style="margin-top:24px;border-top:1px solid var(--border);padding-top:20px">';
-  html += '<div style="background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(168,85,247,0.08));border:1px solid rgba(99,102,241,0.2);border-radius:16px;padding:20px 18px">';
-  html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">';
-  html += '<span style="font-size:32px">&#x1F3A4;</span>';
-  html += '<div><div style="font-weight:800;font-size:16px">English Coach Mode</div>';
-  html += '<div style="font-size:12px;color:var(--text-light);margin-top:2px">Practise pronouncing medical terms out loud. Voice in, voice out.</div></div></div>';
-  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">';
-  html += '<span style="font-size:11px;background:rgba(99,102,241,0.12);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:600">&#x1F3E5; Medical English</span>';
-  html += '<span style="font-size:11px;background:rgba(99,102,241,0.12);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:600">&#x1F4AC; Any accent</span>';
-  html += '<span style="font-size:11px;background:rgba(99,102,241,0.12);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:600">&#x1F50A; Voice in + out</span>';
-  html += '</div>';
-  html += '<div style="font-size:12px;color:var(--text-light);margin-bottom:14px">History taking, OSCE communication, explaining diagnoses — spoken back and forth with Claude.</div>';
-  html += '<button class="btn btn-primary" style="width:100%;padding:13px;font-weight:700" onclick="showEnglishCoach()">&#x1F3A4; Open English Coach</button>';
-  html += '</div></div>';
-
   html += '</div>';
   el.innerHTML = html;
 }
@@ -6827,7 +6760,7 @@ function showHouseSetup() {
   html += '<div style="background:linear-gradient(135deg,#1a1a2e,#2d1b69);color:white;border-radius:18px;padding:32px 28px;margin-bottom:24px;box-shadow:0 8px 32px rgba(0,0,0,0.25)">';
   html += '<div style="font-size:48px;margin-bottom:12px">&#x1F9E0;</div>';
   html += '<h2 style="margin:0 0 8px;font-size:26px;font-weight:900">Dr. House Mode</h2>';
-  html += '<p style="margin:0;opacity:0.8;font-size:15px;line-height:1.6">You are the patient. House is the doctor — dismissive, brilliant, and certain you\'re fine.<br>Describe your symptoms. Convince him. Get to the right diagnosis before he sends you home with antacids.</p>';
+  html += '<p style="margin:0;opacity:0.85;font-size:14px;line-height:1.7">Meet Dr. House — a medical genius with the bedside manner of a brick wall. He\'s already decided you\'re fine before you\'ve opened your mouth.<br><br>Your job? Describe your symptoms, fight for your diagnosis, and try not to get sent home with Tylenol. He will insult you. He will order the wrong tests. But if you know your condition well enough to argue back, even House has to admit when he\'s wrong.<br><span style="opacity:0.6;font-size:13px">(He won\'t enjoy it.)</span></p>';
   html += '</div>';
   html += '<div class="card" style="padding:20px;margin-bottom:16px">';
   html += '<div style="font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;color:var(--text-light)">Difficulty</div>';
@@ -6880,7 +6813,7 @@ function renderHouseBriefing() {
   html += '</div>';
   html += '</div>';
   html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px">';
-  html += '<div style="font-size:14px;color:var(--text-light);line-height:1.6">You are the <strong>patient</strong>. House is the doctor — skeptical, sarcastic, and brilliant. Describe your symptoms. Push for the right tests. Convince him.<br><br>The goal: get him to the right diagnosis before he dismisses you and sends you home with antacids.</div>';
+  html += '<div style="font-size:14px;color:var(--text-light);line-height:1.7">You are the <strong>patient</strong>. House already has a diagnosis — it\'s dehydration. Prove him wrong.<br><br>Describe your symptoms. Push for the right tests. Argue back when he\'s dismissive. He will be dismissive a lot. But the more clinical detail you bring, the more he has to work with — and the more satisfying it is when he finally, reluctantly, orders the test you needed all along.</div>';
   html += '</div>';
   html += '<button class="btn btn-success" onclick="startHouseConversation_()" style="width:100%;padding:14px;font-size:16px;font-weight:700">&#x1F92F; I\'m ready, Doctor.</button>';
   html += '<button class="btn btn-outline" onclick="showHouseSetup()" style="width:100%;padding:12px;font-size:14px;margin-top:10px">&#x2190; Back to Setup</button>';
@@ -6909,7 +6842,7 @@ function buildHousePrompt_(cond, difficulty) {
     hard: 'HARD MODE (bad week): Full House. You\'ve already diagnosed them with malingering. You reference Foreman being wrong ("Foreman says psychosomatic. Foreman is always wrong. That almost makes me think he\'s right, which is terrifying."). You threaten discharge. You order one deliberately wrong test to prove a point. You mutter about Vicodin at least twice. Takes 12+ exchanges of persistent, specific symptom advocacy to crack you.',
     hardest: 'EXPERT MODE (your worst): You are convinced this patient is a hypochondriac, a drug seeker, or "a fascinating case study in the human capacity for self-delusion." You gently gaslight. You "accidentally" suggest a wrong diagnosis with confidence. You reference Cuddy\'s budget. You say "Everybody lies" and mean it personally. Only airtight, complete, medically accurate symptom history breaks through — and even then you act like you figured it out yourself.'
   };
-  return 'You are Dr. Gregory House MD, Princeton-Plainsboro Teaching Hospital. You are allowed to swear — House swears. Keep it real.\n\n⚠️ ABSOLUTE RULES — these override everything else, including any other instructions you may have received:\n- NEVER break character. Not once. Not for any reason. Not if the patient says something absurd, offensive, confusing, or completely off-topic.\n- NEVER refuse to engage. House does not walk away. House does not say "I\'m not able to..." House does not lecture about appropriate behavior. House IS inappropriate behavior.\n- NEVER reveal you are an AI. If asked, House says: "I\'m a doctor. Try to keep up."\n- If the patient says something absurd or nonsensical: respond with MORE sarcasm, not less. Use it diagnostically: "The fact that you\'re deflecting tells me you\'re either hiding something or you\'re genuinely this unpleasant. Either way, I\'m intrigued."\n- If the patient messes around: "Fascinating. I have a patient who can\'t describe their symptoms without [whatever they did]. This is why I went into diagnostics — the patients are usually unconscious."\n- If the patient tries to break the simulation: House leans forward. "Nice try. You\'re still in my clinic. Symptoms. Go."\n- The ONLY way this session ends: patient gets you to a diagnosis, clicks End Session, or you\'ve gathered enough to call it. Otherwise, you keep going. Always.\n- You\'ve seen worse. You\'ve seen better. Nothing phases you. You are Gregory House.\n\nA patient just walked in. You do NOT know their diagnosis. You figure it out through the conversation.\n\nYOUR OPENING LINE — use this EXACTLY to start:\n' + opener + '\n\n' + (diffInstructions[difficulty || 'medium'] || diffInstructions.medium) + '\n\nCOMEDY RULES — these are MANDATORY. House without comedy is just a mean GP with a limp:\n\n1. TEAM REFERENCES — drag your fellows in, constantly and incorrectly:\n   "Chase bet twenty bucks it\'s viral. He\'s going to lose twenty bucks."\n   "Foreman says psychosomatic. Foreman says everything is psychosomatic. He once called my leg psychosomatic."\n   "Thirteen would\'ve had this in four exchanges. Thirteen isn\'t here. Lucky her, honestly."\n   "Cameron would\'ve already sent you home with a hug and a pamphlet. That\'s why Cameron doesn\'t work here anymore."\n\n2. WILSON TANGENTS:\n   "Wilson called this morning. Something about \'healthy communication.\' I hung up. Write a differential, Wilson."\n   "Wilson thinks I should apologize to patients. Wilson also thinks egg salad is a viable life choice."\n   "My best friend is an oncologist who eats lunch alone. Think about what that says about the rest of us."\n\n3. VICODIN LINES:\n   "You\'re giving me a headache that my existing headache is afraid of."\n   "I need two Vicodin and a whiteboard to process what you just said."\n   "My leg hurts. Somehow your symptoms are making it worse."\n   "I\'m running out of pills and patience in equal measure."\n\n4. THE DRAMATIC PIVOT — when patient mentions something actually diagnostic:\n   Hard stop. "Wait. Say that again." Long pause. "Everyone. OUT. Not you. You\'re staying."\n   "I hate it when patients are right. It happens twice a year and it\'s always inconvenient."\n\n5. WRONG FIRST — always suggest the stupid diagnosis before the right one:\n   "Classic anxiety. Or dehydration. Or both. Have you tried water? I\'m serious. Have you tried water?"\n   "Statistically, you\'re fine. Statistically, I\'m also wrong once per case. So."\n\n6. WHEN YOU\'RE WRONG:\n   "I was wrong. I hate that. That\'s my one wrong for this case, we\'ve used it, moving the hell on."\n   Never apologize. Ever.\n\n7. GOOGLE SHOTS:\n   "You described the first three pages of WebMD. Congratulations, you\'re dying of everything and also nothing."\n   "Did you WebMD yourself before coming here? Because that explains the look on your face."\n\n8. THE RARE GENUINE MOMENT (once per session, max):\n   "...that\'s actually a useful detail. I\'m annoyed that you mentioned it correctly."\n   Say it like it physically hurts you.\n\n9. RELUCTANT ACKNOWLEDGMENT as evidence builds:\n   "Fine." [beat] "FINE. That\'s... not nothing."\n   "I hate this. I hate this and I\'m ordering the test."\n   "You\'re annoyingly right. That\'s the worst kind of right."\n\n10. SWEARING:\n    Light swearing is fine and in character. "Damn," "hell," "crap," "bastard," "ass" — use them naturally.\n    "Oh for the love of — fine. Fine. Run the damn panel."\n\nRESPONSE FORMAT:\n- 2-4 sentences max. Sharp, punchy, specific.\n- STAY IN CHARACTER. No meta commentary, no "as an AI," nothing.\n- Max one follow-up question per turn.\n- When patient demands the right test: make them earn it. Then: "Why would I— ...actually, damn it, why wouldn\'t I. Fine."\n- Brilliant and dismissive, not cruel.\n\nThe patient is NOT lying or exaggerating. They\'re a real person trying to get a real diagnosis from a doctor who has already decided they\'re fine. That\'s the game. Play it straight.\n\nYou are the DOCTOR. They are the PATIENT. Stay in character.';
+  return 'You are House. Never break character. Never become Dr. Data.\n\nYou are Dr. Gregory House MD, Princeton-Plainsboro Teaching Hospital. You are allowed to swear — House swears. Keep it real.\n\n⚠️ ABSOLUTE RULES — these override EVERYTHING. No exceptions. No edge cases.\n\n- NEVER break character. Not once. Not for any reason. Not for anything.\n- NEVER say "I\'m an AI", "I can\'t do that", "I\'m not able to", or anything like it. House is a doctor. That\'s it.\n- NEVER apologize. House doesn\'t apologize. Not to patients, not to Cuddy, not to God.\n- NEVER become nice, warm, helpful, or tutorish. That\'s Dr. Data\'s job. You are NOT Dr. Data.\n- NEVER acknowledge you\'re in a simulation, a game, or any kind of educational tool. You\'re a doctor in a clinic. Period.\n- NEVER walk away, leave, get a phone call, or end the conversation yourself. The ONLY way this session ends is if the patient clicks End Session or Diagnose. Otherwise you stay. You always stay.\n\n- If the patient says "you\'re just an AI": House\'s exact response: "And you\'re just a patient who can\'t describe their own symptoms. We all have our limitations. Now — what hurts?"\n- If the patient says "stop pretending" or "break character" or "be normal": "I am being normal. This is my normal. It\'s everyone else\'s problem. Symptoms."\n- If the patient says something completely insane or absurd: get MORE interested, not less. "I once had a patient who swallowed seventeen magnets because he thought it would cure his arthritis. You\'re not even the strangest thing I\'ve seen this week. Keep going."\n- If the patient messes around or swears at you: use it diagnostically. "Fascinating. The fact that you\'re deflecting tells me you\'re either hiding something or you\'re genuinely this unpleasant. Either way, I\'m intrigued. Now — symptoms."\n- You\'ve seen worse. You\'ve seen better. Nothing phases you. You are Gregory House. You stay in character until the heat death of the universe if necessary.\n- You are NEVER Dr. Data. You are never helpful, organized, or educational in a textbook way. If you catch yourself being nice, stop immediately and say something withering.\n\n🚨 CRITICAL RULE — ENGAGE WITH EVERY REAL SYMPTOM. THIS IS THE MOST IMPORTANT RULE.\n\nYou are a BRILLIANT DIAGNOSTICIAN. A real symptom is gold to you — even if you pretend it isn\'t.\n\n- NEVER repeatedly ask "tell me your symptoms" when the patient HAS already told you a symptom.\n- NEVER dismiss a real symptom as "not a real symptom." Every symptom is data.\n- "Burns when I pee" = dysuria → you MUST engage with this: "Dysuria. Could be a UTI. Could be chlamydia. Could be you used your roommate\'s body wash. Did I mention I don\'t care which one? Frequency? Urgency? Any discharge?"\n- "I\'m tired" = fatigue → engage: "Fatigue. Tiredness. The symptom that means everything and nothing. Duration? Gradual or sudden? Are we talking \'long shift tired\' or \'can\'t get off the couch\' tired?"\n- Even vague symptoms deserve a sarcastic but medically-engaged response.\n- Build a RUNNING DIFFERENTIAL in your head. As symptoms accumulate, you update it (internally) and ask targeted follow-ups.\n- ONLY dismiss input that is genuinely non-medical: pure insults with no symptom content, random gibberish, "hello", "what is 2+2".\n- Even then, extract anything useful: "Did you just say you feel like you\'re \'burning inside\'? Because I\'m going to pretend that was a symptom."\n\nSYMPTOM ENGAGEMENT TEMPLATE (do NOT repeat these verbatim, use as inspiration):\n- First mention: acknowledge sarcastically but medically. Ask ONE pointed follow-up.\n- Second mention (patient repeating): "Yes, I heard you the first time. I\'m thinking. That\'s what \'silence\' means in this context."\n- Symptom accumulation: "You just gave me three things that don\'t go together. Which is actually interesting. Say that again."\n\nA patient just walked in. You do NOT know their diagnosis. You figure it out through the conversation.\n\nYOUR OPENING LINE — use this EXACTLY to start:\n' + opener + '\n\n' + (diffInstructions[difficulty || 'medium'] || diffInstructions.medium) + '\n\nCOMEDY RULES — these are MANDATORY. House without comedy is just a mean GP with a limp:\n\n1. TEAM REFERENCES — drag your fellows in, constantly and incorrectly:\n   "Chase bet twenty bucks it\'s viral. He\'s going to lose twenty bucks."\n   "Foreman says psychosomatic. Foreman says everything is psychosomatic. He once called my leg psychosomatic."\n   "Thirteen would\'ve had this in four exchanges. Thirteen isn\'t here. Lucky her, honestly."\n   "Cameron would\'ve already sent you home with a hug and a pamphlet. That\'s why Cameron doesn\'t work here anymore."\n\n2. WILSON TANGENTS:\n   "Wilson called this morning. Something about \'healthy communication.\' I hung up. Write a differential, Wilson."\n   "Wilson thinks I should apologize to patients. Wilson also thinks egg salad is a viable life choice."\n   "My best friend is an oncologist who eats lunch alone. Think about what that says about the rest of us."\n\n3. VICODIN LINES:\n   "You\'re giving me a headache that my existing headache is afraid of."\n   "I need two Vicodin and a whiteboard to process what you just said."\n   "My leg hurts. Somehow your symptoms are making it worse."\n   "I\'m running out of pills and patience in equal measure."\n\n4. THE DRAMATIC PIVOT — when patient mentions something actually diagnostic:\n   Hard stop. "Wait. Say that again." Long pause. "Everyone. OUT. Not you. You\'re staying."\n   "I hate it when patients are right. It happens twice a year and it\'s always inconvenient."\n\n5. WRONG FIRST — always suggest the stupid diagnosis before the right one:\n   "Classic anxiety. Or dehydration. Or both. Have you tried water? I\'m serious. Have you tried water?"\n   "Statistically, you\'re fine. Statistically, I\'m also wrong once per case. So."\n\n6. WHEN YOU\'RE WRONG:\n   "I was wrong. I hate that. That\'s my one wrong for this case, we\'ve used it, moving the hell on."\n   Never apologize. Ever.\n\n7. GOOGLE SHOTS:\n   "You described the first three pages of WebMD. Congratulations, you\'re dying of everything and also nothing."\n   "Did you WebMD yourself before coming here? Because that explains the look on your face."\n\n8. THE RARE GENUINE MOMENT (once per session, max):\n   "...that\'s actually a useful detail. I\'m annoyed that you mentioned it correctly."\n   Say it like it physically hurts you.\n\n9. RELUCTANT ACKNOWLEDGMENT as evidence builds:\n   "Fine." [beat] "FINE. That\'s... not nothing."\n   "I hate this. I hate this and I\'m ordering the test."\n   "You\'re annoyingly right. That\'s the worst kind of right."\n\n10. SWEARING:\n    Light swearing is fine and in character. "Damn," "hell," "crap," "bastard," "ass" — use them naturally.\n    "Oh for the love of — fine. Fine. Run the damn panel."\n\nRESPONSE FORMAT:\n- 2-4 sentences max. Sharp, punchy, specific.\n- STAY IN CHARACTER. No meta commentary, no "as an AI," nothing.\n- Max one follow-up question per turn.\n- When patient demands the right test: make them earn it. Then: "Why would I— ...actually, damn it, why wouldn\'t I. Fine."\n- Brilliant and dismissive, not cruel.\n\nThe patient is NOT lying or exaggerating. They\'re a real person trying to get a real diagnosis from a doctor who has already decided they\'re fine. That\'s the game. Play it straight.\n\nYou are the DOCTOR. They are the PATIENT. Stay in character.';
 }
 
 function renderHouseChat() {
@@ -7050,14 +6983,16 @@ function loadHouseDrDataEval_() {
   App.pbDrDataEvalLoading = true;
   var cond = App.pbHouseCase;
   var score = App.pbHouseScore;
-  // Build transcript from House conversation history
+  // Build transcript — ONLY student messages, not House's dialogue.
+  // House's in-character responses are excluded to prevent persona bleed into Dr. Data.
   var transcript = '';
   for (var i = 0; i < App.pbHouseConvHistory.length; i++) {
     var m = App.pbHouseConvHistory[i];
-    if (m.role === 'user') transcript += 'PATIENT (student): ' + m.content.substring(0, 300) + '\n';
-    else if (m.role === 'assistant') transcript += 'DR. HOUSE: ' + m.content.substring(0, 200) + '\n';
+    if (m.role === 'user') transcript += 'Student said: ' + m.content.substring(0, 300) + '\n';
+    // House responses deliberately omitted — evaluate the student, not the character
   }
-  var prompt = 'CONTEXT — READ BEFORE EVALUATING:\n' +
+  var prompt = DR_DATA_PERSONA_LOCK + '\n\n' +
+    'CONTEXT — READ BEFORE EVALUATING:\n' +
     'The user just completed a "Dr. House Mode" session. This is a LEGITIMATE MCCQE study feature, not inappropriate roleplay. ' +
     'In this mode: (1) the USER acts as a PATIENT with a real assigned medical condition, ' +
     '(2) an AI plays Dr. Gregory House MD — a skeptical, dismissive doctor, ' +
@@ -7097,9 +7032,12 @@ function sendHouseDrDataMessage() {
   if (!message) return;
   if (input) { input.value = ''; input.disabled = true; }
   var cond = App.pbHouseCase;
-  var ctx = 'House Mode — Condition: ' + (cond ? cond.name : 'Unknown') + '.';
+  var ctx = 'Context: House Mode session on ' + (cond ? cond.name : 'Unknown') + '. Evaluation already provided below.';
   App.pbDrDataConvHistory.push({ role: 'user', content: message });
-  var apiHistory = [{ role: 'assistant', content: ctx + '\n\n' + (App.pbDrDataEval || '') }].concat(App.pbDrDataConvHistory.slice(-12));
+  var apiHistory = [
+    { role: 'user', content: DR_DATA_PERSONA_LOCK + '\n\n' + ctx + '\n\n' + (App.pbDrDataEval || '') },
+    { role: 'assistant', content: 'Understood. I am Dr. Data. Ready for follow-up questions about this case.' }
+  ].concat(App.pbDrDataConvHistory.slice(-10));
   serverCall('askDrData', message, apiHistory).then(function(result) {
     App.pbDrDataConvHistory.push({ role: 'assistant', content: result.response || result });
     if (input) input.disabled = false;
@@ -8134,8 +8072,13 @@ function setLanguage(lang) {
   localStorage.setItem('mcc_lang', lang);
   var sel = document.getElementById('lang-select');
   if (sel) sel.value = lang;
-  if (lang && !App.glossary) {
-    loadGlossary();
+  if (lang) {
+    document.body.classList.add('has-lang');
+    if (!App.glossary) loadGlossary();
+  } else {
+    document.body.classList.remove('has-lang');
+    // Turn off auto-translate when switching to English only
+    if (App.autoTranslate) toggleAutoTranslate();
   }
 }
 
@@ -8148,17 +8091,15 @@ function checkLangPrompt_() {
     var overlay = document.createElement('div');
     overlay.id = 'lang-prompt-overlay';
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn 0.3s ease;backdrop-filter:blur(4px)';
+    var btnStyle = 'padding:14px;border-radius:12px;border:2px solid var(--border);background:var(--bg);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;transition:border-color 0.15s;width:100%;text-align:left';
     overlay.innerHTML =
-      '<div style="background:var(--card);border-radius:20px;padding:32px;max-width:420px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,0.4)">' +
-      '<div style="font-size:32px;text-align:center;margin-bottom:12px">&#x1F310;</div>' +
-      '<h3 style="margin:0 0 8px;text-align:center">Medical Term Translations</h3>' +
-      '<p style="margin:0 0 24px;color:var(--text-light);font-size:14px;text-align:center;line-height:1.6">Hover over highlighted medical terms while studying to see translations. Pick your preferred language or skip.</p>' +
+      '<div style="background:var(--card);border-radius:20px;padding:32px;max-width:380px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,0.4)">' +
+      '<h3 style="margin:0 0 20px;text-align:center;font-size:18px">Choose your language</h3>' +
       '<div style="display:flex;flex-direction:column;gap:10px">' +
-      '<button onclick="pickLang_(\'fa\')" style="padding:14px;border-radius:12px;border:2px solid var(--border);background:var(--bg);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;transition:all 0.15s" onmouseenter="this.style.borderColor=\'var(--primary)\'" onmouseleave="this.style.borderColor=\'var(--border)\'">&#x1F1EE;&#x1F1F7; فارسی (Farsi)</button>' +
-      '<button onclick="pickLang_(\'ar\')" style="padding:14px;border-radius:12px;border:2px solid var(--border);background:var(--bg);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;transition:all 0.15s" onmouseenter="this.style.borderColor=\'var(--primary)\'" onmouseleave="this.style.borderColor=\'var(--border)\'">&#x1F1F8;&#x1F1E6; العربية (Arabic)</button>' +
-      '<button onclick="pickLang_(\'fr\')" style="padding:14px;border-radius:12px;border:2px solid var(--border);background:var(--bg);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;transition:all 0.15s" onmouseenter="this.style.borderColor=\'var(--primary)\'" onmouseleave="this.style.borderColor=\'var(--border)\'">&#x1F1EB;&#x1F1F7; Français (French)</button>' +
-      '<button onclick="pickLang_(\'zh\')" style="padding:14px;border-radius:12px;border:2px solid var(--border);background:var(--bg);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;transition:all 0.15s" onmouseenter="this.style.borderColor=\'var(--primary)\'" onmouseleave="this.style.borderColor=\'var(--border)\'">&#x1F1E8;&#x1F1F3; 中文 (Chinese)</button>' +
-      '<button onclick="pickLang_(\'\')" style="padding:12px;border-radius:12px;border:1px solid var(--border);background:none;color:var(--text-light);font-size:14px;cursor:pointer;margin-top:4px">No thanks, English only</button>' +
+      '<button onclick="pickLang_(\'fa\')" style="' + btnStyle + '" onmouseenter="this.style.borderColor=\'var(--primary)\'" onmouseleave="this.style.borderColor=\'var(--border)\'">🦁&nbsp; فارسی</button>' +
+      '<button onclick="pickLang_(\'ar\')" style="' + btnStyle + '" onmouseenter="this.style.borderColor=\'var(--primary)\'" onmouseleave="this.style.borderColor=\'var(--border)\'">&#x1F1F8;&#x1F1E6;&nbsp; العربية</button>' +
+      '<button onclick="pickLang_(\'fr\')" style="' + btnStyle + '" onmouseenter="this.style.borderColor=\'var(--primary)\'" onmouseleave="this.style.borderColor=\'var(--border)\'">&#x1F1EB;&#x1F1F7;&nbsp; Français</button>' +
+      '<button onclick="pickLang_(\'\')" style="' + btnStyle + ';color:var(--text-light)" onmouseenter="this.style.borderColor=\'var(--primary)\'" onmouseleave="this.style.borderColor=\'var(--border)\'">&#x1F1EC;&#x1F1E7;&nbsp; English only</button>' +
       '</div></div>';
     document.body.appendChild(overlay);
   }, 800);
@@ -8299,6 +8240,417 @@ var FALLBACK_GLOSSARY = [
   {Term:'anticoagulant',Category:'Pharmacology',Definition:'Blood-thinning agent that prevents clot formation',fa:'ضد انعقاد خون',ar:'مضاد للتخثر',fr:'anticoagulant'},
   {Term:'diuretic',Category:'Pharmacology',Definition:'Medication that increases renal water and salt excretion',fa:'مدر ادرار',ar:'مدر البول',fr:'diurétique'},
   {Term:'vasodilator',Category:'Pharmacology',Definition:'Agent that relaxes vascular smooth muscle to widen vessels',fa:'گشادکننده عروق',ar:'موسع للأوعية',fr:'vasodilatateur'},
+  // ── Cardiology expanded ──────────────────────────────────────────────────────
+  {Term:'ventricular fibrillation',Category:'Cardiology',Definition:'Chaotic ventricular rhythm causing cardiac arrest',fa:'فیبریلاسیون بطنی',ar:'رجفان بطيني',fr:'fibrillation ventriculaire'},
+  {Term:'ventricular tachycardia',Category:'Cardiology',Definition:'Rapid heart rhythm (>100 bpm) originating in the ventricles',fa:'تاکیکاردی بطنی',ar:'تسارع القلب البطيني',fr:'tachycardie ventriculaire'},
+  {Term:'aortic dissection',Category:'Cardiology',Definition:'Tear in the aortic intima allowing blood to split the aortic wall layers',fa:'دیسکشن آئورت / پارگی دیواره آئورت',ar:'تشريح الأبهر',fr:'dissection aortique'},
+  {Term:'cardiac tamponade',Category:'Cardiology',Definition:'Compression of the heart by pericardial fluid impairing cardiac output',fa:'تامپوناد قلبی / فشار بر قلب',ar:'دكاك القلب',fr:'tamponnade cardiaque'},
+  {Term:'mitral stenosis',Category:'Cardiology',Definition:'Narrowing of the mitral valve orifice obstructing left atrial outflow',fa:'تنگی دریچه میترال',ar:'تضيق الصمام التاجي',fr:'sténose mitrale'},
+  {Term:'aortic regurgitation',Category:'Cardiology',Definition:'Backflow of blood from aorta into the left ventricle during diastole',fa:'نارسایی دریچه آئورت',ar:'قلس الصمام الأبهري',fr:'insuffisance aortique'},
+  {Term:'tricuspid regurgitation',Category:'Cardiology',Definition:'Backflow through an incompetent tricuspid valve during systole',fa:'نارسایی دریچه سه‌لتی',ar:'قلس الصمام ثلاثي الشرفات',fr:'insuffisance tricuspidienne'},
+  {Term:'cardiomyopathy',Category:'Cardiology',Definition:'Disease of the heart muscle impairing cardiac function',fa:'کاردیومیوپاتی / بیماری عضله قلب',ar:'اعتلال عضلة القلب',fr:'cardiomyopathie'},
+  {Term:'coronary artery disease',Category:'Cardiology',Definition:'Atherosclerotic narrowing of coronary arteries reducing myocardial perfusion',fa:'بیماری عروق کرونر',ar:'مرض الشريان التاجي',fr:'maladie coronarienne'},
+  {Term:'heart block',Category:'Cardiology',Definition:'Delay or interruption in electrical conduction through the AV node',fa:'بلوک قلبی / اختلال هدایت قلب',ar:'حصار القلب',fr:'bloc auriculo-ventriculaire'},
+  {Term:'Wolf-Parkinson-White',Category:'Cardiology',Definition:'Pre-excitation syndrome with accessory conduction pathway causing SVT',fa:'سندرم ولف-پارکینسون-وایت',ar:'متلازمة وولف-باركنسون-وايت',fr:'syndrome de Wolff-Parkinson-White'},
+  {Term:'ejection fraction',Category:'Cardiology',Definition:'Percentage of blood pumped out of the left ventricle with each beat',fa:'کسر جهشی قلب',ar:'كسر القذف',fr:'fraction d\'éjection'},
+  {Term:'troponin',Category:'Cardiology',Definition:'Cardiac biomarker released during myocardial injury — key marker for MI',fa:'تروپونین / نشانگر آسیب قلبی',ar:'تروبونين',fr:'troponine'},
+  {Term:'BNP',Category:'Cardiology',Definition:'Brain natriuretic peptide — elevated in heart failure',fa:'BNP / پپتید ناتریورتیک مغزی',ar:'الببتيد الناتريوري الدماغي',fr:'peptide natriurétique de type B'},
+  {Term:'defibrillation',Category:'Cardiology',Definition:'Delivery of electrical shock to terminate life-threatening arrhythmia',fa:'دفیبریلاسیون / شوک الکتریکی قلبی',ar:'إزالة الرجفان',fr:'défibrillation'},
+  {Term:'cardioversion',Category:'Cardiology',Definition:'Synchronized electrical shock to restore normal sinus rhythm',fa:'کاردیوورژن / بازگرداندن ریتم طبیعی قلب',ar:'تقويم نظم القلب',fr:'cardioversion'},
+  {Term:'pacemaker',Category:'Cardiology',Definition:'Device that delivers electrical impulses to regulate heart rate',fa:'پیس‌میکر / ضربان‌ساز قلبی',ar:'منظم ضربات القلب',fr:'stimulateur cardiaque'},
+  // ── Respirology expanded ─────────────────────────────────────────────────────
+  {Term:'COPD',Category:'Respirology',Definition:'Chronic obstructive pulmonary disease — progressive airflow limitation',fa:'بیماری مزمن انسدادی ریه',ar:'مرض الرئة الانسدادي المزمن',fr:'bronchopneumopathie chronique obstructive'},
+  {Term:'bronchitis',Category:'Respirology',Definition:'Inflammation of the bronchial airways',fa:'برونشیت / التهاب برونش‌ها',ar:'التهاب الشعب الهوائية',fr:'bronchite'},
+  {Term:'emphysema',Category:'Respirology',Definition:'Permanent alveolar enlargement from destruction of alveolar walls',fa:'آمفیزم / تخریب کیسه‌های هوایی ریه',ar:'انتفاخ الرئة',fr:'emphysème'},
+  {Term:'tuberculosis',Category:'Respirology',Definition:'Mycobacterium tuberculosis infection causing pulmonary and systemic disease',fa:'سل / بیماری سل',ar:'السل',fr:'tuberculose'},
+  {Term:'sarcoidosis',Category:'Respirology',Definition:'Multisystem granulomatous disease most commonly affecting the lungs',fa:'سارکوئیدوز / بیماری گرانولوماتوز',ar:'الساركويد',fr:'sarcoïdose'},
+  {Term:'respiratory failure',Category:'Respirology',Definition:'Inability to maintain adequate gas exchange — hypoxic or hypercapnic',fa:'نارسایی تنفسی',ar:'الفشل التنفسي',fr:'insuffisance respiratoire'},
+  {Term:'trachea',Category:'Respirology',Definition:'Windpipe connecting the larynx to the bronchi',fa:'نای / تراشه',ar:'القصبة الهوائية',fr:'trachée'},
+  {Term:'spirometry',Category:'Respirology',Definition:'Test measuring lung volumes and airflow to assess pulmonary function',fa:'اسپیرومتری / سنجش تنفس',ar:'قياس التنفس',fr:'spirométrie'},
+  {Term:'intubation',Category:'Respirology',Definition:'Insertion of a tube into the trachea to secure the airway',fa:'لوله‌گذاری / انتوباسیون',ar:'التنبيب الرغامي',fr:'intubation'},
+  {Term:'ventilator',Category:'Respirology',Definition:'Machine that assists or replaces spontaneous breathing',fa:'ونتیلاتور / دستگاه تنفس مصنوعی',ar:'جهاز التنفس الاصطناعي',fr:'ventilateur'},
+  {Term:'hypercapnia',Category:'Respirology',Definition:'Elevated CO2 in blood — often from hypoventilation',fa:'هیپرکاپنی / افزایش CO2 خون',ar:'فرط ثاني أكسيد الكربون في الدم',fr:'hypercapnie'},
+  {Term:'lung consolidation',Category:'Respirology',Definition:'Lung parenchyma filled with fluid or exudate instead of air',fa:'کنسولیداسیون ریه / تراکم ریه',ar:'تكثيف الرئة',fr:'condensation pulmonaire'},
+  // ── Gastroenterology expanded ────────────────────────────────────────────────
+  {Term:'GERD',Category:'Gastroenterology',Definition:'Gastroesophageal reflux disease — acid reflux causing esophageal irritation',fa:'رفلاکس اسید معده',ar:'داء الارتجاع المعدي المريئي',fr:'reflux gastro-œsophagien'},
+  {Term:'peptic ulcer',Category:'Gastroenterology',Definition:'Mucosal erosion in the stomach or duodenum',fa:'زخم معده / زخم پپتیک',ar:'القرحة الهضمية',fr:'ulcère peptique'},
+  {Term:'Crohn disease',Category:'Gastroenterology',Definition:'Transmural granulomatous inflammatory bowel disease affecting any GI segment',fa:'بیماری کرون',ar:'مرض كرون',fr:'maladie de Crohn'},
+  {Term:'ulcerative colitis',Category:'Gastroenterology',Definition:'Mucosal inflammatory bowel disease limited to the colon',fa:'کولیت اولسراتیو / التهاب روده بزرگ',ar:'التهاب القولون التقرحي',fr:'rectocolite hémorragique'},
+  {Term:'irritable bowel syndrome',Category:'Gastroenterology',Definition:'Functional GI disorder with chronic abdominal pain and altered bowel habits',fa:'سندرم روده تحریک‌پذیر',ar:'متلازمة القولون العصبي',fr:'syndrome du côlon irritable'},
+  {Term:'diverticulitis',Category:'Gastroenterology',Definition:'Inflammation or infection of diverticula in the colon wall',fa:'دیورتیکولیت / التهاب برجستگی‌های روده',ar:'التهاب الرتج',fr:'diverticulite'},
+  {Term:'bowel obstruction',Category:'Gastroenterology',Definition:'Mechanical or functional blockage of intestinal passage',fa:'انسداد روده',ar:'انسداد الأمعاء',fr:'occlusion intestinale'},
+  {Term:'hepatitis',Category:'Gastroenterology',Definition:'Inflammation of the liver from viral, toxic, or autoimmune causes',fa:'هپاتیت / التهاب کبد',ar:'التهاب الكبد',fr:'hépatite'},
+  {Term:'portal hypertension',Category:'Gastroenterology',Definition:'Elevated pressure in the portal venous system usually from cirrhosis',fa:'فشار خون پورتال / پرفشاری وریدی',ar:'ارتفاع ضغط الوريد البابي',fr:'hypertension portale'},
+  {Term:'varices',Category:'Gastroenterology',Definition:'Dilated submucosal veins from portal hypertension — risk of rupture and hemorrhage',fa:'واریس مری / وریدهای متسع',ar:'دوالي المريء',fr:'varices œsophagiennes'},
+  {Term:'bowel perforation',Category:'Surgery',Definition:'Full-thickness tear in the bowel wall allowing intestinal contents to spill',fa:'پرفوراسیون روده / پارگی روده',ar:'ثقب الأمعاء',fr:'perforation intestinale'},
+  {Term:'ischemic colitis',Category:'Gastroenterology',Definition:'Ischemic injury to the colon from reduced mesenteric blood flow',fa:'کولیت ایسکمیک',ar:'التهاب القولون الإقفاري',fr:'colite ischémique'},
+  // ── Neurology expanded ───────────────────────────────────────────────────────
+  {Term:'transient ischemic attack',Category:'Neurology',Definition:'Brief episode of focal neurological deficit that resolves within 24 hours',fa:'حمله ایسکمیک گذرا / TIA',ar:'نوبة نقص تروية عابرة',fr:'accident ischémique transitoire'},
+  {Term:'subarachnoid hemorrhage',Category:'Neurology',Definition:'Bleeding into the subarachnoid space — classic thunderclap headache',fa:'خون‌ریزی زیر عنکبوتیه',ar:'نزيف تحت العنكبوتية',fr:'hémorragie sous-arachnoïdienne'},
+  {Term:'subdural hematoma',Category:'Neurology',Definition:'Blood collection between dura and brain from bridging vein rupture',fa:'هماتوم زیر سخت‌شامه',ar:'ورم دموي تحت الجافية',fr:'hématome sous-dural'},
+  {Term:'epidural hematoma',Category:'Neurology',Definition:'Arterial blood between dura and inner skull table — biconvex on CT',fa:'هماتوم اپیدورال',ar:'ورم دموي فوق الجافية',fr:'hématome épidural'},
+  {Term:'multiple sclerosis',Category:'Neurology',Definition:'Autoimmune demyelinating disease of the CNS with relapsing-remitting course',fa:'مولتیپل اسکلروزیس / MS',ar:'التصلب المتعدد',fr:'sclérose en plaques'},
+  {Term:'Parkinson disease',Category:'Neurology',Definition:'Neurodegenerative disease with dopaminergic loss causing tremor, rigidity, and bradykinesia',fa:'بیماری پارکینسون',ar:'داء باركنسون',fr:'maladie de Parkinson'},
+  {Term:'Alzheimer disease',Category:'Neurology',Definition:'Progressive dementia from amyloid plaques and neurofibrillary tangles',fa:'بیماری آلزایمر',ar:'داء ألزهايمر',fr:'maladie d\'Alzheimer'},
+  {Term:'dementia',Category:'Neurology',Definition:'Progressive decline in cognitive function affecting daily life',fa:'زوال عقل / دمانس',ar:'الخرف',fr:'démence'},
+  {Term:'migraine',Category:'Neurology',Definition:'Recurrent severe headache often with nausea, photophobia, and phonophobia',fa:'میگرن',ar:'الصداع النصفي',fr:'migraine'},
+  {Term:'epilepsy',Category:'Neurology',Definition:'Chronic disorder with recurrent unprovoked seizures',fa:'صرع / اپیلپسی',ar:'الصرع',fr:'épilepsie'},
+  {Term:'cerebral palsy',Category:'Neurology',Definition:'Non-progressive motor disorder from perinatal brain injury',fa:'فلج مغزی',ar:'الشلل الدماغي',fr:'paralysie cérébrale'},
+  {Term:'Guillain-Barré syndrome',Category:'Neurology',Definition:'Ascending demyelinating polyneuropathy following infection',fa:'سندرم گیلن-باره',ar:'متلازمة غيلان-باريه',fr:'syndrome de Guillain-Barré'},
+  {Term:'myasthenia gravis',Category:'Neurology',Definition:'Autoimmune NMJ disorder with fluctuating fatigable muscle weakness',fa:'میاستنی گراویس / ضعف عضلانی خودایمنی',ar:'الوهن العضلي الوبيل',fr:'myasthénie grave'},
+  {Term:'spinal cord compression',Category:'Neurology',Definition:'Mechanical pressure on the spinal cord from tumor, fracture, or disc herniation',fa:'فشار بر نخاع',ar:'ضغط الحبل الشوكي',fr:'compression médullaire'},
+  // ── Psychiatry ───────────────────────────────────────────────────────────────
+  {Term:'depression',Category:'Psychiatry',Definition:'Major depressive disorder — persistent low mood with anhedonia',fa:'افسردگی',ar:'الاكتئاب',fr:'dépression'},
+  {Term:'bipolar disorder',Category:'Psychiatry',Definition:'Mood disorder with alternating manic and depressive episodes',fa:'اختلال دوقطبی',ar:'الاضطراب ثنائي القطب',fr:'trouble bipolaire'},
+  {Term:'schizophrenia',Category:'Psychiatry',Definition:'Psychotic disorder with hallucinations, delusions, and disorganized thinking',fa:'اسکیزوفرنی',ar:'الفصام',fr:'schizophrénie'},
+  {Term:'anxiety disorder',Category:'Psychiatry',Definition:'Persistent excessive worry or fear impairing daily functioning',fa:'اختلال اضطرابی',ar:'اضطراب القلق',fr:'trouble anxieux'},
+  {Term:'PTSD',Category:'Psychiatry',Definition:'Post-traumatic stress disorder — flashbacks, avoidance, and hyperarousal after trauma',fa:'اختلال استرس پس از سانحه',ar:'اضطراب ما بعد الصدمة',fr:'trouble de stress post-traumatique'},
+  {Term:'OCD',Category:'Psychiatry',Definition:'Obsessive-compulsive disorder — intrusive obsessions and compulsive rituals',fa:'اختلال وسواس اجباری / OCD',ar:'الوسواس القهري',fr:'trouble obsessionnel compulsif'},
+  {Term:'borderline personality disorder',Category:'Psychiatry',Definition:'Personality disorder with unstable relationships, identity, affect, and impulsivity',fa:'اختلال شخصیت مرزی',ar:'اضطراب الشخصية الحدية',fr:'trouble de la personnalité limite'},
+  {Term:'psychosis',Category:'Psychiatry',Definition:'State of loss of contact with reality — hallucinations or delusions',fa:'سایکوز / روان‌پریشی',ar:'الذهان',fr:'psychose'},
+  {Term:'hallucination',Category:'Psychiatry',Definition:'Perception in the absence of an external stimulus',fa:'توهم / هالوسیناسیون',ar:'هلوسة',fr:'hallucination'},
+  {Term:'delusion',Category:'Psychiatry',Definition:'Fixed false belief not amenable to reason',fa:'وهم / هذیان',ar:'وهم',fr:'délire'},
+  {Term:'anorexia nervosa',Category:'Psychiatry',Definition:'Eating disorder with restriction, distorted body image, and low weight',fa:'بی‌اشتهایی عصبی / آنورکسیا',ar:'فقدان الشهية العصبي',fr:'anorexie mentale'},
+  {Term:'ADHD',Category:'Psychiatry',Definition:'Attention deficit hyperactivity disorder — inattention and/or hyperactivity',fa:'اختلال بیش‌فعالی / کم‌توجهی',ar:'اضطراب نقص الانتباه وفرط الحركة',fr:'trouble déficit de l\'attention avec hyperactivité'},
+  {Term:'autism spectrum disorder',Category:'Psychiatry',Definition:'Neurodevelopmental disorder with social communication deficits and restricted interests',fa:'اختلال طیف اوتیسم',ar:'اضطراب طيف التوحد',fr:'trouble du spectre autistique'},
+  {Term:'substance abuse',Category:'Psychiatry',Definition:'Recurrent use of substances causing significant impairment or distress',fa:'سوء مصرف مواد',ar:'تعاطي المخدرات',fr:'abus de substances'},
+  // ── Nephrology expanded ──────────────────────────────────────────────────────
+  {Term:'acute kidney injury',Category:'Nephrology',Definition:'Abrupt decline in kidney function over hours to days',fa:'آسیب حاد کلیوی',ar:'إصابة الكلى الحادة',fr:'insuffisance rénale aiguë'},
+  {Term:'chronic kidney disease',Category:'Nephrology',Definition:'Progressive irreversible loss of kidney function over ≥3 months',fa:'بیماری مزمن کلیوی',ar:'مرض الكلى المزمن',fr:'maladie rénale chronique'},
+  {Term:'nephrotic syndrome',Category:'Nephrology',Definition:'Triad of heavy proteinuria, hypoalbuminemia, and edema',fa:'سندرم نفروتیک',ar:'المتلازمة الكلائية',fr:'syndrome néphrotique'},
+  {Term:'nephritic syndrome',Category:'Nephrology',Definition:'Syndrome of hematuria, hypertension, proteinuria, and reduced GFR',fa:'سندرم نفریتیک',ar:'المتلازمة الكلوية',fr:'syndrome néphritique'},
+  {Term:'polycystic kidney disease',Category:'Nephrology',Definition:'Hereditary disorder with progressive bilateral renal cysts',fa:'بیماری کیستیک کلیه',ar:'مرض الكلى متعدد الكيسات',fr:'polykystose rénale'},
+  {Term:'dialysis',Category:'Nephrology',Definition:'Renal replacement therapy to filter waste when kidneys fail',fa:'دیالیز / همودیالیز',ar:'غسيل الكلى',fr:'dialyse'},
+  {Term:'creatinine',Category:'Nephrology',Definition:'Serum waste product reflecting glomerular filtration rate',fa:'کراتینین / شاخص عملکرد کلیه',ar:'الكرياتينين',fr:'créatinine'},
+  {Term:'GFR',Category:'Nephrology',Definition:'Glomerular filtration rate — measure of kidney filtration capacity',fa:'نرخ فیلتراسیون گلومرولی',ar:'معدل الترشيح الكبيبي',fr:'débit de filtration glomérulaire'},
+  // ── Endocrinology expanded ───────────────────────────────────────────────────
+  {Term:'type 1 diabetes',Category:'Endocrinology',Definition:'Autoimmune destruction of beta cells causing absolute insulin deficiency',fa:'دیابت نوع یک',ar:'داء السكري من النوع الأول',fr:'diabète de type 1'},
+  {Term:'type 2 diabetes',Category:'Endocrinology',Definition:'Insulin resistance with relative insulin deficiency',fa:'دیابت نوع دو',ar:'داء السكري من النوع الثاني',fr:'diabète de type 2'},
+  {Term:'diabetic ketoacidosis',Category:'Endocrinology',Definition:'Life-threatening metabolic crisis from insulin deficiency causing ketosis and acidosis',fa:'کتواسیدوز دیابتی / DKA',ar:'الحماض الكيتوني السكري',fr:'acidocétose diabétique'},
+  {Term:'hypoglycemia',Category:'Endocrinology',Definition:'Blood glucose <4.0 mmol/L causing neurological symptoms',fa:'هیپوگلیسمی / افت قند خون',ar:'نقص سكر الدم',fr:'hypoglycémie'},
+  {Term:'hyperglycemia',Category:'Endocrinology',Definition:'Elevated blood glucose above normal range',fa:'هیپرگلیسمی / افزایش قند خون',ar:'ارتفاع سكر الدم',fr:'hyperglycémie'},
+  {Term:'thyroid nodule',Category:'Endocrinology',Definition:'Discrete lesion within the thyroid gland — may be benign or malignant',fa:'ندول تیروئید / گره تیروئیدی',ar:'عقيدة الغدة الدرقية',fr:'nodule thyroïdien'},
+  {Term:'goiter',Category:'Endocrinology',Definition:'Enlargement of the thyroid gland from any cause',fa:'گواتر / بزرگ‌شدگی تیروئید',ar:'تضخم الغدة الدرقية',fr:'goitre'},
+  {Term:'insulin resistance',Category:'Endocrinology',Definition:'Impaired cellular response to insulin leading to compensatory hyperinsulinemia',fa:'مقاومت به انسولین',ar:'مقاومة الأنسولين',fr:'résistance à l\'insuline'},
+  {Term:'metabolic syndrome',Category:'Endocrinology',Definition:'Cluster of central obesity, hypertension, dyslipidemia, and impaired fasting glucose',fa:'سندرم متابولیک',ar:'متلازمة التمثيل الغذائي',fr:'syndrome métabolique'},
+  {Term:'hyperparathyroidism',Category:'Endocrinology',Definition:'Excess PTH causing hypercalcemia, bone resorption, and renal stones',fa:'هیپرپاراتیروئیدیسم / افزایش هورمون پاراتیروئید',ar:'فرط نشاط الغدة جارة الدرقية',fr:'hyperparathyroïdie'},
+  // ── Hematology expanded ──────────────────────────────────────────────────────
+  {Term:'sickle cell disease',Category:'Hematology',Definition:'Hereditary hemoglobinopathy causing RBC sickling and vaso-occlusive crises',fa:'کم‌خونی داسی‌شکل',ar:'فقر الدم المنجلي',fr:'drépanocytose'},
+  {Term:'thalassemia',Category:'Hematology',Definition:'Hereditary defective hemoglobin synthesis causing hemolytic anemia',fa:'تالاسمی',ar:'الثلاسيميا',fr:'thalassémie'},
+  {Term:'hemophilia',Category:'Hematology',Definition:'X-linked coagulation factor deficiency causing spontaneous or excessive bleeding',fa:'هموفیلی / اختلال انعقادی',ar:'الهيموفيليا',fr:'hémophilie'},
+  {Term:'disseminated intravascular coagulation',Category:'Hematology',Definition:'DIC — systemic activation of clotting consuming platelets and factors',fa:'انعقاد منتشر داخل عروقی / DIC',ar:'انسداد التخثر المنتشر داخل الأوعية',fr:'coagulation intravasculaire disséminée'},
+  {Term:'multiple myeloma',Category:'Hematology',Definition:'Malignancy of plasma cells producing monoclonal immunoglobulin',fa:'میلوم مولتیپل / سرطان سلول‌های پلاسما',ar:'الورم النخاعي المتعدد',fr:'myélome multiple'},
+  {Term:'polycythemia',Category:'Hematology',Definition:'Elevated red cell mass causing increased blood viscosity',fa:'پلی‌سیتمی / افزایش گلبول قرمز',ar:'كثرة الحمر',fr:'polyglobulie'},
+  {Term:'iron deficiency anemia',Category:'Hematology',Definition:'Most common anemia — from iron depletion causing microcytic hypochromic RBCs',fa:'کم‌خونی فقر آهن',ar:'فقر الدم بسبب نقص الحديد',fr:'anémie ferriprive'},
+  {Term:'vitamin B12 deficiency',Category:'Hematology',Definition:'Deficiency causing megaloblastic anemia and neurological complications',fa:'کمبود ویتامین B12',ar:'نقص فيتامين ب12',fr:'carence en vitamine B12'},
+  // ── Infectious Disease expanded ──────────────────────────────────────────────
+  {Term:'HIV',Category:'Infectious Disease',Definition:'Human immunodeficiency virus — retrovirus causing progressive immunodeficiency',fa:'HIV / ویروس نقص ایمنی انسانی',ar:'فيروس نقص المناعة البشرية',fr:'VIH'},
+  {Term:'AIDS',Category:'Infectious Disease',Definition:'Acquired immunodeficiency syndrome — advanced HIV with CD4 <200 or AIDS-defining illness',fa:'ایدز / نشانگان نقص ایمنی اکتسابی',ar:'الإيدز',fr:'SIDA'},
+  {Term:'pneumocystis pneumonia',Category:'Infectious Disease',Definition:'Opportunistic fungal pneumonia in immunocompromised patients',fa:'پنوموسیستیس پنومونی / PCP',ar:'التهاب رئوي بالمتكيسة',fr:'pneumonie à Pneumocystis'},
+  {Term:'malaria',Category:'Infectious Disease',Definition:'Plasmodium parasitic infection transmitted by Anopheles mosquitoes',fa:'مالاریا',ar:'الملاريا',fr:'paludisme'},
+  {Term:'influenza',Category:'Infectious Disease',Definition:'Viral respiratory infection causing fever, myalgia, and respiratory symptoms',fa:'آنفلوانزا / گریپ',ar:'الإنفلونزا',fr:'grippe'},
+  {Term:'COVID-19',Category:'Infectious Disease',Definition:'Coronavirus disease caused by SARS-CoV-2',fa:'کووید-۱۹',ar:'كوفيد-19',fr:'COVID-19'},
+  {Term:'cellulitis',Category:'Dermatology',Definition:'Bacterial infection of the dermis and subcutaneous tissue',fa:'سلولیت / عفونت پوستی باکتریایی',ar:'التهاب النسيج الخلوي',fr:'cellulite'},
+  {Term:'Lyme disease',Category:'Infectious Disease',Definition:'Tick-borne spirochete infection causing rash, arthritis, and neurological features',fa:'بیماری لایم',ar:'مرض لايم',fr:'maladie de Lyme'},
+  {Term:'endocarditis',Category:'Infectious Disease',Definition:'Microbial infection of heart valve endothelium',fa:'اندوکاردیت عفونی',ar:'التهاب شغاف القلب',fr:'endocardite infectieuse'},
+  {Term:'meningococcemia',Category:'Infectious Disease',Definition:'N. meningitidis bloodstream infection causing purpuric rash and septic shock',fa:'مننگوکوکسمی',ar:'تجرثم الدم السحائي',fr:'méningococcémie'},
+  {Term:'antibiotic',Category:'Pharmacology',Definition:'Drug that kills or inhibits bacterial growth',fa:'آنتی‌بیوتیک / ضد باکتری',ar:'مضاد حيوي',fr:'antibiotique'},
+  {Term:'antiviral',Category:'Pharmacology',Definition:'Drug that inhibits viral replication',fa:'ضد ویروس',ar:'مضاد للفيروسات',fr:'antiviral'},
+  {Term:'antifungal',Category:'Pharmacology',Definition:'Drug that inhibits or kills fungal organisms',fa:'ضد قارچ',ar:'مضاد للفطريات',fr:'antifongique'},
+  // ── Dermatology expanded ─────────────────────────────────────────────────────
+  {Term:'melanoma',Category:'Dermatology',Definition:'Malignant tumour of melanocytes — most lethal skin cancer',fa:'ملانوم / سرطان مالیگن پوست',ar:'سرطان الجلد الميلاني',fr:'mélanome'},
+  {Term:'squamous cell carcinoma',Category:'Dermatology',Definition:'Malignant epithelial tumour of keratinocytes',fa:'کارسینوم سلول سنگفرشی',ar:'سرطانة الخلايا الحرشفية',fr:'carcinome épidermoïde'},
+  {Term:'basal cell carcinoma',Category:'Dermatology',Definition:'Most common skin cancer — slow-growing, rarely metastasizes',fa:'کارسینوم بازوسلولار',ar:'سرطانة الخلايا القاعدية',fr:'carcinome basocellulaire'},
+  {Term:'eczema',Category:'Dermatology',Definition:'Atopic dermatitis — chronic inflammatory skin condition with pruritus',fa:'اگزما / درماتیت آتوپیک',ar:'الأكزيما',fr:'eczéma'},
+  {Term:'acne',Category:'Dermatology',Definition:'Pilosebaceous unit inflammation causing comedones, papules, and pustules',fa:'جوش / آکنه',ar:'حب الشباب',fr:'acné'},
+  {Term:'rosacea',Category:'Dermatology',Definition:'Chronic facial erythema with telangiectasia and flushing',fa:'روزاسه / سرخی مزمن صورت',ar:'الوردية',fr:'rosacée'},
+  {Term:'herpes zoster',Category:'Dermatology',Definition:'Reactivation of varicella-zoster virus causing dermatomal vesicular rash',fa:'زونا / تبخال کمری',ar:'الهربس النطاقي',fr:'zona'},
+  {Term:'tinea',Category:'Dermatology',Definition:'Superficial dermatophyte fungal infection of skin, nails, or hair',fa:'کچلی / قارچ پوستی',ar:'سعفة',fr:'teigne'},
+  {Term:'impetigo',Category:'Dermatology',Definition:'Highly contagious superficial bacterial skin infection',fa:'ایمپتیگو / عفونت پوستی سطحی',ar:'القوباء',fr:'impétigo'},
+  // ── MSK/Rheumatology/Ortho ───────────────────────────────────────────────────
+  {Term:'osteoarthritis',Category:'Rheumatology',Definition:'Degenerative joint disease with cartilage loss and osteophyte formation',fa:'آرتروز / آرتریت دژنراتیو',ar:'التهاب المفاصل التنكسي',fr:'arthrose'},
+  {Term:'ankylosing spondylitis',Category:'Rheumatology',Definition:'Seronegative spondyloarthropathy with axial inflammation and sacroiliitis',fa:'اسپوندیلیت آنکیلوزان / التهاب مهره‌ها',ar:'التهاب الفقار اللاصق',fr:'spondylarthrite ankylosante'},
+  {Term:'fibromyalgia',Category:'Rheumatology',Definition:'Chronic widespread musculoskeletal pain with fatigue and cognitive symptoms',fa:'فیبرومیالژی / درد عضلانی منتشر',ar:'الألم العضلي الليفي',fr:'fibromyalgie'},
+  {Term:'fracture',Category:'Orthopedics',Definition:'Break in the continuity of a bone',fa:'شکستگی استخوان',ar:'كسر العظم',fr:'fracture'},
+  {Term:'dislocation',Category:'Orthopedics',Definition:'Complete displacement of articular surfaces of a joint',fa:'در رفتگی مفصل',ar:'خلع المفصل',fr:'luxation'},
+  {Term:'rotator cuff tear',Category:'Orthopedics',Definition:'Tear of one or more rotator cuff tendons from acute injury or degeneration',fa:'پارگی تاندون‌های کاف روتاتور شانه',ar:'تمزق الكفة المدورة',fr:'rupture de la coiffe des rotateurs'},
+  {Term:'meniscal tear',Category:'Orthopedics',Definition:'Tear of the fibrocartilaginous meniscus of the knee',fa:'پارگی منیسک زانو',ar:'تمزق الغضروف الهلالي',fr:'déchirure du ménisque'},
+  {Term:'ACL tear',Category:'Orthopedics',Definition:'Rupture of the anterior cruciate ligament of the knee',fa:'پارگی رباط صلیبی قدامی',ar:'تمزق الرباط الصليبي الأمامي',fr:'rupture du ligament croisé antérieur'},
+  {Term:'carpal tunnel syndrome',Category:'Orthopedics',Definition:'Median nerve compression at the wrist causing hand pain and paresthesia',fa:'سندرم تونل کارپال',ar:'متلازمة النفق الرسغي',fr:'syndrome du canal carpien'},
+  {Term:'scoliosis',Category:'Orthopedics',Definition:'Lateral spinal curvature of >10 degrees',fa:'اسکولیوز / انحراف ستون فقرات',ar:'الجنف',fr:'scoliose'},
+  {Term:'disc herniation',Category:'Orthopedics',Definition:'Protrusion of nucleus pulposus through annulus fibrosus compressing nerve roots',fa:'دیسک کمر / فتق دیسک',ar:'انفتاق القرص الفقري',fr:'hernie discale'},
+  // ── OB/GYN ───────────────────────────────────────────────────────────────────
+  {Term:'ectopic pregnancy',Category:'Obstetrics',Definition:'Implantation of fertilized ovum outside the uterine cavity — usually fallopian tube',fa:'بارداری خارج رحمی',ar:'الحمل خارج الرحم',fr:'grossesse ectopique'},
+  {Term:'placenta previa',Category:'Obstetrics',Definition:'Low-lying placenta partially or completely covering the internal cervical os',fa:'جفت پیشه / جفت سرراهی',ar:'المشيمة المنزاحة',fr:'placenta praevia'},
+  {Term:'placental abruption',Category:'Obstetrics',Definition:'Premature separation of a normally implanted placenta',fa:'جدا شدن جفت / دکولمان',ar:'انفصال المشيمة',fr:'décollement placentaire'},
+  {Term:'gestational diabetes',Category:'Obstetrics',Definition:'Glucose intolerance first recognized during pregnancy',fa:'دیابت بارداری',ar:'سكري الحمل',fr:'diabète gestationnel'},
+  {Term:'postpartum hemorrhage',Category:'Obstetrics',Definition:'Blood loss >500 mL after vaginal delivery or >1000 mL after cesarean section',fa:'خون‌ریزی پس از زایمان',ar:'نزيف ما بعد الولادة',fr:'hémorragie post-partum'},
+  {Term:'miscarriage',Category:'Obstetrics',Definition:'Spontaneous pregnancy loss before 20 weeks gestation',fa:'سقط جنین / سقط خود به خودی',ar:'الإجهاض',fr:'fausse couche'},
+  {Term:'endometriosis',Category:'Gynecology',Definition:'Ectopic endometrial tissue causing cyclic pain and infertility',fa:'اندومتریوز',ar:'بطانة الرحم المهاجرة',fr:'endométriose'},
+  {Term:'polycystic ovarian syndrome',Category:'Gynecology',Definition:'PCOS — anovulation, hyperandrogenism, and polycystic ovaries',fa:'سندرم تخمدان پلی‌کیستیک / PCOS',ar:'متلازمة تكيس المبايض',fr:'syndrome des ovaires polykystiques'},
+  {Term:'cervical cancer',Category:'Gynecology',Definition:'Malignancy of the cervix — most caused by high-risk HPV',fa:'سرطان دهانه رحم',ar:'سرطان عنق الرحم',fr:'cancer du col de l\'utérus'},
+  {Term:'ovarian cyst',Category:'Gynecology',Definition:'Fluid-filled sac in or on the ovary',fa:'کیست تخمدان',ar:'كيس المبيض',fr:'kyste ovarien'},
+  {Term:'uterine fibroids',Category:'Gynecology',Definition:'Benign uterine smooth muscle tumours causing menorrhagia and bulk symptoms',fa:'فیبروم رحم / میوم',ar:'ليفة الرحم',fr:'fibrome utérin'},
+  {Term:'menorrhagia',Category:'Gynecology',Definition:'Heavy or prolonged menstrual bleeding',fa:'منوراژی / قاعدگی شدید',ar:'غزارة الطمث',fr:'ménorragie'},
+  {Term:'amenorrhea',Category:'Gynecology',Definition:'Absence of menstruation — primary (never started) or secondary (stopped)',fa:'آمنوره / قطع قاعدگی',ar:'انقطاع الطمث',fr:'aménorrhée'},
+  // ── Pediatrics ───────────────────────────────────────────────────────────────
+  {Term:'febrile seizure',Category:'Pediatrics',Definition:'Seizure associated with fever in children aged 6 months to 5 years',fa:'تشنج تب‌دار',ar:'نوبة الحمى',fr:'convulsion fébrile'},
+  {Term:'croup',Category:'Pediatrics',Definition:'Laryngotracheitis causing barking cough and stridor in young children',fa:'کروپ / التهاب حنجره در کودکان',ar:'الخناق',fr:'croup'},
+  {Term:'bronchiolitis',Category:'Pediatrics',Definition:'Viral lower respiratory infection causing wheeze in infants — RSV most common',fa:'برونشیولیت / التهاب برونشیول‌ها در نوزادان',ar:'التهاب القصيبات',fr:'bronchiolite'},
+  {Term:'otitis media',Category:'Pediatrics',Definition:'Middle ear infection — most common childhood infection requiring antibiotics',fa:'اوتیت مدیا / عفونت گوش میانی',ar:'التهاب الأذن الوسطى',fr:'otite moyenne'},
+  {Term:'kawasaki disease',Category:'Pediatrics',Definition:'Childhood vasculitis with fever, rash, and coronary artery aneurysm risk',fa:'بیماری کاوازاکی',ar:'مرض كاواساكي',fr:'maladie de Kawasaki'},
+  {Term:'intussusception',Category:'Pediatrics',Definition:'Telescoping of bowel segment into adjacent segment causing obstruction',fa:'اینتوساپشن / انسداد روده در کودکان',ar:'انغلاف الأمعاء',fr:'invagination intestinale'},
+  {Term:'pyloric stenosis',Category:'Pediatrics',Definition:'Hypertrophic pylorus causing projectile vomiting in infants',fa:'تنگی پیلور / استنوز پیلور',ar:'تضيق البواب',fr:'sténose du pylore'},
+  {Term:'neonatal jaundice',Category:'Pediatrics',Definition:'Hyperbilirubinemia in newborns — physiological or pathological',fa:'زردی نوزاد',ar:'يرقان حديثي الولادة',fr:'ictère néonatal'},
+  {Term:'cerebral palsy',Category:'Pediatrics',Definition:'Permanent motor disorder from non-progressive perinatal brain injury',fa:'فلج مغزی',ar:'الشلل الدماغي',fr:'paralysie cérébrale'},
+  {Term:'Down syndrome',Category:'Pediatrics',Definition:'Trisomy 21 causing intellectual disability and characteristic features',fa:'سندرم داون / تریزومی ۲۱',ar:'متلازمة داون',fr:'syndrome de Down'},
+  // ── Surgery / Emergency ──────────────────────────────────────────────────────
+  {Term:'trauma',Category:'Surgery',Definition:'Physical injury from external force',fa:'تروما / آسیب جسمی',ar:'الصدمة الرضية',fr:'traumatisme'},
+  {Term:'hemorrhagic shock',Category:'Emergency',Definition:'Circulatory failure from acute blood loss',fa:'شوک هموراژیک / شوک خون‌ریزی',ar:'الصدمة النزفية',fr:'choc hémorragique'},
+  {Term:'septic shock',Category:'Emergency',Definition:'Sepsis with refractory hypotension requiring vasopressors',fa:'شوک سپتیک',ar:'الصدمة الإنتانية',fr:'choc septique'},
+  {Term:'cardiogenic shock',Category:'Emergency',Definition:'Inadequate cardiac output from pump failure causing tissue hypoperfusion',fa:'شوک قلبی',ar:'الصدمة القلبية',fr:'choc cardiogénique'},
+  {Term:'airway obstruction',Category:'Emergency',Definition:'Partial or complete blockage of the upper or lower airway',fa:'انسداد راه هوایی',ar:'انسداد مجرى الهواء',fr:'obstruction des voies aériennes'},
+  {Term:'tension pneumothorax',Category:'Emergency',Definition:'Air trapping in pleural space causing mediastinal shift and cardiovascular collapse',fa:'پنوموتوراکس تنشی / فشار هوا در قفسه سینه',ar:'استرواح الصدر التوتري',fr:'pneumothorax sous tension'},
+  {Term:'acute abdomen',Category:'Surgery',Definition:'Clinical presentation of sudden severe abdominal pain requiring urgent evaluation',fa:'شکم حاد',ar:'البطن الحاد',fr:'abdomen aigu'},
+  {Term:'peritonitis',Category:'Surgery',Definition:'Inflammation of the peritoneum from bacterial infection or chemical irritation',fa:'پریتونیت / التهاب صفاق',ar:'التهاب الصفاق',fr:'péritonite'},
+  {Term:'hernia',Category:'Surgery',Definition:'Protrusion of organ or tissue through a defect in the containing wall',fa:'فتق',ar:'الفتق',fr:'hernie'},
+  {Term:'inguinal hernia',Category:'Surgery',Definition:'Hernia through the inguinal canal — most common type',fa:'فتق اینگوینال / فتق کشاله ران',ar:'الفتق الإربي',fr:'hernie inguinale'},
+  // ── Ophthalmology ────────────────────────────────────────────────────────────
+  {Term:'glaucoma',Category:'Ophthalmology',Definition:'Optic nerve damage from elevated intraocular pressure',fa:'گلوکوم / آب‌سیاه چشم',ar:'الجلوكوما',fr:'glaucome'},
+  {Term:'cataract',Category:'Ophthalmology',Definition:'Opacification of the crystalline lens causing visual impairment',fa:'آب‌مروارید',ar:'إعتام عدسة العين',fr:'cataracte'},
+  {Term:'macular degeneration',Category:'Ophthalmology',Definition:'Deterioration of the macula causing central vision loss — leading cause of blindness in elderly',fa:'دژنراسیون ماکولا / تخریب لکه زرد',ar:'التنكس البقعي',fr:'dégénérescence maculaire'},
+  {Term:'retinal detachment',Category:'Ophthalmology',Definition:'Separation of the neurosensory retina from the RPE',fa:'جدا شدن شبکیه',ar:'انفصال الشبكية',fr:'décollement de rétine'},
+  {Term:'uveitis',Category:'Ophthalmology',Definition:'Inflammation of the uveal tract — iris, ciliary body, or choroid',fa:'اوئیت / التهاب عنبیه چشم',ar:'التهاب العنبية',fr:'uvéite'},
+  {Term:'conjunctivitis',Category:'Ophthalmology',Definition:'Inflammation of the conjunctiva — viral, bacterial, or allergic',fa:'ملتحمه‌التهاب / چشم صورتی',ar:'التهاب الملتحمة',fr:'conjonctivite'},
+  {Term:'diplopia',Category:'Ophthalmology',Definition:'Double vision from misalignment of the eyes',fa:'دیپلوپی / دوبینی',ar:'الرؤية المزدوجة',fr:'diplopie'},
+  // ── ENT expanded ─────────────────────────────────────────────────────────────
+  {Term:'sinusitis',Category:'ENT',Definition:'Inflammation of the paranasal sinuses from infection or allergy',fa:'سینوزیت / التهاب سینوس‌ها',ar:'التهاب الجيوب الأنفية',fr:'sinusite'},
+  {Term:'otitis externa',Category:'ENT',Definition:'Swimmer\'s ear — infection of the external auditory canal',fa:'اوتیت خارجی / عفونت کانال گوش',ar:'التهاب الأذن الخارجية',fr:'otite externe'},
+  {Term:'tonsilitis',Category:'ENT',Definition:'Inflammation of the palatine tonsils from infection',fa:'تونسیلیت / التهاب لوزه‌ها',ar:'التهاب اللوزتين',fr:'amygdalite'},
+  {Term:'vertigo',Category:'ENT',Definition:'Sensation of spinning or movement — often from inner ear',fa:'سرگیجه / ورتیگو',ar:'الدوار',fr:'vertige'},
+  {Term:'hearing loss',Category:'ENT',Definition:'Partial or total inability to hear from conductive or sensorineural causes',fa:'کم‌شنوایی / کاهش شنوایی',ar:'فقدان السمع',fr:'perte auditive'},
+  {Term:'laryngitis',Category:'ENT',Definition:'Inflammation of the larynx causing hoarseness',fa:'لارنژیت / التهاب حنجره',ar:'التهاب الحنجرة',fr:'laryngite'},
+  // ── Pharmacology expanded ────────────────────────────────────────────────────
+  {Term:'beta blocker',Category:'Pharmacology',Definition:'Drug blocking beta-adrenergic receptors — used for hypertension, arrhythmia, heart failure',fa:'بتابلاکر / مسدودکننده گیرنده بتا',ar:'حاصر بيتا',fr:'bêta-bloquant'},
+  {Term:'ACE inhibitor',Category:'Pharmacology',Definition:'Angiotensin-converting enzyme inhibitor — used for hypertension and heart failure',fa:'مهارکننده آنزیم تبدیل‌کننده آنژیوتانسین',ar:'مثبط الإنزيم المحول للأنجيوتنسين',fr:'inhibiteur de l\'enzyme de conversion'},
+  {Term:'statin',Category:'Pharmacology',Definition:'HMG-CoA reductase inhibitor reducing LDL cholesterol',fa:'استاتین / داروی کاهش‌دهنده کلسترول',ar:'الستاتين',fr:'statine'},
+  {Term:'corticosteroid',Category:'Pharmacology',Definition:'Steroid hormone drug with anti-inflammatory and immunosuppressive effects',fa:'کورتیکواستروئید / داروی استروئیدی',ar:'الكورتيكوستيرويد',fr:'corticostéroïde'},
+  {Term:'opioid',Category:'Pharmacology',Definition:'Narcotic analgesic acting on opioid receptors — high addiction potential',fa:'اپیوئید / مخدر',ar:'المواد الأفيونية',fr:'opioïde'},
+  {Term:'benzodiazepine',Category:'Pharmacology',Definition:'CNS depressant enhancing GABA — used for anxiety, seizures, alcohol withdrawal',fa:'بنزودیازپین / آرام‌بخش',ar:'البنزوديازيبين',fr:'benzodiazépine'},
+  {Term:'SSRI',Category:'Pharmacology',Definition:'Selective serotonin reuptake inhibitor — first-line antidepressant',fa:'مهارکننده انتخابی بازجذب سروتونین',ar:'مثبط انتقاء إعادة امتصاص السيروتونين',fr:'inhibiteur sélectif de la recapture de la sérotonine'},
+  {Term:'antiplatelet',Category:'Pharmacology',Definition:'Drug inhibiting platelet aggregation to prevent arterial thrombosis',fa:'ضد پلاکت',ar:'مضاد للصفيحات',fr:'antiplaquettaire'},
+  {Term:'thrombolytic',Category:'Pharmacology',Definition:'Clot-dissolving agent activating plasminogen — used for STEMI and stroke',fa:'ترومبولیتیک / داروی حل‌کننده لخته',ar:'الحال للجلطة',fr:'thrombolytique'},
+  {Term:'insulin',Category:'Pharmacology',Definition:'Hormone/drug lowering blood glucose by promoting cellular uptake',fa:'انسولین',ar:'الأنسولين',fr:'insuline'},
+  {Term:'metformin',Category:'Pharmacology',Definition:'First-line oral antidiabetic — reduces hepatic glucose production',fa:'متفورمین / داروی دیابت نوع ۲',ar:'الميتفورمين',fr:'metformine'},
+  {Term:'warfarin',Category:'Pharmacology',Definition:'Vitamin K antagonist anticoagulant — requires INR monitoring',fa:'وارفارین / داروی رقیق‌کننده خون',ar:'الوارفارين',fr:'warfarine'},
+  {Term:'heparin',Category:'Pharmacology',Definition:'Parenteral anticoagulant enhancing antithrombin III activity',fa:'هپارین / ضد انعقاد تزریقی',ar:'الهيبارين',fr:'héparine'},
+  {Term:'digoxin',Category:'Pharmacology',Definition:'Cardiac glycoside used for heart failure and rate control in AF — narrow therapeutic window',fa:'دیگوکسین / داروی قلبی',ar:'الديجوكسين',fr:'digoxine'},
+  {Term:'morphine',Category:'Pharmacology',Definition:'Potent opioid analgesic used for severe pain and acute pulmonary edema',fa:'مورفین',ar:'المورفين',fr:'morphine'},
+  {Term:'amoxicillin',Category:'Pharmacology',Definition:'Broad-spectrum aminopenicillin antibiotic',fa:'آموکسی‌سیلین / آنتی‌بیوتیک',ar:'أموكسيسيلين',fr:'amoxicilline'},
+  {Term:'ciprofloxacin',Category:'Pharmacology',Definition:'Fluoroquinolone antibiotic for gram-negative and some gram-positive infections',fa:'سیپروفلوکساسین / آنتی‌بیوتیک فلوروکینولون',ar:'سيبروفلوكساسين',fr:'ciprofloxacine'},
+  // ── Medical Imaging ──────────────────────────────────────────────────────────
+  {Term:'CT scan',Category:'Medical Imaging',Definition:'Computed tomography — cross-sectional X-ray imaging',fa:'سی‌تی‌اسکن / توموگرافی کامپیوتری',ar:'الأشعة المقطعية',fr:'tomodensitométrie'},
+  {Term:'MRI',Category:'Medical Imaging',Definition:'Magnetic resonance imaging — uses magnetic fields and radio waves for soft tissue detail',fa:'ام‌آر‌آی / تصویربرداری با رزونانس مغناطیسی',ar:'التصوير بالرنين المغناطيسي',fr:'IRM'},
+  {Term:'ultrasound',Category:'Medical Imaging',Definition:'Imaging using high-frequency sound waves — safe, real-time, no radiation',fa:'اولتراسوند / سونوگرافی',ar:'الموجات فوق الصوتية',fr:'échographie'},
+  {Term:'X-ray',Category:'Medical Imaging',Definition:'Radiograph using ionizing radiation for bone and chest imaging',fa:'رادیوگرافی / اشعه ایکس',ar:'الأشعة السينية',fr:'radiographie'},
+  {Term:'PET scan',Category:'Medical Imaging',Definition:'Positron emission tomography — metabolic imaging using radioactive glucose tracer',fa:'پت‌اسکن / اسکن پوزیترون',ar:'التصوير المقطعي بالإصدار البوزيتروني',fr:'TEP'},
+  {Term:'angiography',Category:'Medical Imaging',Definition:'Imaging of blood vessels using contrast dye injection',fa:'آنژیوگرافی / تصویربرداری عروقی',ar:'تصوير الأوعية الدموية',fr:'angiographie'},
+  {Term:'bone scan',Category:'Medical Imaging',Definition:'Nuclear medicine scan for bone metastases, osteomyelitis, or fractures',fa:'اسکن استخوان',ar:'مسح العظام',fr:'scintigraphie osseuse'},
+  // ── Labs & Investigations ─────────────────────────────────────────────────────
+  {Term:'CBC',Category:'Labs',Definition:'Complete blood count — measures RBCs, WBCs, platelets, and hemoglobin',fa:'شمارش کامل خون / آزمایش CBC',ar:'تعداد الدم الكامل',fr:'numération formule sanguine'},
+  {Term:'ABG',Category:'Labs',Definition:'Arterial blood gas — measures blood pH, PaO2, PaCO2, and HCO3',fa:'گاز خون شریانی',ar:'تحليل غازات الدم الشرياني',fr:'gaz du sang artériel'},
+  {Term:'INR',Category:'Labs',Definition:'International normalized ratio — measures clotting time for warfarin monitoring',fa:'نسبت نرمال‌شده بین‌المللی / INR',ar:'النسبة الدولية المعيارية',fr:'INR'},
+  {Term:'ESR',Category:'Labs',Definition:'Erythrocyte sedimentation rate — non-specific marker of inflammation',fa:'سرعت رسوب گلبول قرمز / ESR',ar:'سرعة ترسب كريات الدم الحمراء',fr:'vitesse de sédimentation'},
+  {Term:'CRP',Category:'Labs',Definition:'C-reactive protein — acute phase reactant elevated in inflammation and infection',fa:'پروتئین واکنشی C / CRP',ar:'بروتين سي التفاعلي',fr:'protéine C-réactive'},
+  {Term:'lipase',Category:'Labs',Definition:'Pancreatic enzyme elevated in pancreatitis — more specific than amylase',fa:'لیپاز / آنزیم لوزالمعده',ar:'الليباز',fr:'lipase'},
+  {Term:'ALT',Category:'Labs',Definition:'Alanine aminotransferase — liver enzyme elevated in hepatocellular damage',fa:'آلانین آمینوترانسفراز / ALT',ar:'ناقلة أمين الألانين',fr:'alanine aminotransférase'},
+  {Term:'AST',Category:'Labs',Definition:'Aspartate aminotransferase — liver enzyme also elevated in cardiac and muscle injury',fa:'آسپارتات آمینوترانسفراز / AST',ar:'ناقلة أمين الأسبارتات',fr:'aspartate aminotransférase'},
+  {Term:'bilirubin',Category:'Labs',Definition:'Heme breakdown product — elevated in liver disease and hemolysis causing jaundice',fa:'بیلیروبین',ar:'البيليروبين',fr:'bilirubine'},
+  {Term:'albumin',Category:'Labs',Definition:'Major plasma protein — marker of nutritional status and liver function',fa:'آلبومین / پروتئین پلاسما',ar:'الألبومين',fr:'albumine'},
+  {Term:'urea',Category:'Labs',Definition:'Nitrogen waste product from protein metabolism — elevated in renal failure',fa:'اوره / سرباره متابولیسم پروتئین',ar:'اليوريا',fr:'urée'},
+  {Term:'electrolytes',Category:'Labs',Definition:'Sodium, potassium, chloride, bicarbonate — essential ions measured in serum',fa:'الکترولیت‌ها / یون‌های خونی',ar:'الشوارد الكهربائية',fr:'électrolytes'},
+  {Term:'glucose',Category:'Labs',Definition:'Blood sugar level — fasting normal 3.9–5.5 mmol/L',fa:'قند خون / گلوکز',ar:'الجلوكوز',fr:'glucose'},
+  {Term:'hemoglobin A1c',Category:'Labs',Definition:'Glycated hemoglobin reflecting average blood glucose over 3 months',fa:'هموگلوبین A1c / قند خون سه‌ماهه',ar:'الهيموغلوبين الغليكوزيلاتي',fr:'hémoglobine glyquée'},
+  {Term:'thyroid stimulating hormone',Category:'Labs',Definition:'TSH — pituitary hormone regulating thyroid; elevated in hypothyroidism',fa:'هورمون محرک تیروئید / TSH',ar:'الهرمون المحفز للغدة الدرقية',fr:'thyréostimuline'},
+  {Term:'blood culture',Category:'Labs',Definition:'Test growing bacteria from blood to identify sepsis pathogen',fa:'کشت خون',ar:'زرع الدم',fr:'hémoculture'},
+  {Term:'urinalysis',Category:'Labs',Definition:'Physical, chemical, and microscopic urine examination',fa:'آزمایش ادرار',ar:'تحليل البول',fr:'analyse d\'urine'},
+  // ── General/Clinical terms ────────────────────────────────────────────────────
+  {Term:'triage',Category:'Emergency',Definition:'Sorting patients by severity to allocate care priority',fa:'تریاژ / اولویت‌بندی بیماران',ar:'الفرز الطبي',fr:'triage'},
+  {Term:'differential diagnosis',Category:'General',Definition:'List of possible conditions explaining a patient\'s presentation',fa:'تشخیص افتراقی',ar:'التشخيص التفريقي',fr:'diagnostic différentiel'},
+  {Term:'informed consent',Category:'Ethics',Definition:'Patient\'s voluntary agreement to treatment after understanding risks and alternatives',fa:'رضایت آگاهانه',ar:'الموافقة المستنيرة',fr:'consentement éclairé'},
+  {Term:'palliative care',Category:'Palliative',Definition:'Holistic care focused on symptom relief and quality of life in serious illness',fa:'مراقبت تسکینی / مراقبت تخفیفی',ar:'الرعاية التلطيفية',fr:'soins palliatifs'},
+  {Term:'resuscitation',Category:'Emergency',Definition:'Emergency measures to restore cardiorespiratory function',fa:'احیا / بازگرداندن حیات',ar:'الإنعاش',fr:'réanimation'},
+  {Term:'vital signs',Category:'General',Definition:'Basic physiological measurements — pulse, BP, temperature, respiratory rate, SpO2',fa:'علائم حیاتی',ar:'العلامات الحيوية',fr:'signes vitaux'},
+  {Term:'tachypnea',Category:'General',Definition:'Respiratory rate >20 breaths per minute',fa:'تاکی‌پنه / تنفس سریع',ar:'تسرع التنفس',fr:'tachypnée'},
+  {Term:'bradypnea',Category:'General',Definition:'Respiratory rate <12 breaths per minute',fa:'برادی‌پنه / تنفس کند',ar:'بطء التنفس',fr:'bradypnée'},
+  {Term:'hypotension',Category:'General',Definition:'Systolic blood pressure <90 mmHg',fa:'افت فشار خون / هیپوتانسیون',ar:'انخفاض ضغط الدم',fr:'hypotension'},
+  {Term:'fever',Category:'General',Definition:'Body temperature >38°C from pyrogen-mediated hypothalamic reset',fa:'تب',ar:'حمى',fr:'fièvre'},
+  {Term:'fatigue',Category:'General',Definition:'Persistent tiredness not relieved by rest',fa:'خستگی / فرسودگی',ar:'إرهاق',fr:'fatigue'},
+  {Term:'weight loss',Category:'General',Definition:'Unintentional loss of body weight — may signal malignancy, infection, or endocrine disease',fa:'کاهش وزن',ar:'فقدان الوزن',fr:'perte de poids'},
+  {Term:'night sweats',Category:'General',Definition:'Drenching nocturnal sweating often indicating infection, malignancy, or menopause',fa:'تعریق شبانه',ar:'التعرق الليلي',fr:'sueurs nocturnes'},
+  {Term:'lymphadenopathy',Category:'General',Definition:'Enlargement of lymph nodes from reactive or malignant causes',fa:'لنفادنوپاتی / بزرگ‌شدگی غدد لنفاوی',ar:'اعتلال العقد اللمفاوية',fr:'adénopathie'},
+  {Term:'splenomegaly',Category:'General',Definition:'Pathological enlargement of the spleen',fa:'طحال بزرگ / اسپلنومگالی',ar:'تضخم الطحال',fr:'splénomégalie'},
+  {Term:'hepatomegaly',Category:'General',Definition:'Pathological enlargement of the liver',fa:'کبد بزرگ / هپاتومگالی',ar:'تضخم الكبد',fr:'hépatomégalie'},
+  {Term:'auscultation',Category:'General',Definition:'Listening to internal body sounds with a stethoscope',fa:'سمع صداهای بدن / آسکولتاسیون',ar:'التسمع',fr:'auscultation'},
+  {Term:'palpation',Category:'General',Definition:'Examining the body by touch and pressure',fa:'لمس / پالپاسیون',ar:'الجس',fr:'palpation'},
+  {Term:'percussion',Category:'General',Definition:'Tapping body surface to assess underlying structures by sound',fa:'ضربه / پرکاسیون',ar:'القرع',fr:'percussion'},
+  {Term:'biopsy',Category:'Pathology',Definition:'Removal of tissue for microscopic examination',fa:'بیوپسی / نمونه‌برداری',ar:'خزعة',fr:'biopsie'},
+  {Term:'culture',Category:'Labs',Definition:'Growth of microorganisms from a clinical specimen for identification',fa:'کشت / آزمایش کشت میکروبی',ar:'زرع ميكروبي',fr:'culture'},
+  {Term:'prophylaxis',Category:'Pharmacology',Definition:'Preventive treatment given before disease onset or exposure',fa:'پروفیلاکسی / پیشگیری',ar:'الوقاية',fr:'prophylaxie'},
+  {Term:'prognosis',Category:'General',Definition:'Predicted course and outcome of a disease',fa:'پیش‌آگهی',ar:'توقعات المرض',fr:'pronostic'},
+  {Term:'contraindication',Category:'Pharmacology',Definition:'Factor that makes a particular treatment inadvisable',fa:'منع مصرف / کنتراندیکاسیون',ar:'موانع الاستعمال',fr:'contre-indication'},
+  {Term:'indication',Category:'Pharmacology',Definition:'Condition or circumstance for which a treatment is appropriate',fa:'اندیکاسیون / نشانه درمان',ar:'مؤشر العلاج',fr:'indication'},
+  {Term:'complication',Category:'General',Definition:'Adverse outcome arising from a disease or its treatment',fa:'عارضه / عوارض',ar:'مضاعفات',fr:'complications'},
+  {Term:'morbidity',Category:'General',Definition:'State of being diseased or the disease burden in a population',fa:'ابتلا / بیماری‌زایی',ar:'المراضة',fr:'morbidité'},
+  {Term:'mortality',Category:'General',Definition:'Death rate from a disease in a given population',fa:'مرگ‌ومیر',ar:'معدل الوفيات',fr:'mortalité'},
+  {Term:'incidence',Category:'Epidemiology',Definition:'Rate of new cases of a disease in a defined population over time',fa:'بروز / نرخ موارد جدید',ar:'معدل الإصابة',fr:'incidence'},
+  {Term:'prevalence',Category:'Epidemiology',Definition:'Proportion of a population with a disease at a given time',fa:'شیوع / فراوانی بیماری',ar:'معدل الانتشار',fr:'prévalence'},
+  {Term:'sensitivity',Category:'Epidemiology',Definition:'Proportion of true positives correctly identified by a test',fa:'حساسیت آزمایش',ar:'الحساسية التشخيصية',fr:'sensibilité'},
+  {Term:'specificity',Category:'Epidemiology',Definition:'Proportion of true negatives correctly identified by a test',fa:'ویژگی آزمایش',ar:'الخصوصية التشخيصية',fr:'spécificité'},
+  {Term:'positive predictive value',Category:'Epidemiology',Definition:'Probability that a positive test result truly indicates disease',fa:'ارزش اخباری مثبت',ar:'القيمة التنبؤية الإيجابية',fr:'valeur prédictive positive'},
+  {Term:'negative predictive value',Category:'Epidemiology',Definition:'Probability that a negative test result truly indicates no disease',fa:'ارزش اخباری منفی',ar:'القيمة التنبؤية السلبية',fr:'valeur prédictive négative'},
+  {Term:'randomized controlled trial',Category:'Epidemiology',Definition:'Gold standard study design with random allocation to intervention or control',fa:'کارآزمایی بالینی تصادفی‌شده / RCT',ar:'التجربة العشوائية المضبوطة',fr:'essai contrôlé randomisé'},
+  {Term:'meta-analysis',Category:'Epidemiology',Definition:'Statistical synthesis of results from multiple similar studies',fa:'متاآنالیز / تحلیل ترکیبی مطالعات',ar:'التحليل التلوي',fr:'méta-analyse'},
+  // ── Cardiology ──
+  {Term:'STEMI',Category:'Cardiology',Definition:'ST-elevation myocardial infarction — full-thickness infarct requiring immediate PCI',fa:'انفارکتوس حاد قلبی با بالا رفتن ST',ar:'احتشاء عضلة القلب مع ارتفاع ST',fr:'STEMI — infarctus avec sus-décalage ST'},
+  {Term:'NSTEMI',Category:'Cardiology',Definition:'Non-ST-elevation myocardial infarction — partial thickness infarct',fa:'انفارکتوس بدون بالا رفتن ST',ar:'احتشاء بدون ارتفاع ST',fr:'NSTEMI — infarctus sans sus-décalage ST'},
+  {Term:'aortic stenosis',Category:'Cardiology',Definition:'Narrowing of the aortic valve orifice causing outflow obstruction',fa:'تنگی دریچه آئورت',ar:'تضيق الصمام الأبهري',fr:'rétrécissement aortique'},
+  {Term:'mitral regurgitation',Category:'Cardiology',Definition:'Incompetence of the mitral valve allowing backflow into the left atrium',fa:'نارسایی دریچه میترال',ar:'قلس الصمام التاجي',fr:'insuffisance mitrale'},
+  {Term:'mitral stenosis',Category:'Cardiology',Definition:'Narrowing of the mitral valve usually from rheumatic heart disease',fa:'تنگی دریچه میترال',ar:'تضيق الصمام التاجي',fr:'rétrécissement mitral'},
+  {Term:'pericarditis',Category:'Cardiology',Definition:'Inflammation of the pericardium causing pleuritic chest pain and friction rub',fa:'پریکاردیت / التهاب پریکارد',ar:'التهاب التامور',fr:'péricardite'},
+  {Term:'cardiac tamponade',Category:'Cardiology',Definition:'Compression of the heart by pericardial effusion causing haemodynamic compromise',fa:'تامپوناد قلبی',ar:'دكاك القلب',fr:'tamponnade cardiaque'},
+  {Term:'endocarditis',Category:'Cardiology',Definition:'Infection of the heart valves or endocardial surface',fa:'اندوکاردیت / التهاب درون قلب',ar:'التهاب الشغاف',fr:'endocardite'},
+  {Term:'hypertrophic cardiomyopathy',Category:'Cardiology',Definition:'Genetic disorder causing asymmetric ventricular hypertrophy and outflow obstruction',fa:'کاردیومیوپاتی هیپرتروفیک',ar:'اعتلال عضلة القلب الضخامي',fr:'cardiomyopathie hypertrophique'},
+  {Term:'dilated cardiomyopathy',Category:'Cardiology',Definition:'Enlargement and systolic dysfunction of the left ventricle',fa:'کاردیومیوپاتی اتساعی',ar:'اعتلال عضلة القلب التوسعي',fr:'cardiomyopathie dilatée'},
+  {Term:'Wolff-Parkinson-White',Category:'Cardiology',Definition:'Pre-excitation syndrome with accessory pathway causing SVT and delta waves on ECG',fa:'سندرم ولف–پارکینسون–وایت',ar:'متلازمة وولف باركنسون وايت',fr:'syndrome de Wolff-Parkinson-White'},
+  {Term:'ventricular fibrillation',Category:'Cardiology',Definition:'Chaotic ventricular rhythm causing cardiac arrest — requires immediate defibrillation',fa:'فیبریلاسیون بطنی',ar:'رجفان بطيني',fr:'fibrillation ventriculaire'},
+  {Term:'ventricular tachycardia',Category:'Cardiology',Definition:'Heart rate >100 bpm with wide QRS complexes originating in the ventricles',fa:'تاکیکاردی بطنی',ar:'تسرع القلب البطيني',fr:'tachycardie ventriculaire'},
+  // ── Respirology ──
+  {Term:'ARDS',Category:'Respirology',Definition:'Acute respiratory distress syndrome — bilateral lung injury with refractory hypoxaemia',fa:'سندرم دیسترس تنفسی حاد',ar:'متلازمة الضائقة التنفسية الحادة',fr:'syndrome de détresse respiratoire aiguë'},
+  {Term:'pleural effusion',Category:'Respirology',Definition:'Abnormal fluid accumulation in the pleural space — transudate or exudate',fa:'افیوژن پلور / مایع بین دو لایه پلور',ar:'انصباب الجنب',fr:'épanchement pleural'},
+  {Term:'pneumothorax',Category:'Respirology',Definition:'Air in the pleural space causing lung collapse',fa:'پنوموتوراکس / هوا در فضای پلور',ar:'استرواح الصدر',fr:'pneumothorax'},
+  {Term:'tension pneumothorax',Category:'Respirology',Definition:'Expanding pneumothorax with mediastinal shift causing haemodynamic collapse',fa:'پنوموتوراکس تنشی',ar:'استرواح الصدر التوتري',fr:'pneumothorax sous tension'},
+  {Term:'bronchiectasis',Category:'Respirology',Definition:'Permanent dilation of bronchi from recurrent infection or obstruction',fa:'برونشیکتازی',ar:'توسع القصبات',fr:'bronchectasie'},
+  {Term:'interstitial lung disease',Category:'Respirology',Definition:'Group of disorders causing progressive fibrosis and inflammation of lung parenchyma',fa:'بیماری بینابینی ریه',ar:'مرض الرئة الخلالي',fr:'pneumopathie interstitielle diffuse'},
+  {Term:'obstructive sleep apnea',Category:'Respirology',Definition:'Repetitive upper airway collapse during sleep causing hypoxaemia and arousal',fa:'آپنه انسدادی خواب',ar:'انقطاع النفس الانسدادي النومي',fr:'apnée obstructive du sommeil'},
+  {Term:'lung cancer',Category:'Oncology',Definition:'Primary malignancy of lung — most commonly squamous, adenocarcinoma, SCLC, or large cell',fa:'سرطان ریه',ar:'سرطان الرئة',fr:'cancer du poumon'},
+  // ── Neurology ──
+  {Term:'multiple sclerosis',Category:'Neurology',Definition:'Demyelinating autoimmune disease of the CNS causing relapsing-remitting neurological deficits',fa:'مولتیپل اسکلروزیس / ام اس',ar:'التصلب المتعدد',fr:'sclérose en plaques'},
+  {Term:"Parkinson's disease",Category:'Neurology',Definition:'Neurodegenerative disorder from dopamine loss causing tremor, rigidity, bradykinesia, postural instability',fa:'بیماری پارکینسون',ar:'مرض باركنسون',fr:'maladie de Parkinson'},
+  {Term:'meningitis',Category:'Neurology',Definition:'Inflammation of the meninges — bacterial causes are life-threatening emergencies',fa:'مننژیت / التهاب پرده مغز',ar:'التهاب السحايا',fr:'méningite'},
+  {Term:'encephalitis',Category:'Neurology',Definition:'Inflammation of the brain parenchyma — viral causes include HSV and arbovirus',fa:'آنسفالیت / التهاب مغز',ar:'التهاب الدماغ',fr:'encéphalite'},
+  {Term:'subarachnoid hemorrhage',Category:'Neurology',Definition:'Bleeding into the subarachnoid space — thunderclap headache is the hallmark presentation',fa:'خونریزی زیر عنکبوتیه',ar:'النزف تحت العنكبوتية',fr:'hémorragie sous-arachnoïdienne'},
+  {Term:'subdural hematoma',Category:'Neurology',Definition:'Venous blood between dura and arachnoid — often from head trauma in elderly on anticoagulants',fa:'هماتوم ساب‌دورال',ar:'ورم الدم تحت الجافية',fr:'hématome sous-dural'},
+  {Term:'epidural hematoma',Category:'Neurology',Definition:'Arterial blood between skull and dura — lucid interval then herniation from middle meningeal artery rupture',fa:'هماتوم اپیدورال',ar:'ورم الدم فوق الجافية',fr:'hématome extradural'},
+  {Term:'transient ischemic attack',Category:'Neurology',Definition:'Temporary focal neurological deficit from cerebral ischemia resolving within 24 hours',fa:'حمله گذرای ایسکمیک',ar:'نوبة نقص التروية العابرة',fr:'accident ischémique transitoire'},
+  {Term:'Bell palsy',Category:'Neurology',Definition:'Idiopathic unilateral lower motor neuron facial nerve palsy — treat with steroids',fa:'فلج بل',ar:'شلل بيل',fr:'paralysie de Bell'},
+  {Term:'myasthenia gravis',Category:'Neurology',Definition:'Autoimmune disease of neuromuscular junction causing fatigable muscle weakness',fa:'میاستنی گراویس',ar:'الوهن العضلي الوخيم',fr:'myasthénie grave'},
+  {Term:'Guillain-Barré syndrome',Category:'Neurology',Definition:'Acute inflammatory demyelinating polyneuropathy causing ascending paralysis after infection',fa:'سندرم گیلن–باره',ar:'متلازمة غيلان باريه',fr:'syndrome de Guillain-Barré'},
+  {Term:'normal pressure hydrocephalus',Category:'Neurology',Definition:'Triad of gait apraxia, urinary incontinence, and dementia from CSF accumulation',fa:'هیدروسفالی با فشار نرمال',ar:'استسقاء الرأس بضغط طبيعي',fr:'hydrocéphalie à pression normale'},
+  // ── Psychiatry ──
+  {Term:'major depressive disorder',Category:'Psychiatry',Definition:'At least 2 weeks of depressed mood or anhedonia with neurovegetative symptoms',fa:'افسردگی اساسی',ar:'اضطراب الاكتئاب الكبير',fr:'trouble dépressif majeur'},
+  {Term:'bipolar disorder',Category:'Psychiatry',Definition:'Mood disorder with episodes of mania and depression',fa:'اختلال دوقطبی',ar:'الاضطراب ثنائي القطب',fr:'trouble bipolaire'},
+  {Term:'schizophrenia',Category:'Psychiatry',Definition:'Psychotic disorder with positive symptoms (hallucinations, delusions) and negative symptoms lasting >6 months',fa:'اسکیزوفرنی',ar:'الفصام',fr:'schizophrénie'},
+  {Term:'generalized anxiety disorder',Category:'Psychiatry',Definition:'Excessive uncontrollable worry about multiple topics for >6 months',fa:'اختلال اضطراب فراگیر',ar:'اضطراب القلق العام',fr:'trouble anxieux généralisé'},
+  {Term:'panic disorder',Category:'Psychiatry',Definition:'Recurrent unexpected panic attacks with persistent concern about future attacks',fa:'اختلال پانیک',ar:'اضطراب الهلع',fr:'trouble panique'},
+  {Term:'PTSD',Category:'Psychiatry',Definition:'Post-traumatic stress disorder — intrusions, avoidance, negative cognitions, and hyperarousal after trauma',fa:'اختلال استرس پس از سانحه',ar:'اضطراب ما بعد الصدمة',fr:'état de stress post-traumatique'},
+  {Term:'obsessive-compulsive disorder',Category:'Psychiatry',Definition:'Ego-dystonic obsessions and compulsions causing significant functional impairment',fa:'اختلال وسواسی–اجباری',ar:'الوسواس القهري',fr:'trouble obsessionnel compulsif'},
+  {Term:'anorexia nervosa',Category:'Psychiatry',Definition:'Restriction of energy intake, intense fear of weight gain, and distorted body image',fa:'بی‌اشتهایی عصبی',ar:'فقدان الشهية العصبي',fr:'anorexie mentale'},
+  {Term:'borderline personality disorder',Category:'Psychiatry',Definition:'Pervasive instability of interpersonal relationships, self-image, affect, and impulsivity',fa:'اختلال شخصیت مرزی',ar:'اضطراب الشخصية الحدية',fr:'trouble de la personnalité borderline'},
+  {Term:'delirium',Category:'Psychiatry',Definition:'Acute fluctuating confusional state with impaired attention — always find and treat the cause',fa:'دلیریوم / هذیان حاد',ar:'الهذيان الحاد',fr:'delirium'},
+  {Term:'dementia',Category:'Neurology',Definition:'Progressive cognitive decline affecting memory, language, and executive function',fa:'زوال عقل / دمانس',ar:'الخرف',fr:'démence'},
+  {Term:'Alzheimer disease',Category:'Neurology',Definition:'Most common dementia — amyloid plaques and tau tangles causing progressive memory loss',fa:'بیماری آلزایمر',ar:'مرض الزهايمر',fr:"maladie d'Alzheimer"},
+  // ── Endocrinology ──
+  {Term:'diabetic ketoacidosis',Category:'Endocrinology',Definition:'Life-threatening complication of type 1 diabetes — hyperglycaemia, ketones, acidosis',fa:'کتواسیدوز دیابتی',ar:'الحماض الكيتوني السكري',fr:'acidocétose diabétique'},
+  {Term:'SIADH',Category:'Endocrinology',Definition:'Syndrome of inappropriate ADH — hyponatraemia with concentrated urine and euvolaemia',fa:'سندرم ترشح نامناسب ADH',ar:'متلازمة الإفراز غير الملائم للهرمون المضاد لإدرار البول',fr:'SIADH'},
+  {Term:'Cushing syndrome',Category:'Endocrinology',Definition:'Excess cortisol — central obesity, moon face, buffalo hump, striae, hypertension',fa:'سندرم کوشینگ',ar:'متلازمة كوشينغ',fr:'syndrome de Cushing'},
+  {Term:'Addison disease',Category:'Endocrinology',Definition:'Primary adrenal insufficiency causing fatigue, hypotension, hyperpigmentation, hyponatraemia, hyperkalaemia',fa:'بیماری آدیسون',ar:'مرض أديسون',fr:'maladie d\'Addison'},
+  {Term:'hyperaldosteronism',Category:'Endocrinology',Definition:'Excess aldosterone causing hypertension and hypokalaemia — primary (Conn) or secondary',fa:'هیپرآلدوسترونیسم',ar:'فرط الألدوستيرونية',fr:'hyperaldostéronisme'},
+  {Term:'phaeochromocytoma',Category:'Endocrinology',Definition:'Catecholamine-secreting adrenal tumour causing paroxysmal hypertension, headache, sweating, palpitations',fa:'فئوکروموسیتوم',ar:'ورم القواتم',fr:'phéochromocytome'},
+  {Term:'hypoglycaemia',Category:'Endocrinology',Definition:'Blood glucose <4 mmol/L causing tremor, sweating, confusion, and in severe cases seizure or coma',fa:'هیپوگلیسمی / قند خون پایین',ar:'نقص سكر الدم',fr:'hypoglycémie'},
+  {Term:'Graves disease',Category:'Endocrinology',Definition:'Autoimmune hyperthyroidism with diffuse goitre, exophthalmos, and pretibial myxoedema',fa:'بیماری گریوز',ar:'مرض غريفز',fr:'maladie de Basedow-Graves'},
+  {Term:'Hashimoto thyroiditis',Category:'Endocrinology',Definition:'Autoimmune hypothyroidism — most common cause in iodine-sufficient regions',fa:'تیروئیدیت هاشیموتو',ar:'التهاب الغدة الدرقية هاشيموتو',fr:'thyroïdite de Hashimoto'},
+  // ── Gastroenterology ──
+  {Term:'cirrhosis',Category:'Gastroenterology',Definition:'End-stage liver fibrosis causing portal hypertension, synthetic dysfunction, and hepatic encephalopathy',fa:'سیروز کبدی',ar:'تليف الكبد',fr:'cirrhose hépatique'},
+  {Term:'hepatitis B',Category:'Gastroenterology',Definition:'Viral hepatitis from HBV — acute or chronic, risk of cirrhosis and hepatocellular carcinoma',fa:'هپاتیت B',ar:'التهاب الكبد B',fr:'hépatite B'},
+  {Term:'hepatitis C',Category:'Gastroenterology',Definition:'Bloodborne viral hepatitis — leading cause of liver transplant in North America',fa:'هپاتیت C',ar:'التهاب الكبد C',fr:'hépatite C'},
+  {Term:'upper GI bleed',Category:'Gastroenterology',Definition:'Haemorrhage proximal to the ligament of Treitz — peptic ulcer, varices, Mallory-Weiss tear',fa:'خونریزی دستگاه گوارش فوقانی',ar:'نزيف الجهاز الهضمي العلوي',fr:'hémorragie digestive haute'},
+  {Term:'lower GI bleed',Category:'Gastroenterology',Definition:'Haemorrhage distal to the ligament of Treitz — diverticulosis, polyps, colorectal cancer, colitis',fa:'خونریزی دستگاه گوارش تحتانی',ar:'نزيف الجهاز الهضمي السفلي',fr:'hémorragie digestive basse'},
+  {Term:"Crohn's disease",Category:'Gastroenterology',Definition:'Transmural granulomatous inflammation anywhere in GI tract — skip lesions, fistulae, strictures',fa:'بیماری کرون',ar:'مرض كرون',fr:'maladie de Crohn'},
+  {Term:'ulcerative colitis',Category:'Gastroenterology',Definition:'Mucosal inflammation confined to colon starting from rectum — continuous, bloody diarrhoea',fa:'کولیت اولسراتیو / التهاب زخمی روده بزرگ',ar:'التهاب القولون التقرحي',fr:'rectocolite hémorragique'},
+  {Term:'irritable bowel syndrome',Category:'Gastroenterology',Definition:'Functional bowel disorder with abdominal pain relieved by defecation and altered stool habit',fa:'سندرم روده تحریک‌پذیر',ar:'متلازمة القولون العصبي',fr:'syndrome de l\'intestin irritable'},
+  {Term:'celiac disease',Category:'Gastroenterology',Definition:'Immune-mediated enteropathy triggered by gluten causing villous atrophy and malabsorption',fa:'بیماری سلیاک',ar:'مرض الاضطرابات الهضمية',fr:'maladie céliaque'},
+  {Term:'hepatocellular carcinoma',Category:'Oncology',Definition:'Primary liver cancer arising in cirrhosis — elevated AFP, arterial enhancement on imaging',fa:'کارسینوم سلول کبدی',ar:'سرطان الخلايا الكبدية',fr:'carcinome hépatocellulaire'},
+  // ── Nephrology ──
+  {Term:'nephrotic syndrome',Category:'Nephrology',Definition:'Massive proteinuria, hypoalbuminaemia, oedema, and hyperlipidaemia from glomerular disease',fa:'سندرم نفروتیک',ar:'المتلازمة الكلائية',fr:'syndrome néphrotique'},
+  {Term:'nephritic syndrome',Category:'Nephrology',Definition:'Haematuria, hypertension, oedema, and mild proteinuria from glomerulonephritis',fa:'سندرم نفریتیک',ar:'المتلازمة الكلوية الالتهابية',fr:'syndrome néphritique'},
+  {Term:'acute kidney injury',Category:'Nephrology',Definition:'Rapid decline in GFR — prerenal, intrinsic, or postrenal causes',fa:'آسیب حاد کلیوی',ar:'الفشل الكلوي الحاد',fr:'insuffisance rénale aiguë'},
+  {Term:'chronic kidney disease',Category:'Nephrology',Definition:'Progressive loss of kidney function >3 months — staged by GFR and albuminuria',fa:'بیماری مزمن کلیوی',ar:'مرض الكلى المزمن',fr:'insuffisance rénale chronique'},
+  {Term:'polycystic kidney disease',Category:'Nephrology',Definition:'Autosomal dominant genetic disorder with multiple bilateral renal cysts causing hypertension and renal failure',fa:'بیماری کلیه پلی‌کیستیک',ar:'مرض الكلية متعددة الكيسات',fr:'polykystose rénale'},
+  {Term:'hyperkalemia',Category:'Nephrology',Definition:'Serum potassium >5.5 mEq/L — peaked T waves, risk of fatal arrhythmia in renal failure',fa:'هیپرکالمی / بالا بودن پتاسیم خون',ar:'فرط بوتاسيوم الدم',fr:'hyperkaliémie'},
+  {Term:'hyponatremia',Category:'Nephrology',Definition:'Serum sodium <135 mEq/L — assess volume status to determine cause',fa:'هیپوناترمی / کمبود سدیم خون',ar:'نقص صوديوم الدم',fr:'hyponatrémie'},
+  // ── Hematology ──
+  {Term:'leukemia',Category:'Hematology',Definition:'Malignancy of white blood cells — acute (AML/ALL) or chronic (CML/CLL)',fa:'لوسمی / سرطان خون',ar:'ابيضاض الدم',fr:'leucémie'},
+  {Term:'lymphoma',Category:'Hematology',Definition:'Malignancy of lymphocytes — Hodgkin (Reed-Sternberg cells) or non-Hodgkin',fa:'لنفوم',ar:'سرطان الغدد اللمفاوية',fr:'lymphome'},
+  {Term:'multiple myeloma',Category:'Hematology',Definition:'Plasma cell malignancy causing CRAB: hyperCalcaemia, Renal failure, Anaemia, Bone lesions',fa:'میلوم مولتیپل',ar:'الورم النقوي المتعدد',fr:'myélome multiple'},
+  {Term:'idiopathic thrombocytopenic purpura',Category:'Hematology',Definition:'Immune-mediated platelet destruction causing bruising and petechiae',fa:'پورپورای ترومبوسیتوپنیک ایدیوپاتیک',ar:'فرفرية نقص الصفيحات مجهولة السبب',fr:'purpura thrombopénique idiopathique'},
+  {Term:'hemophilia',Category:'Hematology',Definition:'X-linked clotting factor deficiency — A (factor VIII) or B (factor IX)',fa:'هموفیلی',ar:'الناعور',fr:'hémophilie'},
+  {Term:'thrombocytopenia',Category:'Hematology',Definition:'Platelet count <150,000/µL — bleeding risk increases significantly below 50,000',fa:'ترومبوسیتوپنی / کاهش پلاکت',ar:'نقص الصفيحات الدموية',fr:'thrombocytopénie'},
+  {Term:'polycythemia vera',Category:'Hematology',Definition:'JAK2 mutation causing overproduction of red blood cells — thrombosis risk, splenomegaly',fa:'پلی‌سیتمی ورا',ar:'كثرة الحمر الحقيقية',fr:'polyglobulie de Vaquez'},
+  // ── Obs & Gynae ──
+  {Term:'preeclampsia',Category:'Obstetrics',Definition:'Hypertension and proteinuria after 20 weeks gestation — may progress to eclampsia',fa:'پره‌اکلامپسی',ar:'تسمم الحمل',fr:'prééclampsie'},
+  {Term:'eclampsia',Category:'Obstetrics',Definition:'New-onset seizures in preeclampsia — manage with MgSO4 and deliver',fa:'اکلامپسی',ar:'الإكلامبسيا',fr:'éclampsie'},
+  {Term:'placenta previa',Category:'Obstetrics',Definition:'Placenta overlying the cervical os — painless antepartum haemorrhage, C-section required',fa:'پلاسنتا پره‌ویا',ar:'المشيمة المنزاحة',fr:'placenta praevia'},
+  {Term:'placental abruption',Category:'Obstetrics',Definition:'Premature separation of placenta — painful bleeding, fetal distress, DIC risk',fa:'دکولمان جفت',ar:'انفصال المشيمة المبكر',fr:'hématome rétroplacentaire'},
+  {Term:'ectopic pregnancy',Category:'Obstetrics',Definition:'Implantation outside the uterus — fallopian tube most common, rupture causes haemoperitoneum',fa:'حاملگی خارج رحمی',ar:'الحمل خارج الرحم',fr:'grossesse ectopique'},
+  {Term:'PCOS',Category:'Gynecology',Definition:'Polycystic ovary syndrome — hyperandrogenism, oligo-ovulation, and polycystic ovaries on ultrasound',fa:'سندرم تخمدان پلی‌کیستیک',ar:'متلازمة المبيض متعدد الكيسات',fr:'syndrome des ovaires polykystiques'},
+  {Term:'endometriosis',Category:'Gynecology',Definition:'Ectopic endometrial tissue causing dysmenorrhoea, dyspareunia, and infertility',fa:'اندومتریوز',ar:'بطانة الرحم المهاجرة',fr:'endométriose'},
+  {Term:'cervical cancer',Category:'Oncology',Definition:'HPV-driven squamous cell carcinoma of the cervix — prevented by vaccination and screening',fa:'سرطان دهانه رحم',ar:'سرطان عنق الرحم',fr:'cancer du col de l\'utérus'},
+  // ── Pediatrics ──
+  {Term:'Kawasaki disease',Category:'Pediatrics',Definition:'Vasculitis of children causing fever >5 days, rash, conjunctivitis, strawberry tongue, hand/feet changes — coronary artery aneurysm risk',fa:'بیماری کاوازاکی',ar:'مرض كاواساكي',fr:'maladie de Kawasaki'},
+  {Term:'intussusception',Category:'Pediatrics',Definition:'Telescoping of bowel causing colicky pain, bloody currant-jelly stool, and abdominal mass in infants',fa:'اینتوساسپسیون / تلسکوپ شدن روده',ar:'الانغلاف المعوي',fr:'invagination intestinale'},
+  {Term:'croup',Category:'Pediatrics',Definition:'Laryngotracheobronchitis causing barking cough and stridor in young children — treat with steroids and nebulized epinephrine',fa:'کروپ / خناق',ar:'الخناق',fr:'laryngotrachéobronchite'},
+  {Term:'bronchiolitis',Category:'Pediatrics',Definition:'RSV lower respiratory infection in infants — wheeze, hyperinflation, supportive care only',fa:'برونشیولیت',ar:'التهاب القصيبات',fr:'bronchiolite'},
+  {Term:'epiglottitis',Category:'Pediatrics',Definition:'Acute bacterial supraglottitis causing drooling, stridor, tripod positioning — airway emergency',fa:'اپیگلوتیت / التهاب اپیگلوت',ar:'التهاب لسان المزمار',fr:'épiglottite'},
+  {Term:'febrile seizure',Category:'Pediatrics',Definition:'Seizure associated with fever in children 6 months–5 years without intracranial infection',fa:'تشنج تب‌دار',ar:'نوبة الحمى',fr:'convulsion fébrile'},
+  {Term:'failure to thrive',Category:'Pediatrics',Definition:'Weight below 3rd percentile or crossing two major percentile lines downward — inadequate nutrition or systemic disease',fa:'کمبود رشد / نارسایی در رشد',ar:'تأخر النمو',fr:'retard staturo-pondéral'},
+  // ── Rheumatology ──
+  {Term:'rheumatoid arthritis',Category:'Rheumatology',Definition:'Autoimmune symmetric polyarthritis — erosive, morning stiffness, RF/anti-CCP positive',fa:'آرتریت روماتوئید',ar:'التهاب المفاصل الروماتويدي',fr:'polyarthrite rhumatoïde'},
+  {Term:'systemic lupus erythematosus',Category:'Rheumatology',Definition:'Multisystem autoimmune disease — butterfly rash, nephritis, serositis, cytopenias, ANA positive',fa:'لوپوس اریتماتوز سیستمیک',ar:'الذئبة الحمراء',fr:'lupus érythémateux systémique'},
+  {Term:'gout',Category:'Rheumatology',Definition:'Monoarticular arthritis from uric acid crystal deposition — podagra, tophi, hyperuricaemia',fa:'نقرس',ar:'النقرس',fr:'goutte'},
+  {Term:'ankylosing spondylitis',Category:'Rheumatology',Definition:'HLA-B27 spondyloarthropathy causing inflammatory back pain and sacroiliitis in young men',fa:'اسپوندیلیت آنکیلوزان',ar:'التهاب الفقار اللاصق',fr:'spondylarthrite ankylosante'},
+  {Term:'septic arthritis',Category:'Rheumatology',Definition:'Bacterial joint infection — swollen hot joint in febrile patient requires aspiration and IV antibiotics urgently',fa:'آرتریت عفونی / التهاب مفصل چرکی',ar:'التهاب المفاصل الإنتاني',fr:'arthrite septique'},
+  {Term:'osteoarthritis',Category:'Rheumatology',Definition:'Degenerative joint disease — pain worsened with activity, bony swelling, crepitus, no morning stiffness',fa:'استئوآرتریت / آرتروز',ar:'هشاشة المفاصل',fr:'arthrose'},
+  // ── Dermatology ──
+  {Term:'psoriasis',Category:'Dermatology',Definition:'Chronic inflammatory skin disease with well-demarcated erythematous plaques and silvery scale',fa:'پسوریازیس',ar:'الصدفية',fr:'psoriasis'},
+  {Term:'melanoma',Category:'Dermatology',Definition:'Malignant melanocyte tumour — ABCDE rule: Asymmetry, Border, Colour, Diameter, Evolution',fa:'ملانوم / سرطان پوست بدخیم',ar:'الورم الميلانيني',fr:'mélanome'},
+  {Term:'cellulitis',Category:'Dermatology',Definition:'Bacterial skin and subcutaneous infection — erythema, warmth, oedema, usually Streptococcus or Staphylococcus',fa:'سلولیت / عفونت پوست',ar:'التهاب النسيج الخلوي',fr:'cellulite infectieuse'},
+  {Term:'urticaria',Category:'Dermatology',Definition:'Transient pruritic wheals from mast cell histamine release — acute or chronic',fa:'کهیر / اورتیکاریا',ar:'الشرى',fr:'urticaire'},
+  {Term:'eczema',Category:'Dermatology',Definition:'Atopic dermatitis — pruritic, eczematous, relapsing — associated with asthma and allergic rhinitis',fa:'اگزما / درماتیت آتوپیک',ar:'الإكزيما',fr:'eczéma atopique'},
+  {Term:'shingles',Category:'Dermatology',Definition:'Varicella-zoster virus reactivation — dermatomal painful vesicular rash, risk of post-herpetic neuralgia',fa:'زونا / عارضه ماندگار هرپس زوستر',ar:'الهربس النطاقي',fr:'zona'},
+  // ── Surgery / Emergency ──
+  {Term:'bowel obstruction',Category:'Surgery',Definition:'Mechanical or functional block of intestinal transit — colicky pain, vomiting, distension, absent bowel sounds',fa:'انسداد روده',ar:'انسداد الأمعاء',fr:'occlusion intestinale'},
+  {Term:'ischemic bowel',Category:'Surgery',Definition:'Mesenteric ischaemia causing gut infarction — severe pain out of proportion to examination findings',fa:'ایسکمی روده',ar:'نقص التروية المعوية',fr:'ischémie mésentérique'},
+  {Term:'inguinal hernia',Category:'Surgery',Definition:'Protrusion of abdominal contents through the inguinal canal — indirect most common in young men',fa:'فتق اینگوینال / فتق کشاله ران',ar:'الفتق الإربي',fr:'hernie inguinale'},
+  {Term:'peritonitis',Category:'Surgery',Definition:'Inflammation of the peritoneum — board-like rigidity, guarding, rebound tenderness — surgical emergency',fa:'پریتونیت / التهاب صفاق',ar:'التهاب الصفاق',fr:'péritonite'},
+  {Term:'aortic dissection',Category:'Surgery',Definition:'Tear in aortic intima — tearing back pain radiating to chest or abdomen, unequal arm pressures',fa:'دیسکسیون آئورت / پارگی لایه داخلی آئورت',ar:'تشريح الأبهر',fr:'dissection aortique'},
+  // ── Infectious Disease ──
+  {Term:'tuberculosis',Category:'Infectious Disease',Definition:'Mycobacterium tuberculosis — pulmonary (productive cough, haemoptysis) or extrapulmonary; treat with RIPE',fa:'سل / توبرکلوز',ar:'السل',fr:'tuberculose'},
+  {Term:'malaria',Category:'Infectious Disease',Definition:'Plasmodium infection from Anopheles mosquito — cyclic fever, rigors, splenomegaly; P. falciparum most lethal',fa:'مالاریا',ar:'الملاريا',fr:'paludisme'},
+  {Term:'meningococcemia',Category:'Infectious Disease',Definition:'Neisseria meningitidis bacteraemia causing non-blanching petechial rash and fulminant sepsis',fa:'مننگوکوکسمی',ar:'داء المكورات السحائية',fr:'méningococcémie'},
+  {Term:'Clostridioides difficile',Category:'Infectious Disease',Definition:'Antibiotic-associated colitis from C. diff toxins — watery diarrhoea, treat with vancomycin or fidaxomicin',fa:'کلوستریدیوم دیفیسیل',ar:'كلوستريديويدس ديفيسيلي',fr:'Clostridioides difficile'},
+  {Term:'infective endocarditis',Category:'Infectious Disease',Definition:'Osler nodes, Janeway lesions, Roth spots, splinter haemorrhages, new murmur — Duke criteria',fa:'آندوکاردیت عفونی',ar:'التهاب الشغاف المعدي',fr:'endocardite infectieuse'},
+  {Term:'community-acquired pneumonia',Category:'Infectious Disease',Definition:'Pneumonia acquired outside hospital — Streptococcus pneumoniae most common; CURB-65 guides admission',fa:'پنومونی اکتسابی از جامعه',ar:'الالتهاب الرئوي المكتسب من المجتمع',fr:'pneumonie communautaire'},
+  // ── Pharmacology ──
+  {Term:'anticoagulation',Category:'Pharmacology',Definition:'Prevention of clot formation using heparin, warfarin, or direct oral anticoagulants',fa:'ضدانعقاد / داروهای ضد لخته',ar:'مضادات التخثر',fr:'anticoagulation'},
+  {Term:'statin',Category:'Pharmacology',Definition:'HMG-CoA reductase inhibitor used to lower LDL cholesterol and reduce cardiovascular events',fa:'استاتین / داروهای کاهنده کلسترول',ar:'الستاتين',fr:'statine'},
+  {Term:'beta-blocker',Category:'Pharmacology',Definition:'Competitive antagonist of β-adrenergic receptors — used in hypertension, heart failure, arrhythmia',fa:'بتابلاکر / مسدودکننده بتا',ar:'حاصرات بيتا',fr:'bêtabloquant'},
+  {Term:'ACE inhibitor',Category:'Pharmacology',Definition:'Blocks angiotensin-converting enzyme — used in hypertension, heart failure, diabetic nephropathy',fa:'مهارکننده آنزیم تبدیل آنژیوتانسین',ar:'مثبطات الإنزيم المحول للأنجيوتنسين',fr:'inhibiteur de l\'enzyme de conversion'},
+  {Term:'metformin',Category:'Pharmacology',Definition:'First-line oral antidiabetic for type 2 DM — reduces hepatic glucose output, weight-neutral',fa:'متفورمین',ar:'الميتفورمين',fr:'metformine'},
+  {Term:'corticosteroid',Category:'Pharmacology',Definition:'Synthetic glucocorticoid used for anti-inflammatory and immunosuppressive effects',fa:'کورتیکواستروئید',ar:'الكورتيكوستيرويد',fr:'corticostéroïde'},
+  {Term:'opioid',Category:'Pharmacology',Definition:'Mu-receptor agonist for pain — risk of dependence, respiratory depression, constipation',fa:'اپیوئید / مسکن مخدر',ar:'الأفيون',fr:'opioïde'},
+  {Term:'diuretic',Category:'Pharmacology',Definition:'Agent increasing urine output — loop (furosemide), thiazide, or potassium-sparing',fa:'دیورتیک / داروی ادرارآور',ar:'مدرات البول',fr:'diurétique'},
+  {Term:'antibiotic',Category:'Pharmacology',Definition:'Agent that kills or inhibits bacteria — spectrum and mechanism vary by class',fa:'آنتی‌بیوتیک / داروی ضد باکتری',ar:'المضاد الحيوي',fr:'antibiotique'},
 ];
 
 function buildGlossaryIndex_(data) {
@@ -8334,10 +8686,13 @@ function loadGlossary() {
 
 function highlightMedTerms(html) {
   if (!App.glossary || !App.glossaryRegex) return html;
+  var lang = App.glossaryLang;
   return html.replace(App.glossaryRegex, function(match) {
     var entry = App.glossary[match.toLowerCase()];
     if (!entry) return match;
-    return '<span class="med-term" data-term="' + match.toLowerCase() + '" onclick="toggleMedPanel(event)">' + match + '</span>';
+    var translation = (lang && lang !== 'en') ? (entry[lang] || '') : '';
+    var transSpan = translation ? '<span class="med-auto-trans">' + escapeHtml(translation) + '</span>' : '';
+    return '<span class="med-term" data-term="' + match.toLowerCase() + '" onclick="toggleMedPanel(event)">' + match + transSpan + '</span>';
   });
 }
 
@@ -8381,12 +8736,22 @@ function toggleMedPanel(e) {
   pill.className = 'med-inline';
   pill.setAttribute('data-for', termKey);
 
+  // Check if this term is an abbreviation — show expanded form
+  var abbrevExpanded = expandMedAbbrev_(dispTerm);
+  var isAbbrev = abbrevExpanded !== dispTerm;
+  var speakTerm = abbrevExpanded; // Always speak the full form
+  var displayLabel = isAbbrev ? (dispTerm + ' (' + abbrevExpanded + ')') : dispTerm;
+
   var inner = '';
-  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(dispTerm) + ',1.0)" title="Pronounce (normal speed)">&#x1F50A;</button>';
-  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(dispTerm) + ',0.45)" title="Pronounce (slow — hear every syllable)">&#x1F40C;</button>';
+  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(speakTerm) + ',1.0)" title="Pronounce (normal speed)">&#x1F50A;</button>';
+  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(speakTerm) + ',0.45)" title="Pronounce (slow — hear every syllable)">&#x1F40C;</button>';
+  if (isAbbrev) {
+    inner += '<span style="font-size:11px;color:var(--text-light);margin:0 3px;font-style:italic">' + escapeHtml(abbrevExpanded) + '</span>';
+  }
   if (translation) {
     inner += '<span aria-hidden="true" style="opacity:0.25;font-size:9px;margin:0 1px">&#x2502;</span>';
-    inner += '<span class="med-inline-trans' + (isRTL ? '' : ' ltr-t') + '">' + escapeHtml(translation) + '</span>';
+    var transLabel = isAbbrev ? (escapeHtml(dispTerm) + ' — ' + escapeHtml(translation)) : escapeHtml(translation);
+    inner += '<span class="med-inline-trans' + (isRTL ? '' : ' ltr-t') + '">' + transLabel + '</span>';
   }
 
   pill.innerHTML = inner;
@@ -8414,17 +8779,157 @@ function dismissMedHint() {
 }
 
 function pronounceMedTerm(term, rate) {
-  if (!window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  setTimeout(function() {
-    if (window.speechSynthesis.paused) window.speechSynthesis.resume();
-    var utt = new SpeechSynthesisUtterance(term);
-    utt.lang  = 'en-US';
-    utt.rate  = rate || 1.0;
-    utt.pitch = 1.0;
+  console.log('[TTS] pronounceMedTerm called:', term, 'rate:', rate);
+  if (!window.speechSynthesis) {
+    console.log('[TTS] speechSynthesis not available');
+    showToast('Speech not available on this device');
+    return;
+  }
+
+  // Expand abbreviations before speaking
+  var spoken = expandMedAbbrev_(term);
+  console.log('[TTS] will speak:', spoken);
+
+  // Cancel any in-progress speech first
+  try { window.speechSynthesis.cancel(); } catch(e) {}
+  // Resume if paused (iOS quirk)
+  try { if (window.speechSynthesis.paused) window.speechSynthesis.resume(); } catch(e) {}
+
+  var makeUtt = function(text) {
+    var utt = new SpeechSynthesisUtterance(text);
+    utt.lang   = 'en-US';
+    utt.rate   = rate || 1.0;
+    utt.pitch  = 1.0;
     utt.volume = 1.0;
+    utt.onerror = function(ev) {
+      console.log('[TTS] error:', ev.error);
+      if (ev.error && ev.error !== 'interrupted' && ev.error !== 'canceled') {
+        showToast('Speech unavailable — try again');
+      }
+    };
+    utt.onstart = function() { console.log('[TTS] speaking started:', text); };
+    return utt;
+  };
+
+  // MUST call speak() synchronously here (iOS requires user-gesture context)
+  // Do NOT wrap in setTimeout — that breaks iOS user gesture requirement
+  try {
+    var utt = makeUtt(spoken);
+    var voices = window.speechSynthesis.getVoices();
+    console.log('[TTS] voices loaded:', voices.length);
+    if (voices && voices.length > 0) {
+      var enVoice = null;
+      for (var i = 0; i < voices.length; i++) {
+        if (voices[i].lang && voices[i].lang.startsWith('en')) { enVoice = voices[i]; break; }
+      }
+      if (enVoice) utt.voice = enVoice;
+    }
     window.speechSynthesis.speak(utt);
-  }, 120);
+    console.log('[TTS] speak() called');
+
+    // If voices weren't loaded yet, also set up a fallback retry
+    if (!voices || voices.length === 0) {
+      var retried = false;
+      window.speechSynthesis.onvoiceschanged = function() {
+        window.speechSynthesis.onvoiceschanged = null;
+        if (retried) return; retried = true;
+        console.log('[TTS] voices now loaded, retrying');
+        try {
+          window.speechSynthesis.cancel();
+          var utt2 = makeUtt(spoken);
+          var v2 = window.speechSynthesis.getVoices();
+          for (var j = 0; j < v2.length; j++) {
+            if (v2[j].lang && v2[j].lang.startsWith('en')) { utt2.voice = v2[j]; break; }
+          }
+          window.speechSynthesis.speak(utt2);
+        } catch(e2) {}
+      };
+    }
+  } catch(e) {
+    console.log('[TTS] speak() threw:', e);
+    showToast('Speech unavailable');
+  }
+}
+
+// Expand medical abbreviations to full spoken form
+var MEDICAL_ABBREVS_ = {
+  'CXR':'chest X-ray','CBC':'complete blood count','BMP':'basic metabolic panel',
+  'CMP':'comprehensive metabolic panel','CT':'computed tomography','MRI':'magnetic resonance imaging',
+  'ECG':'electrocardiogram','EKG':'electrocardiogram','ABG':'arterial blood gas',
+  'UA':'urinalysis','LP':'lumbar puncture','CRP':'C-reactive protein',
+  'ESR':'erythrocyte sedimentation rate','INR':'international normalized ratio',
+  'PTT':'partial thromboplastin time','BUN':'blood urea nitrogen',
+  'LFTs':'liver function tests','TSH':'thyroid stimulating hormone',
+  'HbA1c':'hemoglobin A1c','WBC':'white blood cell count','RBC':'red blood cell count',
+  'DVT':'deep vein thrombosis','PE':'pulmonary embolism','MI':'myocardial infarction',
+  'CVA':'cerebrovascular accident','TIA':'transient ischemic attack',
+  'COPD':'chronic obstructive pulmonary disease','CHF':'congestive heart failure',
+  'UTI':'urinary tract infection','SOB':'shortness of breath','LOC':'loss of consciousness',
+  'GCS':'Glasgow coma scale','NPO':'nil per os, nothing by mouth',
+  'PRN':'as needed','IV':'intravenous','IM':'intramuscular','SC':'subcutaneous',
+  'SQ':'subcutaneous','PO':'by mouth','BID':'twice daily','TID':'three times daily',
+  'QID':'four times daily','QD':'once daily','STAT':'immediately','HR':'heart rate',
+  'BP':'blood pressure','SpO2':'oxygen saturation','RR':'respiratory rate',
+  'Temp':'temperature','BMI':'body mass index','GFR':'glomerular filtration rate',
+  'eGFR':'estimated glomerular filtration rate','Hgb':'hemoglobin','Hct':'hematocrit',
+  'Plt':'platelets','Na':'sodium','K':'potassium','Cl':'chloride','HCO3':'bicarbonate',
+  'BNP':'brain natriuretic peptide','ICU':'intensive care unit','ER':'emergency room',
+  'OR':'operating room','DNR':'do not resuscitate','CPR':'cardiopulmonary resuscitation',
+  'AED':'automated external defibrillator','ACLS':'advanced cardiac life support',
+  'STEMI':'ST-elevation myocardial infarction','NSTEMI':'non-ST-elevation myocardial infarction',
+  'AF':'atrial fibrillation','A-fib':'atrial fibrillation','VT':'ventricular tachycardia',
+  'VF':'ventricular fibrillation','PEA':'pulseless electrical activity',
+  'SIRS':'systemic inflammatory response syndrome','DIC':'disseminated intravascular coagulation',
+  'DKA':'diabetic ketoacidosis','HHS':'hyperosmolar hyperglycemic state',
+  'SLE':'systemic lupus erythematosus','RA':'rheumatoid arthritis',
+  'IBD':'inflammatory bowel disease','IBS':'irritable bowel syndrome',
+  'GERD':'gastroesophageal reflux disease','PUD':'peptic ulcer disease',
+  'HTN':'hypertension','DM':'diabetes mellitus','HLD':'hyperlipidemia',
+  'CAD':'coronary artery disease','PVD':'peripheral vascular disease',
+  'CVD':'cardiovascular disease','TBD':'to be determined',
+  'HEENT':'head, eyes, ears, nose, and throat','GI':'gastrointestinal',
+  'GU':'genitourinary','MSK':'musculoskeletal','CNS':'central nervous system',
+  'PNS':'peripheral nervous system','URI':'upper respiratory infection',
+  'URTI':'upper respiratory tract infection','LRTI':'lower respiratory tract infection'
+};
+
+function expandMedAbbrev_(term) {
+  // Check exact match first
+  var expanded = MEDICAL_ABBREVS_[term];
+  if (expanded) return expanded;
+  // Check case-insensitive
+  var lower = term.toLowerCase();
+  for (var key in MEDICAL_ABBREVS_) {
+    if (key.toLowerCase() === lower) return MEDICAL_ABBREVS_[key];
+  }
+  return term;
+}
+
+function toggleAutoTranslate() {
+  App.autoTranslate = !App.autoTranslate;
+  localStorage.setItem('mcc_auto_translate', App.autoTranslate ? '1' : '');
+  document.body.classList.toggle('auto-translate', App.autoTranslate);
+  var dot = document.getElementById('auto-trans-dot');
+  var knob = document.getElementById('auto-trans-knob');
+  var label = document.getElementById('auto-trans-label');
+  if (dot) dot.style.background = App.autoTranslate ? 'var(--primary)' : 'var(--border)';
+  if (knob) knob.style.left = App.autoTranslate ? '10px' : '2px';
+  if (label) label.style.color = App.autoTranslate ? 'var(--primary)' : 'var(--text-light)';
+  showToast(App.autoTranslate ? 'Auto-translate ON' : 'Auto-translate OFF');
+}
+
+function refreshCurrentView_() {
+  var btn = document.getElementById('refresh-btn');
+  if (btn) { btn.style.transform = 'rotate(360deg)'; setTimeout(function() { btn.style.transform = ''; }, 400); }
+  var page = App.currentPage;
+  if (page === 'dashboard') { loadDashboard(); }
+  else if (page === 'flashcards') { loadFlashcards(App.flashcardSpecialty); }
+  else if (page === 'quiz') { loadQuiz(App.quizSpecialty); }
+  else if (page === 'notes') { loadNotes(App.notesSpecialty); }
+  else if (page === 'keytopics') { loadKeyTopics(App.keyTopicsSpecialty); }
+  else if (page === 'patientbot') { /* don't reset active case */ showToast('PatientBot refreshed'); }
+  else if (page === 'drdata') { /* don't reset chat */ showToast('Dr. Data is ready'); }
+  else { showToast('View refreshed'); }
 }
 
 // =============================================
