@@ -2846,7 +2846,7 @@ function serverCall(funcName) {
   // Use GAS API directly (works from any host including GitHub Pages)
   var GAS_API = 'https://script.google.com/macros/s/AKfycbz6k69fs4pqcHvLP2H9S8B7abKCZ0axS9wIR5ZoMSk1vyZgJCaSN5Kxetup02QF56Pk/exec';
   var API_URL = GAS_API;
-  var profile = localStorage.getItem('mcc_profile') || '';
+  var profile = sessionStorage.getItem('mcc_profile') || '';
   var payload = JSON.stringify({ fn: funcName, args: args, profile: profile });
   var url = API_URL + '?apiCall=' + encodeURIComponent(payload);
   return fetch(url)
@@ -2913,7 +2913,7 @@ var ALLOWED_NAMES = ['tony','roxanna','soroosh','amin','noha','said','sarah'];
 var DEV_USERS = ['tony'];
 
 function getGuestId() {
-  var profile = localStorage.getItem('mcc_profile');
+  var profile = sessionStorage.getItem('mcc_profile');
   if (profile) return 'profile_' + profile;
   var id = localStorage.getItem('mcc_guest_id');
   if (!id) { id = 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); localStorage.setItem('mcc_guest_id', id); }
@@ -2969,7 +2969,7 @@ function showProfileSelect() {
 
 function showNameEntry() {
   localStorage.removeItem('mcc_last_name');
-  localStorage.removeItem('mcc_profile');
+  sessionStorage.removeItem('mcc_profile');
   showProfileSelect();
 }
 
@@ -2983,7 +2983,7 @@ function loginAsGuest() {
   var guestNum = getNextGuestNumber();
   var guestId = 'guest_' + guestNum;
   var displayName = 'Guest ' + guestNum;
-  localStorage.setItem('mcc_profile', guestId);
+  sessionStorage.setItem('mcc_profile', guestId);
   localStorage.setItem('mcc_last_name', guestId);
   localStorage.setItem('mcc_last_display', displayName);
   App.guestId = 'profile_' + guestId;
@@ -3002,7 +3002,7 @@ function confirmNameEntry() {
 }
 
 function loginAsReturningGuest(guestId, displayName) {
-  localStorage.setItem('mcc_profile', guestId);
+  sessionStorage.setItem('mcc_profile', guestId);
   App.guestId = 'profile_' + guestId;
   App.user = { name: displayName, email: displayName, isGuest: true };
   afterLogin_(displayName);
@@ -3010,7 +3010,7 @@ function loginAsReturningGuest(guestId, displayName) {
 
 function loginAsProfile(profileId) {
   var displayName = profileId.charAt(0).toUpperCase() + profileId.slice(1);
-  localStorage.setItem('mcc_profile', profileId);
+  sessionStorage.setItem('mcc_profile', profileId);
   localStorage.setItem('mcc_last_name', profileId);
   localStorage.setItem('mcc_last_display', displayName);
   App.guestId = 'profile_' + profileId;
@@ -3038,7 +3038,7 @@ function afterLogin_(displayName) {
   document.getElementById('user-email').textContent = displayName;
 
   // Enable dev mode for dev users
-  var profileId = localStorage.getItem('mcc_profile') || '';
+  var profileId = sessionStorage.getItem('mcc_profile') || '';
   if (DEV_USERS.indexOf(profileId.toLowerCase()) !== -1) {
     var devNav = document.getElementById('nav-dev');
     if (devNav) devNav.style.display = '';
@@ -3111,7 +3111,7 @@ function nextTutorialStep() {
 }
 
 function endTutorial() {
-  var profileId = localStorage.getItem('mcc_profile');
+  var profileId = sessionStorage.getItem('mcc_profile');
   if (profileId) localStorage.setItem('mcc_tutorial_v2_' + profileId, '1');
   var overlay = document.getElementById('tutorial-overlay');
   if (overlay) overlay.remove();
@@ -3119,7 +3119,7 @@ function endTutorial() {
 
 function init() {
   // Check if profile is selected
-  var savedProfile = localStorage.getItem('mcc_profile');
+  var savedProfile = sessionStorage.getItem('mcc_profile');
   if (!savedProfile) {
     showProfileSelect();
     // Preload everything heavy while user types their name
@@ -3153,10 +3153,15 @@ function init() {
 }
 
 function finishInit() {
-  serverCall('getSpecialties').then(function(specs) {
-    App.specialties = specs;
+  // Use preloaded data if available (loaded during login screen), otherwise fetch fresh
+  if (App.specialties) {
     populateSpecialtyDropdowns();
-  });
+  } else {
+    serverCall('getSpecialties').then(function(specs) {
+      App.specialties = specs;
+      populateSpecialtyDropdowns();
+    });
+  }
 
   // Restore language setting and always load glossary for term highlighting
   var savedLang = localStorage.getItem('mcc_lang');
@@ -3165,9 +3170,9 @@ function finishInit() {
     var langSelect = document.getElementById('lang-select');
     if (langSelect) langSelect.value = savedLang;
   }
-  // Always load glossary — highlights medical terms in blue even without translation
   if (!App.glossaryLang) App.glossaryLang = 'en';
-  loadGlossary();
+  // Only load glossary if not already loaded during login
+  if (!App.glossary || !App.glossary.length) loadGlossary();
 
   // Check for shared flashcard link (?fc=123&spec=Cardiology)
   var urlParams = new URLSearchParams(window.location.search);
@@ -4091,7 +4096,7 @@ function renderDevPanel(stats) {
 // =============================================
 
 function getFlashcardProgressKey_(specialty) {
-  var profile = localStorage.getItem('mcc_profile') || 'default';
+  var profile = sessionStorage.getItem('mcc_profile') || 'default';
   return 'mcc_fc_progress_' + profile + '_' + (specialty || 'All');
 }
 
@@ -4388,7 +4393,13 @@ function nextFlashcard() { if (App.flashcardIndex < App.flashcards.length - 1) {
 function loadBulletNotes(specialty) {
   var el = document.getElementById('notes-content');
   el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
-  serverCall('getBulletNotes', specialty || 'All').then(function(data) { App.bulletNotes = data; renderBulletNotes(); })
+  // Use preloaded notes if available and requesting All
+  var spec = specialty || 'All';
+  if (spec === 'All' && App.bulletNotes && App.bulletNotes.length > 0) {
+    renderBulletNotes();
+    return;
+  }
+  serverCall('getBulletNotes', spec).then(function(data) { App.bulletNotes = data; renderBulletNotes(); })
     .catch(function(e) { el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>'; });
 }
 
@@ -4785,7 +4796,12 @@ function loadQuizHistory() {
 function loadDontMiss(specialty) {
   var el = document.getElementById('dontmiss-content');
   el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
-  serverCall('getDontMiss', specialty || 'All').then(function(data) { App.dontMissItems = data; renderDontMiss(); })
+  var spec = specialty || 'All';
+  if (spec === 'All' && App.dontMissItems && App.dontMissItems.length > 0) {
+    renderDontMiss();
+    return;
+  }
+  serverCall('getDontMiss', spec).then(function(data) { App.dontMissItems = data; renderDontMiss(); })
     .catch(function(e) { el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>'; });
 }
 
@@ -5044,6 +5060,10 @@ function renderDrDataChat() {
 
 function loadDiagramChapters() {
   var el = document.getElementById('diagrams-content');
+  if (App.diagramChapters && App.diagramChapters.length > 0) {
+    renderDiagramChapters();
+    return;
+  }
   el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
   serverCall('getImageChapters').then(function(chapters) { App.diagramChapters = chapters; renderDiagramChapters(); })
     .catch(function(e) { el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>'; });
@@ -5174,7 +5194,7 @@ function showPatientBotSetup() {
   App.pbCaseId = null; App.pbHistory = []; App.pbCurrentCase = 0; App.pbCaseScores = [];
 
   // Show tutorial on first visit
-  var profileId = localStorage.getItem('mcc_profile') || 'default';
+  var profileId = sessionStorage.getItem('mcc_profile') || 'default';
   var tutKey = 'mcc_pb_tutorial_' + profileId;
   if (!localStorage.getItem(tutKey)) {
     localStorage.setItem(tutKey, '1');
@@ -6710,7 +6730,7 @@ document.addEventListener('keydown', function(e) {
     var msg = msgs[hours] || msgs[3];
 
     // Try to get a witty AI summary of what they did
-    var profileId = localStorage.getItem('mcc_profile') || '';
+    var profileId = sessionStorage.getItem('mcc_profile') || '';
     serverCall('getUserStats').then(function(stats) {
       var prompt = 'A medical student has been studying on MCC Master for ' + hours + ' hours straight and it\'s ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) + ' at night. ' +
         'Today they did: ' + (stats.totalQuizzes || 0) + ' quizzes (avg ' + (stats.avgScore || 0) + '%), ' + (stats.totalCardsReviewed || 0) + ' flashcards, ' + (stats.pbTotal || 0) + ' patient cases. ' +
