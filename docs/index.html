@@ -2761,6 +2761,8 @@ var App = {
   pbPartialFeedback: null,
   pbPartialScore: null,
   pbScorecard: null,
+  pbScorecardLoading: false,
+  pbScorecardError: false,
 
   // Medical Glossary
   glossary: null,
@@ -2795,8 +2797,13 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '2.6';
+var APP_VERSION = '2.7';
 var APP_CHANGELOG = [
+  { version: '2.7', date: 'Mar 23 2026', label: 'PatientBot OSCE Scorecard Bug Fix', items: [
+    'BUG FIX: "substring is not a function" crash after diagnosis — getPBTranscript() was calling .substring() on object-typed message content (diagnosis_result, debrief, partial roles store objects, not strings)',
+    'BUG FIX: OSCE scorecard spinner would freeze forever if generateCaseDebrief failed — catch handler now clears the spinner and shows a Retry button instead of silently hanging',
+    'BUG FIX: scorecard auto-load would retry infinitely on failure — now blocked by pbScorecardError flag until user clicks Retry',
+  ]},
   { version: '2.6', date: 'Mar 23 2026', label: 'Med Term Click Panel + Pronunciation', items: [
     'TRANSLATION: Clicking a highlighted medical term now opens a persistent panel — no more blink/hover disappearing',
     'TRANSLATION: Panel stays open until you click outside or hit X',
@@ -6167,7 +6174,7 @@ function startNextPBCase() {
   serverCall('startPatientBotCase', App.pbSetupSpecialty, App.pbCheatMode, App.pbDifficulty, App.pbCustom || {}).then(function(result) {
     App.pbCaseId = result.caseId; App.pbSpecialty = result.specialty; App.pbPresentation = result.presentation || '';
     App.pbDiagnosis = null; App.pbPatientInfo = null; App.pbDiagnosing = false; App.pbDiagAttempts = 0; App.pbDiagResolved = false;
-    App.pbPartialUsed = false; App.pbPartialFeedback = null; App.pbPartialScore = null; App.pbScorecard = null;
+    App.pbPartialUsed = false; App.pbPartialFeedback = null; App.pbPartialScore = null; App.pbScorecard = null; App.pbScorecardLoading = false; App.pbScorecardError = false;
 
     var msg = stripPatientJSON(result.initialMessage);
     if (result.patientInfo) { App.pbPatientInfo = result.patientInfo; App.pbDiagnosis = result.patientInfo.diagnosis; }
@@ -6557,13 +6564,18 @@ function showPBSummary() {
 
 function getPBTranscript() {
   // Save compact transcript for case library (max 20 messages, truncated)
+  // NOTE: m.content may be an object for roles like diagnosis_result/debrief/partial —
+  //       typeof check prevents "substring is not a function" crash
   return App.pbHistory.slice(0, 20).map(function(m) {
-    return { role: m.role, content: (m.content || '').substring(0, 400) };
+    var c = m.content;
+    var str = typeof c === 'string' ? c : JSON.stringify(c);
+    return { role: m.role, content: str.substring(0, 400) };
   });
 }
 
 function loadOSCEScorecard() {
   App.pbScorecardLoading = true;
+  App.pbScorecardError = false;
   serverCall('generateCaseDebrief', App.pbCaseId, App.pbHistory.slice(-40)).then(function(result) {
     App.pbScorecard = result;
     App.pbScorecardLoading = false;
@@ -6571,11 +6583,14 @@ function loadOSCEScorecard() {
     renderFn();
   }).catch(function(e) {
     App.pbScorecardLoading = false;
+    App.pbScorecardError = true; // prevents silent infinite-retry loop
     console.error('Scorecard error:', e);
+    var renderFn = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
+    renderFn(); // must re-render so spinner clears and error state is shown
   });
 }
 
-function endPBCase() { App.pbCaseId = null; App.pbHistory = []; App.pbSpecialty = null; App.pbPartialUsed = false; App.pbPartialFeedback = null; App.pbPartialScore = null; App.pbScorecard = null; App.pbScorecardLoading = false; showPatientBotSetup(); }
+function endPBCase() { App.pbCaseId = null; App.pbHistory = []; App.pbSpecialty = null; App.pbPartialUsed = false; App.pbPartialFeedback = null; App.pbPartialScore = null; App.pbScorecard = null; App.pbScorecardLoading = false; App.pbScorecardError = false; showPatientBotSetup(); }
 
 function renderPBChat() {
   var el = document.getElementById('patientbot-content');
@@ -7025,8 +7040,8 @@ function renderPBChatInner() {
     }
     html += '</div>';
 
-    // Auto-load scorecard when case resolves
-    if (!App.pbScorecard && !App.pbScorecardLoading) {
+    // Auto-load scorecard when case resolves (only if not already loaded/loading/errored)
+    if (!App.pbScorecard && !App.pbScorecardLoading && !App.pbScorecardError) {
       App.pbScorecardLoading = true;
       setTimeout(function() { loadOSCEScorecard(); }, 500);
     }
@@ -7034,6 +7049,12 @@ function renderPBChatInner() {
     // OSCE Scorecard display
     if (App.pbScorecardLoading && !App.pbScorecard) {
       html += '<div style="text-align:center;padding:24px;color:var(--text-light)"><div class="spinner" style="margin:0 auto 12px"></div>Generating OSCE Scorecard...</div>';
+    }
+    if (App.pbScorecardError && !App.pbScorecard) {
+      html += '<div style="text-align:center;padding:20px 16px;color:var(--text-light);font-size:14px">';
+      html += '&#x26A0;&#xFE0F; Scorecard generation failed. ';
+      html += '<button class="btn btn-outline btn-sm" onclick="App.pbScorecardError=false;loadOSCEScorecard()" style="margin-left:8px;padding:4px 12px;font-size:13px">Retry</button>';
+      html += '</div>';
     }
 
     if (App.pbScorecard) {
