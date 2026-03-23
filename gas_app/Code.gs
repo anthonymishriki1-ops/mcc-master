@@ -58,6 +58,9 @@ function doGet(e) {
         'getGlossaryStatus': getGlossaryStatus,
         'getTermTranslation': getTermTranslation,
         'askHouseMode': askHouseMode,
+        'reportIssue': reportIssue,
+        'getFlaggedIssues': getFlaggedIssues,
+        'updateIssueStatus': updateIssueStatus,
         'getDevStats': getDevStats
       };
       if (!allowed[fn]) {
@@ -169,6 +172,9 @@ function doPost(e) {
       'getGlossaryStatus': getGlossaryStatus,
       'getTermTranslation': getTermTranslation,
       'askHouseMode': askHouseMode,
+      'reportIssue': reportIssue,
+      'getFlaggedIssues': getFlaggedIssues,
+      'updateIssueStatus': updateIssueStatus,
       'getDevStats': getDevStats
     };
 
@@ -759,6 +765,89 @@ function getTermTranslation(term, targetLang) {
 
   try { cache.put(cacheKey, JSON.stringify(result), 21600); } catch(e) {}
   return result;
+}
+
+// =============================================
+// FLAG / REPORT ISSUE SYSTEM
+// =============================================
+
+function reportIssue(contentType, contentId, contentText, category, userNote, userName) {
+  var ss = SpreadsheetApp.openById(getConfig_().SHEET_ID);
+  var sheet = ss.getSheetByName('FlaggedIssues');
+  if (!sheet) {
+    sheet = ss.insertSheet('FlaggedIssues');
+    sheet.appendRow(['ID','Timestamp','User','ContentType','ContentID','Category','UserNote','ContentText','AIReview','AISeverity','Status']);
+    sheet.setFrozenRows(1);
+    sheet.setColumnWidth(8, 300); sheet.setColumnWidth(9, 300);
+  }
+  var issueId = 'flag_' + Date.now();
+  var timestamp = new Date().toISOString();
+
+  // AI review (synchronous — GAS doesn't support async)
+  var aiReview = '';
+  var aiSeverity = 'medium';
+  try {
+    var aiPrompt = 'A user flagged medical education content.\n' +
+      'Category: ' + category + '\n' +
+      'User note: ' + (userNote || 'none') + '\n' +
+      'Content (' + contentType + '): ' + (contentText || '').substring(0, 500) + '\n\n' +
+      'Reply on ONE line: VALID: yes/no | SEVERITY: low/medium/high | FIX: <suggestion or none>';
+    var aiResp = callAnthropic_(
+      'You are a medical content quality reviewer. Be concise.',
+      [{ role: 'user', content: aiPrompt }]
+    );
+    aiReview = aiResp || '';
+    if (/severity:\s*high/i.test(aiReview)) aiSeverity = 'high';
+    else if (/severity:\s*low/i.test(aiReview)) aiSeverity = 'low';
+  } catch(e) { aiReview = 'AI review failed: ' + e.message; }
+
+  sheet.appendRow([issueId, timestamp, userName || 'unknown', contentType || '', contentId || '',
+    category || '', userNote || '', (contentText || '').substring(0, 1000), aiReview, aiSeverity, 'open']);
+
+  try { CacheService.getScriptCache().remove('flaggedIssues_all'); } catch(e) {}
+  return { id: issueId, aiReview: aiReview, severity: aiSeverity };
+}
+
+function getFlaggedIssues(statusFilter) {
+  var cache = CacheService.getScriptCache();
+  var cacheKey = 'flaggedIssues_all';
+  var cached = cache.get(cacheKey);
+  if (cached) { try { return JSON.parse(cached); } catch(e) {} }
+
+  var ss = SpreadsheetApp.openById(getConfig_().SHEET_ID);
+  var sheet = ss.getSheetByName('FlaggedIssues');
+  if (!sheet) return [];
+
+  var data = sheet.getDataRange().getValues();
+  if (data.length < 2) return [];
+  var headers = data[0].map(String);
+  var issues = data.slice(1).map(function(row, i) {
+    var obj = { _row: i + 2 };
+    headers.forEach(function(h, j) { obj[h] = row[j] !== undefined ? String(row[j]) : ''; });
+    return obj;
+  }).reverse(); // newest first
+
+  try { cache.put(cacheKey, JSON.stringify(issues), 120); } catch(e) {}
+  return issues;
+}
+
+function updateIssueStatus(issueId, status) {
+  var ss = SpreadsheetApp.openById(getConfig_().SHEET_ID);
+  var sheet = ss.getSheetByName('FlaggedIssues');
+  if (!sheet) return { error: 'Sheet not found' };
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var idCol = headers.indexOf('ID');
+  var statusCol = headers.indexOf('Status');
+  if (idCol === -1 || statusCol === -1) return { error: 'Column not found' };
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idCol]) === String(issueId)) {
+      sheet.getRange(i + 1, statusCol + 1).setValue(status);
+      try { CacheService.getScriptCache().remove('flaggedIssues_all'); } catch(e) {}
+      return { success: true };
+    }
+  }
+  return { error: 'Issue not found' };
 }
 
 // Build glossary using Claude API — run from GAS editor, call multiple times if it times out

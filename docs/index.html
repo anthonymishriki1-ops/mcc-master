@@ -272,8 +272,7 @@ body {
 .med-inline-trans.ltr-t { direction: ltr; }
 .med-auto-trans { display:none; font-size:0.7em; color:var(--primary); opacity:0.85; margin-left:3px; font-style:italic; pointer-events:none; }
 body.auto-translate .med-auto-trans { display:inline; }
-#auto-translate-toggle { display:none; }
-body.has-lang #auto-translate-toggle { display:flex; }
+#auto-translate-toggle { display:flex; }
 .med-inline-btn {
   background: none; border: none; cursor: pointer;
   font-size: 14px; padding: 0 1px; line-height: 1;
@@ -1551,6 +1550,7 @@ body.kb-open #bottom-nav { display: none !important; }
     padding-bottom: 80px;
     max-height: calc(45vh - 60px);
   }
+  .sidebar-footer { padding-bottom: 72px; }
 }
 
 /* --- Mobile Responsive --- */
@@ -2456,23 +2456,6 @@ body.kb-open #bottom-nav { display: none !important; }
       <li data-page="devpanel" onclick="navigateTo('devpanel')" id="nav-dev" style="display:none;border-top:1px solid rgba(255,255,255,0.1);margin-top:8px;color:#ff9800">&#x1F6E0; Dev Panel</li>
     </ul>
     <div class="sidebar-footer">
-      <select class="sidebar-lang-select" id="lang-select" onchange="setLanguage(this.value)" title="Translation language for medical terms">
-        <option value="">&#x1F310; Translations Off</option>
-        <option value="fr">&#x1F1EB;&#x1F1F7; Français (French)</option>
-        <option value="fa">🦁 فارسی (Farsi)</option>
-        <option value="ar">&#x1F1F8;&#x1F1E6; العربية (Arabic)</option>
-        <option value="zh">&#x1F1E8;&#x1F1F3; 中文 (Chinese)</option>
-        <option value="hi">&#x1F1EE;&#x1F1F3; हिन्दी (Hindi)</option>
-        <option value="es">&#x1F1EA;&#x1F1F8; Español (Spanish)</option>
-        <option value="pt">&#x1F1E7;&#x1F1F7; Português (Portuguese)</option>
-        <option value="ru">&#x1F1F7;&#x1F1FA; Русский (Russian)</option>
-        <option value="ko">&#x1F1F0;&#x1F1F7; 한국어 (Korean)</option>
-        <option value="ja">&#x1F1EF;&#x1F1F5; 日本語 (Japanese)</option>
-        <option value="de">&#x1F1E9;&#x1F1EA; Deutsch (German)</option>
-        <option value="tr">&#x1F1F9;&#x1F1F7; Türkçe (Turkish)</option>
-        <option value="ur">&#x1F1F5;&#x1F1F0; اردو (Urdu)</option>
-        <option value="tl">&#x1F1F5;&#x1F1ED; Filipino (Tagalog)</option>
-      </select>
       <button class="dark-mode-toggle" onclick="toggleDarkMode()" id="dark-mode-btn" title="Toggle dark mode" style="margin-top:8px">&#x1F319; Dark Mode</button>
       <button class="dark-mode-toggle" onclick="showNameEntry()" style="margin-top:6px">&#x1F465; Switch User</button>
       <button class="dark-mode-toggle" onclick="startTutorial()" style="margin-top:6px" title="Replay the pronunciation &amp; translation guide">&#x2753; Help</button>
@@ -2486,11 +2469,30 @@ body.kb-open #bottom-nav { display: none !important; }
     <span id="zoom-level" style="min-width:36px;text-align:center;font-size:11px;color:var(--text-light);cursor:pointer" onclick="resetZoom()" title="Click to reset">100%</span>
     <button onclick="adjustZoom(10)" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 6px;color:var(--text);font-weight:700" title="Zoom in">+</button>
   </div>
-  <!-- Auto-Translate Toggle — only visible when a language is set -->
-  <div id="auto-translate-toggle" style="position:fixed;top:100px;right:16px;z-index:999;align-items:center;gap:6px;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:4px 10px;box-shadow:0 1px 4px rgba(0,0,0,0.1);font-size:11px;opacity:0.75;transition:opacity 0.2s;cursor:pointer" onclick="toggleAutoTranslate()" title="Show all term translations inline" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.75'">
-    <span id="auto-trans-icon" style="font-size:13px">&#x1F310;</span>
-    <span id="auto-trans-label" style="color:var(--text-light);font-weight:600">Auto</span>
-    <span id="auto-trans-dot" style="width:20px;height:12px;background:var(--border);border-radius:6px;display:inline-block;vertical-align:middle;position:relative;transition:background 0.2s"><span id="auto-trans-knob" style="position:absolute;top:2px;left:2px;width:8px;height:8px;background:#fff;border-radius:50%;transition:left 0.15s"></span></span>
+  <!-- Auto-Translate Toggle + Language Picker -->
+  <div id="auto-translate-toggle" style="position:fixed;top:52px;right:10px;z-index:999;flex-direction:column;align-items:stretch;gap:4px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:6px 10px;box-shadow:0 2px 8px rgba(0,0,0,0.12);font-size:11px;opacity:0.85;transition:opacity 0.2s" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.85'">
+    <select id="lang-select" onchange="setLanguage(this.value)" title="Translation language" style="border:none;background:transparent;color:var(--text);font-size:11px;font-family:inherit;cursor:pointer;outline:none;padding:0;max-width:120px">
+      <option value="">&#x1F310; Off</option>
+      <option value="fr">&#x1F1EB;&#x1F1F7; French</option>
+      <option value="fa">🦁 Farsi</option>
+      <option value="ar">&#x1F1F8;&#x1F1E6; Arabic</option>
+      <option value="zh">&#x1F1E8;&#x1F1F3; Chinese</option>
+      <option value="hi">&#x1F1EE;&#x1F1F3; Hindi</option>
+      <option value="es">&#x1F1EA;&#x1F1F8; Spanish</option>
+      <option value="pt">&#x1F1E7;&#x1F1F7; Portuguese</option>
+      <option value="ru">&#x1F1F7;&#x1F1FA; Russian</option>
+      <option value="ko">&#x1F1F0;&#x1F1F7; Korean</option>
+      <option value="ja">&#x1F1EF;&#x1F1F5; Japanese</option>
+      <option value="de">&#x1F1E9;&#x1F1EA; German</option>
+      <option value="tr">&#x1F1F9;&#x1F1F7; Turkish</option>
+      <option value="ur">&#x1F1F5;&#x1F1F0; Urdu</option>
+      <option value="tl">&#x1F1F5;&#x1F1ED; Filipino</option>
+    </select>
+    <div onclick="toggleAutoTranslate()" title="Show all term translations inline" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding-top:2px;border-top:1px solid var(--border)">
+      <span id="auto-trans-icon" style="font-size:13px">&#x1F310;</span>
+      <span id="auto-trans-label" style="color:var(--text-light);font-weight:600">Auto</span>
+      <span id="auto-trans-dot" style="width:20px;height:12px;background:var(--border);border-radius:6px;display:inline-block;vertical-align:middle;position:relative;transition:background 0.2s"><span id="auto-trans-knob" style="position:absolute;top:2px;left:2px;width:8px;height:8px;background:#fff;border-radius:50%;transition:left 0.15s"></span></span>
+    </div>
   </div>
   <!-- Refresh button -->
   <button id="refresh-btn" onclick="refreshCurrentView_()" title="Refresh" style="position:fixed;top:10px;right:10px;z-index:9999;background:var(--card);border:1px solid var(--border);border-radius:50%;width:36px;height:36px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.15);opacity:0.85;transition:opacity 0.2s,transform 0.3s" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.85'">&#x21BB;</button>
@@ -3256,7 +3258,8 @@ function patchApiResult_(fn, result) {
 // ===== PROFILE / LOGIN =====
 var ALLOWED_NAMES = ['tony','roxana','soroosh','amin','noha','said','sarah'];
 // Aliases → canonical name (case-insensitive matching applied before ALLOWED_NAMES check)
-var NAME_ALIASES = { 'roxanna': 'roxana' };
+// 'admin' and 'dev' map to 'tony' so they get Tony's profile + auto-enable dev mode
+var NAME_ALIASES = { 'roxanna': 'roxana', 'admin': 'tony', 'dev': 'tony' };
 var DEV_USERS = ['tony'];
 
 // ---- API / Notification Config ----
@@ -3397,11 +3400,27 @@ function loginAsReturningGuest(guestId, displayName) {
   ]).then(function() { clearTimeout(warningTimer); proceed(); });
 }
 
+// One-time onboarding reset for specific profiles — runs once per device then sets a done flag
+var ONBOARDING_RESET_PROFILES = ['noha'];
+function maybeResetOnboarding_(profileId) {
+  if (ONBOARDING_RESET_PROFILES.indexOf(profileId.toLowerCase()) === -1) return;
+  var doneKey = 'mcc_onboard_reset_done_' + profileId.toLowerCase();
+  if (localStorage.getItem(doneKey)) return; // already reset once
+  // Clear first-time-user flags so they get fresh tutorial/language picker/what's new
+  ['mcc_tutorial_v3_' + profileId, 'mcc_lang', 'mcc_lang_prompted',
+   'mcc_last_version', 'mcc_medterm_hint_seen'].forEach(function(k) {
+    localStorage.removeItem(k);
+  });
+  localStorage.setItem(doneKey, '1');
+  console.log('[onboarding] Reset first-time flags for', profileId);
+}
+
 function loginAsProfile(profileId) {
   var displayName = profileId.charAt(0).toUpperCase() + profileId.slice(1);
   sessionStorage.setItem('mcc_profile', profileId);
   localStorage.setItem('mcc_last_name', profileId);
   localStorage.setItem('mcc_last_display', displayName);
+  maybeResetOnboarding_(profileId);
   App.guestId = 'profile_' + profileId;
   App.user = { name: displayName, email: displayName, isGuest: true };
   showLoginLoading_();
@@ -5135,10 +5154,15 @@ function renderDevPanel(stats) {
   // Flagged Issues section
   html += '<h3 style="margin:24px 0 16px">&#x1F6A9; Flagged Issues</h3>';
   html += '<div id="dev-flags-container" class="card" style="padding:16px">';
-  html += '<p style="color:var(--text-light);font-size:13px">Flags are logged to the UserData sheet as <code>content_flag</code> rows. ';
-  html += 'Each flag includes: reporter, content type, category, comment, and timestamp.</p>';
-  html += '<p style="margin-top:8px"><a href="https://docs.google.com/spreadsheets/d/1dqlfIfqzRA4pgLa1NocrlT2iyiJuQBN9Tauy1xLVsvo" target="_blank" style="color:var(--primary);font-weight:600">Open Google Sheet</a></p>';
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">';
+  html += '<select id="dev-flag-filter-status" onchange="filterDevFlags_()" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px"><option value="">All statuses</option><option value="open">Open</option><option value="resolved">Resolved</option><option value="dismissed">Dismissed</option></select>';
+  html += '<select id="dev-flag-filter-cat" onchange="filterDevFlags_()" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px"><option value="">All categories</option><option value="wrong_answer">Wrong answer</option><option value="incomplete_vignette">Incomplete vignette</option><option value="formatting">Formatting</option><option value="contradictory">Contradictory</option><option value="outdated">Outdated</option><option value="duplicate">Duplicate</option><option value="translation_error">Translation error</option><option value="spelling">Spelling/grammar</option><option value="other">Other</option></select>';
+  html += '<button class="btn btn-sm btn-outline" onclick="loadDevFlags_()">&#x21BB; Refresh</button>';
   html += '</div>';
+  html += '<div id="dev-flags-list"><div class="loading-overlay" style="position:relative;height:60px"><div class="spinner"></div></div></div>';
+  html += '</div>';
+  // Trigger flags load
+  setTimeout(function() { loadDevFlags_(); }, 100);
 
   el.innerHTML = html;
 }
@@ -6554,7 +6578,9 @@ function renderDrDataChat() {
   var html = '';
   for (var i = 0; i < App.drDataHistory.length; i++) {
     var m = App.drDataHistory[i];
-    html += '<div class="chat-message ' + m.role + '">' + (m.role === 'assistant' ? formatMarkdown(m.content) : escapeHtml(m.content)) + '</div>';
+    var msgHtml = m.role === 'assistant' ? formatMarkdown(m.content) : escapeHtml(m.content);
+    var flagHtml = m.role === 'assistant' ? ' <button class="flag-btn" style="float:right;margin:4px 0 0 8px;font-size:10px;padding:2px 6px" onclick=\'openFlagModal({"type":"drdata","id":' + i + ',"content":' + JSON.stringify((m.content||'').substring(0,200)) + '})\'>&#x1F6A9;</button>' : '';
+    html += '<div class="chat-message ' + m.role + '">' + flagHtml + msgHtml + '</div>';
   }
   el.innerHTML = html; el.scrollTop = el.scrollHeight;
 }
@@ -7312,7 +7338,7 @@ function renderHouseChat() {
     if (m.role === 'user') {
       html += '<div class="chat-message user">' + escapeHtml(m.content) + '</div>';
     } else if (m.role === 'assistant') {
-      html += '<div class="chat-message assistant" style="border-left:3px solid #7c3aed;padding-left:12px"><strong>Dr. House:</strong> ' + formatMarkdown(m.content) + '</div>';
+      html += '<div class="chat-message assistant" style="border-left:3px solid #7c3aed;padding-left:12px"><button class="flag-btn" style="float:right;font-size:10px;padding:2px 6px;margin:0 0 4px 8px" onclick=\'openFlagModal({"type":"house","id":' + i + ',"content":' + JSON.stringify((m.content||'').substring(0,200)) + '})\'>&#x1F6A9;</button><strong>Dr. House:</strong> ' + formatMarkdown(m.content) + '</div>';
     } else if (m.role === 'typing') {
       html += '<div class="chat-message assistant typing" id="pb-typing">House is thinking... or ignoring you. Hard to tell.</div>';
     }
@@ -9666,7 +9692,25 @@ document.addEventListener('keydown', function(e) {
   btn.className = 'changelog-btn';
   btn.innerHTML = '&#x1F4CB; v' + APP_VERSION;
   btn.title = 'View changelog & bug fixes';
-  btn.onclick = showChangelogModal;
+  var tapCount = 0; var tapTimer = null;
+  btn.onclick = function(e) {
+    tapCount++;
+    clearTimeout(tapTimer);
+    tapTimer = setTimeout(function() { tapCount = 0; }, 2500);
+    if (tapCount >= 5) {
+      tapCount = 0;
+      // Enable dev mode for current user
+      var profile = sessionStorage.getItem('mcc_profile') || '';
+      if (DEV_USERS.indexOf(profile.toLowerCase()) === -1) {
+        DEV_USERS.push(profile.toLowerCase());
+      }
+      var devNav = document.getElementById('nav-dev');
+      if (devNav) devNav.style.display = '';
+      showToast('🛠️ Dev mode enabled');
+      return;
+    }
+    showChangelogModal();
+  };
   document.body.appendChild(btn);
 })();
 
@@ -9736,11 +9780,14 @@ function openFlagModal(context) {
       '<h3>&#x1F6A9; Flag an Issue</h3>' +
       '<p>' + escapeHtml(context.type) + (contentPreview ? ': "' + escapeHtml(contentPreview) + '"' : '') + '</p>' +
       '<select id="flag-category">' +
-        '<option value="incorrect">Incorrect / Wrong Answer</option>' +
-        '<option value="unclear">Unclear / Confusing</option>' +
-        '<option value="outdated">Outdated Information</option>' +
-        '<option value="typo">Typo / Formatting</option>' +
-        '<option value="missing">Missing Information</option>' +
+        '<option value="wrong_answer">Wrong answer (correct answer marked wrong or vice versa)</option>' +
+        '<option value="incomplete_vignette">Incomplete vignette (scenario missing or cut off)</option>' +
+        '<option value="formatting">Formatting issue (broken layout, missing text, garbled HTML)</option>' +
+        '<option value="contradictory">Contradictory information (contradicts itself or medical facts)</option>' +
+        '<option value="outdated">Outdated information (guidelines have changed)</option>' +
+        '<option value="duplicate">Duplicate content (appears twice)</option>' +
+        '<option value="translation_error">Translation error (wrong translation)</option>' +
+        '<option value="spelling">Spelling / grammar error</option>' +
         '<option value="other">Other</option>' +
       '</select>' +
       '<textarea id="flag-comment" placeholder="Describe the issue (optional but helpful)..."></textarea>' +
@@ -9764,58 +9811,117 @@ function submitFlag() {
   var comment = document.getElementById('flag-comment').value.trim();
   var profile = sessionStorage.getItem('mcc_profile') || 'unknown';
 
-  var flagData = {
-    type: context.type,
-    category: category,
-    comment: comment,
-    contentId: context.id || '',
-    specialty: context.specialty || '',
-    contentPreview: (context.content || '').substring(0, 200),
-    reporter: profile,
-    url: window.location.href,
-    timestamp: new Date().toISOString()
-  };
+  // Mark locally so user can see they already flagged this item
+  var localKey = 'mcc_flag_' + context.type + '_' + context.id;
+  try { localStorage.setItem(localKey, category); } catch(e) {}
 
   overlay.remove();
-  showToast_('Flag submitted — thanks for helping improve MCC Master!');
+  showToast('&#x1F6A9; Report submitted — thanks! AI is reviewing it now.');
 
-  // Save to backend
-  serverCall('saveProgress', 'content_flag', flagData).catch(function(e) {
+  // Send to dedicated reportIssue endpoint (logs to FlaggedIssues sheet + triggers AI review)
+  serverCall('reportIssue',
+    context.type,
+    String(context.id || ''),
+    (context.content || '').substring(0, 800),
+    category,
+    comment,
+    profile
+  ).then(function(result) {
+    if (result && result.aiReview && result.severity === 'high') {
+      showToast('&#x26A0;&#xFE0F; High-severity issue flagged — will be prioritized.');
+    }
+  }).catch(function(e) {
     console.error('Failed to save flag:', e);
   });
-
-  // Try AI auto-fix for simple issues
-  if (category === 'incorrect' && comment) {
-    serverCall('askDrData',
-      'A user flagged this ' + context.type + ' content as incorrect: "' + (context.content || '').substring(0, 300) + '". ' +
-      'Their comment: "' + comment + '". ' +
-      'Is the user likely correct? If so, what would the correct information be? Reply in 2-3 sentences max. If you cannot determine the answer, say "NEEDS_REVIEW".',
-      []
-    ).then(function(result) {
-      if (result && result.response && result.response.indexOf('NEEDS_REVIEW') === -1) {
-        // Store AI suggestion for dev review
-        serverCall('saveProgress', 'flag_ai_suggestion', {
-          flagData: flagData,
-          aiSuggestion: result.response
-        }).catch(function() {});
-      }
-    }).catch(function() {});
-  }
 }
 
-// Dev mode: show flagged issues count on dashboard
-function loadFlaggedIssues_() {
-  var profile = sessionStorage.getItem('mcc_profile') || '';
-  if (DEV_USERS.indexOf(profile.toLowerCase()) === -1) return;
+// Dev mode: load flagged issues
+function loadFlaggedIssues_() { loadDevFlags_(); }
 
-  serverCall('getUserStats').then(function() {
-    // Flags are stored as 'content_flag' type in user data sheet
-    // For now, show a badge in the dev nav
+var _devFlagsCache = null;
+
+function loadDevFlags_() {
+  var container = document.getElementById('dev-flags-list');
+  if (!container) return;
+  container.innerHTML = '<div style="color:var(--text-light);font-size:13px;padding:8px 0">Loading...</div>';
+  serverCall('getFlaggedIssues').then(function(issues) {
+    _devFlagsCache = issues || [];
+    filterDevFlags_();
+    // Show badge on nav if open issues exist
+    var openCount = _devFlagsCache.filter(function(i) { return i.Status === 'open'; }).length;
     var devNav = document.getElementById('nav-dev');
-    if (devNav && !devNav.querySelector('.flag-badge')) {
-      // We'll check for flags in the dev stats page
+    if (devNav && openCount > 0) {
+      var existing = devNav.querySelector('.flag-badge');
+      if (existing) existing.remove();
+      var badge = document.createElement('span');
+      badge.className = 'flag-badge';
+      badge.style.cssText = 'background:var(--error);color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;margin-left:6px;font-weight:700';
+      badge.textContent = openCount;
+      devNav.appendChild(badge);
     }
+  }).catch(function(e) {
+    var container2 = document.getElementById('dev-flags-list');
+    if (container2) container2.innerHTML = '<p style="color:var(--error);font-size:13px">Error loading flags: ' + escapeHtml(e.message || String(e)) + '</p>';
   });
+}
+
+function filterDevFlags_() {
+  var container = document.getElementById('dev-flags-list');
+  if (!container || !_devFlagsCache) return;
+  var statusF = (document.getElementById('dev-flag-filter-status') || {}).value || '';
+  var catF = (document.getElementById('dev-flag-filter-cat') || {}).value || '';
+  var filtered = _devFlagsCache.filter(function(issue) {
+    if (statusF && issue.Status !== statusF) return false;
+    if (catF && issue.Category !== catF) return false;
+    return true;
+  });
+  if (filtered.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-light);font-size:13px;margin:0">No issues found.</p>';
+    return;
+  }
+  var sevColor = { high: 'var(--error)', medium: '#f59e0b', low: 'var(--success)' };
+  var statusColor = { open: 'var(--error)', resolved: 'var(--success)', dismissed: 'var(--text-light)' };
+  var html = '';
+  filtered.slice(0, 50).forEach(function(issue) {
+    var sev = issue.AISeverity || 'medium';
+    var status = issue.Status || 'open';
+    var ts = issue.Timestamp ? new Date(issue.Timestamp).toLocaleDateString() : '';
+    html += '<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;border-left:4px solid ' + (sevColor[sev] || '#999') + '">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:6px">';
+    html += '<span style="font-size:12px;font-weight:700;color:var(--text)">' + escapeHtml(issue.Category || '') + '</span>';
+    html += '<span style="font-size:11px;color:' + (statusColor[status] || '#999') + ';font-weight:700">' + status.toUpperCase() + '</span>';
+    html += '</div>';
+    html += '<div style="font-size:12px;color:var(--text-light);margin-bottom:4px">Type: <strong>' + escapeHtml(issue.ContentType || '') + '</strong> &bull; By: <strong>' + escapeHtml(issue.User || '') + '</strong> &bull; ' + ts + '</div>';
+    if (issue.ContentText) {
+      html += '<div style="font-size:12px;background:var(--bg);border-radius:6px;padding:6px 8px;margin:4px 0;max-height:80px;overflow:hidden;text-overflow:ellipsis">' + escapeHtml((issue.ContentText || '').substring(0, 200)) + (issue.ContentText.length > 200 ? '...' : '') + '</div>';
+    }
+    if (issue.UserNote) {
+      html += '<div style="font-size:12px;color:var(--text);font-style:italic;margin:4px 0">"' + escapeHtml(issue.UserNote) + '"</div>';
+    }
+    if (issue.AIReview) {
+      html += '<div style="font-size:11px;color:var(--primary);margin:4px 0;padding:4px 8px;background:rgba(99,102,241,0.08);border-radius:6px">&#x1F916; ' + escapeHtml(issue.AIReview) + '</div>';
+    }
+    if (status === 'open') {
+      html += '<div style="display:flex;gap:6px;margin-top:8px">';
+      html += '<button class="btn btn-sm" style="background:var(--success);color:#fff;font-size:11px;padding:4px 10px" onclick="updateFlagStatus_(\'' + escapeHtml(issue.ID) + '\',\'resolved\')">&#x2713; Resolve</button>';
+      html += '<button class="btn btn-sm btn-outline" style="font-size:11px;padding:4px 10px" onclick="updateFlagStatus_(\'' + escapeHtml(issue.ID) + '\',\'dismissed\')">Dismiss</button>';
+      html += '</div>';
+    }
+    html += '</div>';
+  });
+  if (filtered.length > 50) html += '<p style="color:var(--text-light);font-size:12px;margin-top:8px">Showing 50 of ' + filtered.length + ' issues.</p>';
+  container.innerHTML = html;
+}
+
+function updateFlagStatus_(issueId, status) {
+  serverCall('updateIssueStatus', issueId, status).then(function() {
+    showToast('Issue marked as ' + status);
+    // Update local cache
+    if (_devFlagsCache) {
+      _devFlagsCache.forEach(function(i) { if (i.ID === issueId) i.Status = status; });
+    }
+    filterDevFlags_();
+  }).catch(function(e) { showToast('Error: ' + (e.message || String(e))); });
 }
 
 // =============================================
