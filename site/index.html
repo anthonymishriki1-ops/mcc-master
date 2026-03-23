@@ -2750,15 +2750,14 @@ function toggleDarkMode() {
 
 function serverCall(funcName) {
   var args = Array.prototype.slice.call(arguments, 1);
-  // Use Netlify Function when served over HTTP(S), fallback to GAS for file:// access
+  // Use GAS API directly (works from any host including GitHub Pages)
   var GAS_API = 'https://script.google.com/macros/s/AKfycbyr4fykFUygDTJlJigbdtvms6NNTC0Ywxg48banF_buFbK9VEptCYvYRuF4Evw6nOH7/exec';
-  var isHosted = window.location.protocol === 'https:' || window.location.protocol === 'http:';
-  var API_URL = isHosted ? '/.netlify/functions/api' : GAS_API;
+  var API_URL = GAS_API;
   var profile = localStorage.getItem('mcc_profile') || '';
   return fetch(API_URL, {
     method: 'POST',
     redirect: 'follow',
-    headers: { 'Content-Type': isHosted ? 'application/json' : 'text/plain' },
+    headers: { 'Content-Type': 'text/plain' },
     body: JSON.stringify({ fn: funcName, args: args, profile: profile })
   })
   .then(function(resp) {
