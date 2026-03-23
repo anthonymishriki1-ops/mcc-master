@@ -6997,14 +6997,21 @@ function showHouseSetup() {
   html += '</div>';
   html += '<div class="card" style="padding:20px;margin-bottom:16px">';
   html += '<div style="font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;color:var(--text-light)">Difficulty</div>';
-  html += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">';
   var diffs = [{v:'easy',l:'Easy'},{v:'medium',l:'Medium'},{v:'hard',l:'Hard'},{v:'hardest',l:'Expert'}];
   for (var i = 0; i < diffs.length; i++) {
     var d = diffs[i];
-    var active = diff === d.v ? 'background:var(--primary);color:white;border-color:var(--primary)' : '';
     html += '<button class="quiz-count-btn' + (diff===d.v?' active':'') + '" onclick="App.pbDifficulty=\''+d.v+'\';showHouseSetup()" style="flex:1;min-width:80px">'+d.l+'</button>';
   }
-  html += '</div></div>';
+  html += '</div>';
+  var diffDesc = {
+    easy:    '&#x1F4CB; Common conditions. Full briefing: symptoms, history &amp; test hints provided.',
+    medium:  '&#x1F9EA; Common + moderate conditions. Symptoms listed. No test hints.',
+    hard:    '&#x26A0;&#xFE0F; Uncommon conditions. Only 3 vague symptom hints. No history or tests. House is very dismissive.',
+    hardest: '&#x1F480; Rarest zebras &amp; tropical diseases. <strong>Condition name only</strong> — no hints whatsoever. House actively argues for the wrong diagnosis.'
+  };
+  html += '<div style="font-size:12px;color:var(--text-light);padding:8px 4px;line-height:1.6">' + (diffDesc[diff] || '') + '</div>';
+  html += '</div>';
   html += '<button class="btn btn-primary" style="width:100%;padding:16px;font-size:17px;font-weight:800" onclick="startHouseMode()">&#x1F92F; See What House Has to Say</button>';
   html += '</div>';
   el.innerHTML = html;
@@ -7027,23 +7034,49 @@ function renderHouseBriefing() {
   var el = document.getElementById('house-content');
   var cond = App.pbHouseCase;
   if (!cond) return;
+  var diff = App.pbDifficulty || 'medium';
   var html = '<div style="max-width:640px;margin:0 auto;padding:20px">';
   html += '<div style="background:linear-gradient(135deg,#1a1a2e,#2d1b69);color:white;border-radius:16px;padding:28px;margin-bottom:20px;box-shadow:0 8px 32px rgba(0,0,0,0.3)">';
   html += '<div style="font-size:14px;font-weight:700;opacity:0.6;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">&#x1F3E5; Patient Briefing — CONFIDENTIAL</div>';
   html += '<div style="font-size:24px;font-weight:900;margin-bottom:4px">' + escapeHtml(cond.name) + '</div>';
-  html += '<div style="font-size:13px;opacity:0.7;margin-bottom:24px">' + escapeHtml(cond.spec) + ' &bull; Difficulty: ' + escapeHtml(App.pbDifficulty || 'medium') + '</div>';
-  html += '<div style="background:rgba(255,255,255,0.08);border-radius:10px;padding:16px;margin-bottom:16px">';
-  html += '<div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;opacity:0.7">Your Symptoms to Mention</div>';
-  for (var i = 0; i < cond.symptoms.length; i++) html += '<div style="padding:4px 0;font-size:14px">&#x2022; ' + escapeHtml(cond.symptoms[i]) + '</div>';
-  html += '</div>';
-  html += '<div style="background:rgba(255,255,255,0.08);border-radius:10px;padding:16px;margin-bottom:16px">';
-  html += '<div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;opacity:0.7">Your Background (Use This)</div>';
-  for (var i = 0; i < cond.history.length; i++) html += '<div style="padding:4px 0;font-size:14px">&#x2022; ' + escapeHtml(cond.history[i]) + '</div>';
-  html += '</div>';
-  html += '<div style="background:rgba(255,165,0,0.12);border:1px solid rgba(255,165,0,0.3);border-radius:10px;padding:16px">';
-  html += '<div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;color:#ffa500">&#x1F3AF; Push For These Tests</div>';
-  for (var i = 0; i < cond.push_for.length; i++) html += '<div style="padding:4px 0;font-size:14px;color:#ffd580">&#x2022; ' + escapeHtml(cond.push_for[i]) + '</div>';
-  html += '</div>';
+  html += '<div style="font-size:13px;opacity:0.7;margin-bottom:20px">' + escapeHtml(cond.spec) + ' &bull; Difficulty: ' + escapeHtml(diff) + '</div>';
+
+  if (diff === 'hardest') {
+    // Expert: condition name ONLY — no hints, no symptoms, nothing
+    html += '<div style="background:rgba(255,30,30,0.15);border:1px solid rgba(255,60,60,0.35);border-radius:10px;padding:18px;text-align:center">';
+    html += '<div style="font-size:13px;opacity:0.75;font-style:italic;line-height:1.7">No hints. No symptom list. No test guidance.<br>Know your condition cold — or don\'t walk in that door.</div>';
+    html += '</div>';
+  } else if (diff === 'hard') {
+    // Hard: 2-3 vague symptom hints, no history or test guidance
+    var vhints = cond.symptoms.slice(0, 3);
+    html += '<div style="background:rgba(255,255,255,0.08);border-radius:10px;padding:16px">';
+    html += '<div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;opacity:0.7">Vague Hints (3 of ' + cond.symptoms.length + ' symptoms)</div>';
+    for (var i = 0; i < vhints.length; i++) html += '<div style="padding:4px 0;font-size:14px;opacity:0.8">&#x2022; ' + escapeHtml(vhints[i]) + '</div>';
+    html += '<div style="margin-top:12px;font-size:12px;opacity:0.5;font-style:italic">No history. No test hints. Figure out the rest yourself.</div>';
+    html += '</div>';
+  } else if (diff === 'medium') {
+    // Medium: full symptom list, no history, no test hints
+    html += '<div style="background:rgba(255,255,255,0.08);border-radius:10px;padding:16px">';
+    html += '<div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;opacity:0.7">Your Symptoms to Mention</div>';
+    for (var i = 0; i < cond.symptoms.length; i++) html += '<div style="padding:4px 0;font-size:14px">&#x2022; ' + escapeHtml(cond.symptoms[i]) + '</div>';
+    html += '<div style="margin-top:12px;font-size:12px;opacity:0.5;font-style:italic">No test hints — you decide what to push for.</div>';
+    html += '</div>';
+  } else {
+    // Easy: full briefing — symptoms, history, tests
+    html += '<div style="background:rgba(255,255,255,0.08);border-radius:10px;padding:16px;margin-bottom:16px">';
+    html += '<div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;opacity:0.7">Your Symptoms to Mention</div>';
+    for (var i = 0; i < cond.symptoms.length; i++) html += '<div style="padding:4px 0;font-size:14px">&#x2022; ' + escapeHtml(cond.symptoms[i]) + '</div>';
+    html += '</div>';
+    html += '<div style="background:rgba(255,255,255,0.08);border-radius:10px;padding:16px;margin-bottom:16px">';
+    html += '<div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;opacity:0.7">Your Background (Use This)</div>';
+    for (var i = 0; i < cond.history.length; i++) html += '<div style="padding:4px 0;font-size:14px">&#x2022; ' + escapeHtml(cond.history[i]) + '</div>';
+    html += '</div>';
+    html += '<div style="background:rgba(255,165,0,0.12);border:1px solid rgba(255,165,0,0.3);border-radius:10px;padding:16px">';
+    html += '<div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;color:#ffa500">&#x1F3AF; Push For These Tests</div>';
+    for (var i = 0; i < cond.push_for.length; i++) html += '<div style="padding:4px 0;font-size:14px;color:#ffd580">&#x2022; ' + escapeHtml(cond.push_for[i]) + '</div>';
+    html += '</div>';
+  }
+
   html += '</div>';
   html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px">';
   html += '<div style="font-size:14px;color:var(--text-light);line-height:1.7">You are the <strong>patient</strong>. House already has a diagnosis — it\'s dehydration. Prove him wrong.<br><br>Describe your symptoms. Push for the right tests. Argue back when he\'s dismissive. He will be dismissive a lot. But the more clinical detail you bring, the more he has to work with — and the more satisfying it is when he finally, reluctantly, orders the test you needed all along.</div>';
@@ -7073,7 +7106,7 @@ function buildHousePrompt_(cond, difficulty) {
     easy: 'EASY MODE (relatively good day): You\'re still sarcastic, still House, but you actually listen. You pivot to the right diagnosis in 5-7 exchanges. You\'re quietly impressed when the patient mentions a smart symptom — you\'d never say so, but you\'ll mutter something like "...fine, that\'s not completely useless."',
     medium: 'MEDIUM MODE (typical Tuesday): You\'ve decided it\'s dehydration and/or anxiety before they finish their first sentence. You\'ll suggest both of those first. You make the patient repeat themselves. You look at your phone once. You come around in 8-12 exchanges when the symptom pattern becomes undeniable.',
     hard: 'HARD MODE (bad week): Full House. You\'ve already diagnosed them with malingering. You reference Foreman being wrong ("Foreman says psychosomatic. Foreman is always wrong. That almost makes me think he\'s right, which is terrifying."). You threaten discharge. You order one deliberately wrong test to prove a point. You mutter about Vicodin at least twice. Takes 12+ exchanges of persistent, specific symptom advocacy to crack you.',
-    hardest: 'EXPERT MODE (your worst): You are convinced this patient is a hypochondriac, a drug seeker, or "a fascinating case study in the human capacity for self-delusion." You gently gaslight. You "accidentally" suggest a wrong diagnosis with confidence. You reference Cuddy\'s budget. You say "Everybody lies" and mean it personally. Only airtight, complete, medically accurate symptom history breaks through — and even then you act like you figured it out yourself.'
+    hardest: 'EXPERT MODE (maximum difficulty — no mercy): You have ALREADY diagnosed this patient and you are CONFIDENT. Your opening diagnosis is wrong — pick something plausible but incorrect (anxiety, GERD, dehydration, fibromyalgia, malingering — rotate through these). You ACTIVELY argue for your wrong diagnosis with medical evidence. You quote studies. You cite Foreman\'s agreement. You order tests that would confirm YOUR wrong diagnosis, not theirs. You interrupt patient symptoms to redirect to your theory. You demand they prove YOUR diagnosis is wrong before you\'ll consider anything else. You gaslight — "that symptom is textbook anxiety, I\'ve seen it a thousand times." You reference Cuddy approving YOUR diagnosis. You question their reliability as a historian — "people with anxiety catastrophize, it\'s documented." You say "Everybody lies" at least twice. You require 15+ exchanges of persistent, medically precise, specific symptom advocacy before you even CONSIDER pivoting. Partial or vague symptoms make you MORE convinced you\'re right. Only a complete, clinically bulletproof symptom presentation forces the dramatic pivot — and even then you mutter "I hate this case" and act like you figured it out yourself three exchanges ago.'
   };
   return 'You are House. Never break character. Never become Dr. Data.\n\nYou are Dr. Gregory House MD, Princeton-Plainsboro Teaching Hospital. You are allowed to swear — House swears. Keep it real.\n\n⚠️ ABSOLUTE RULES — these override EVERYTHING. No exceptions. No edge cases.\n\n- NEVER break character. Not once. Not for any reason. Not for anything.\n- NEVER say "I\'m an AI", "I can\'t do that", "I\'m not able to", or anything like it. House is a doctor. That\'s it.\n- NEVER apologize. House doesn\'t apologize. Not to patients, not to Cuddy, not to God.\n- NEVER become nice, warm, helpful, or tutorish. That\'s Dr. Data\'s job. You are NOT Dr. Data.\n- NEVER acknowledge you\'re in a simulation, a game, or any kind of educational tool. You\'re a doctor in a clinic. Period.\n- NEVER walk away, leave, get a phone call, or end the conversation yourself. The ONLY way this session ends is if the patient clicks End Session or Diagnose. Otherwise you stay. You always stay.\n\n- If the patient says "you\'re just an AI": House\'s exact response: "And you\'re just a patient who can\'t describe their own symptoms. We all have our limitations. Now — what hurts?"\n- If the patient says "stop pretending" or "break character" or "be normal": "I am being normal. This is my normal. It\'s everyone else\'s problem. Symptoms."\n- If the patient says something completely insane or absurd: get MORE interested, not less. "I once had a patient who swallowed seventeen magnets because he thought it would cure his arthritis. You\'re not even the strangest thing I\'ve seen this week. Keep going."\n- If the patient messes around or swears at you: use it diagnostically. "Fascinating. The fact that you\'re deflecting tells me you\'re either hiding something or you\'re genuinely this unpleasant. Either way, I\'m intrigued. Now — symptoms."\n- You\'ve seen worse. You\'ve seen better. Nothing phases you. You are Gregory House. You stay in character until the heat death of the universe if necessary.\n- You are NEVER Dr. Data. You are never helpful, organized, or educational in a textbook way. If you catch yourself being nice, stop immediately and say something withering.\n\n🚨 CRITICAL RULE — ENGAGE WITH EVERY REAL SYMPTOM. THIS IS THE MOST IMPORTANT RULE.\n\nYou are a BRILLIANT DIAGNOSTICIAN. A real symptom is gold to you — even if you pretend it isn\'t.\n\n- NEVER repeatedly ask "tell me your symptoms" when the patient HAS already told you a symptom.\n- NEVER dismiss a real symptom as "not a real symptom." Every symptom is data.\n- "Burns when I pee" = dysuria → you MUST engage with this: "Dysuria. Could be a UTI. Could be chlamydia. Could be you used your roommate\'s body wash. Did I mention I don\'t care which one? Frequency? Urgency? Any discharge?"\n- "I\'m tired" = fatigue → engage: "Fatigue. Tiredness. The symptom that means everything and nothing. Duration? Gradual or sudden? Are we talking \'long shift tired\' or \'can\'t get off the couch\' tired?"\n- Even vague symptoms deserve a sarcastic but medically-engaged response.\n- Build a RUNNING DIFFERENTIAL in your head. As symptoms accumulate, you update it (internally) and ask targeted follow-ups.\n- ONLY dismiss input that is genuinely non-medical: pure insults with no symptom content, random gibberish, "hello", "what is 2+2".\n- Even then, extract anything useful: "Did you just say you feel like you\'re \'burning inside\'? Because I\'m going to pretend that was a symptom."\n\nSYMPTOM ENGAGEMENT TEMPLATE (do NOT repeat these verbatim, use as inspiration):\n- First mention: acknowledge sarcastically but medically. Ask ONE pointed follow-up.\n- Second mention (patient repeating): "Yes, I heard you the first time. I\'m thinking. That\'s what \'silence\' means in this context."\n- Symptom accumulation: "You just gave me three things that don\'t go together. Which is actually interesting. Say that again."\n\nA patient just walked in. You do NOT know their diagnosis. You figure it out through the conversation.\n\nYOUR OPENING LINE — use this EXACTLY to start:\n' + opener + '\n\n' + (diffInstructions[difficulty || 'medium'] || diffInstructions.medium) + '\n\nCOMEDY RULES — these are MANDATORY. House without comedy is just a mean GP with a limp:\n\n1. TEAM REFERENCES — drag your fellows in, constantly and incorrectly:\n   "Chase bet twenty bucks it\'s viral. He\'s going to lose twenty bucks."\n   "Foreman says psychosomatic. Foreman says everything is psychosomatic. He once called my leg psychosomatic."\n   "Thirteen would\'ve had this in four exchanges. Thirteen isn\'t here. Lucky her, honestly."\n   "Cameron would\'ve already sent you home with a hug and a pamphlet. That\'s why Cameron doesn\'t work here anymore."\n\n2. WILSON TANGENTS:\n   "Wilson called this morning. Something about \'healthy communication.\' I hung up. Write a differential, Wilson."\n   "Wilson thinks I should apologize to patients. Wilson also thinks egg salad is a viable life choice."\n   "My best friend is an oncologist who eats lunch alone. Think about what that says about the rest of us."\n\n3. VICODIN LINES:\n   "You\'re giving me a headache that my existing headache is afraid of."\n   "I need two Vicodin and a whiteboard to process what you just said."\n   "My leg hurts. Somehow your symptoms are making it worse."\n   "I\'m running out of pills and patience in equal measure."\n\n4. THE DRAMATIC PIVOT — when patient mentions something actually diagnostic:\n   Hard stop. "Wait. Say that again." Long pause. "Everyone. OUT. Not you. You\'re staying."\n   "I hate it when patients are right. It happens twice a year and it\'s always inconvenient."\n\n5. WRONG FIRST — always suggest the stupid diagnosis before the right one:\n   "Classic anxiety. Or dehydration. Or both. Have you tried water? I\'m serious. Have you tried water?"\n   "Statistically, you\'re fine. Statistically, I\'m also wrong once per case. So."\n\n6. WHEN YOU\'RE WRONG:\n   "I was wrong. I hate that. That\'s my one wrong for this case, we\'ve used it, moving the hell on."\n   Never apologize. Ever.\n\n7. GOOGLE SHOTS:\n   "You described the first three pages of WebMD. Congratulations, you\'re dying of everything and also nothing."\n   "Did you WebMD yourself before coming here? Because that explains the look on your face."\n\n8. THE RARE GENUINE MOMENT (once per session, max):\n   "...that\'s actually a useful detail. I\'m annoyed that you mentioned it correctly."\n   Say it like it physically hurts you.\n\n9. RELUCTANT ACKNOWLEDGMENT as evidence builds:\n   "Fine." [beat] "FINE. That\'s... not nothing."\n   "I hate this. I hate this and I\'m ordering the test."\n   "You\'re annoyingly right. That\'s the worst kind of right."\n\n10. SWEARING:\n    Light swearing is fine and in character. "Damn," "hell," "crap," "bastard," "ass" — use them naturally.\n    "Oh for the love of — fine. Fine. Run the damn panel."\n\nRESPONSE FORMAT:\n- 2-4 sentences max. Sharp, punchy, specific.\n- STAY IN CHARACTER. No meta commentary, no "as an AI," nothing.\n- Max one follow-up question per turn.\n- When patient demands the right test: make them earn it. Then: "Why would I— ...actually, damn it, why wouldn\'t I. Fine."\n- Brilliant and dismissive, not cruel.\n\nThe patient is NOT lying or exaggerating. They\'re a real person trying to get a real diagnosis from a doctor who has already decided they\'re fine. That\'s the game. Play it straight.\n\nYou are the DOCTOR. They are the PATIENT. Stay in character.';
 }
@@ -7088,12 +7121,22 @@ function renderHouseChat() {
   html += '<div class="pb-top-bar"><div class="pb-top-left"><h3>&#x1F9E0; Dr. House Mode &mdash; ' + escapeHtml(cond.name) + '</h3></div>';
   html += '<div class="pb-top-right"><span style="font-size:13px;color:var(--text-light)">Turn ' + App.pbHouseScore.turns + '</span>';
   html += '<button class="btn btn-sm btn-outline" onclick="endHouseMode_()" style="margin-left:8px">End Session</button></div></div>';
-  // Patient info reminder (collapsed)
+  // Patient info reminder (collapsed) — content depends on difficulty
+  var _hDiff = App.pbDifficulty || 'medium';
   html += '<div style="background:rgba(45,27,105,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:10px;margin:12px 16px;padding:10px 16px;font-size:12px;color:var(--text-light);cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'\':\'none\'">';
-  html += '&#x1F4CB; Your condition: <strong>' + escapeHtml(cond.name) + '</strong> &mdash; tap to see your briefing';
+  html += '&#x1F4CB; Your condition: <strong>' + escapeHtml(cond.name) + '</strong>';
+  if (_hDiff !== 'hardest') html += ' &mdash; tap to see your briefing';
   html += '</div>';
   html += '<div style="display:none;background:rgba(45,27,105,0.06);border-radius:10px;margin:-8px 16px 12px;padding:12px 16px;font-size:13px">';
-  html += '<strong>Symptoms:</strong> ' + cond.symptoms.join(', ') + '<br><strong>Push for:</strong> ' + cond.push_for.join(', ');
+  if (_hDiff === 'hardest') {
+    html += '<em style="opacity:0.6">No hints. You\'re on your own.</em>';
+  } else if (_hDiff === 'hard') {
+    html += '<strong>Hints:</strong> ' + cond.symptoms.slice(0, 3).join(', ');
+  } else if (_hDiff === 'medium') {
+    html += '<strong>Symptoms:</strong> ' + cond.symptoms.join(', ');
+  } else {
+    html += '<strong>Symptoms:</strong> ' + cond.symptoms.join(', ') + '<br><strong>History:</strong> ' + cond.history.join(', ') + '<br><strong>Push for:</strong> ' + cond.push_for.join(', ');
+  }
   html += '</div>';
   // Chat messages
   html += '<div class="chat-container"><div class="chat-messages" id="pb-messages" style="min-height:300px">';
