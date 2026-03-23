@@ -3378,7 +3378,7 @@ function finishInit() {
   loadDashboard();
 
   // Start heartbeat for online presence
-  startHeartbeat_();
+  try { startHeartbeat_(); } catch(e) { console.warn('Heartbeat init failed:', e); }
 
   // If shared flashcard link, navigate directly to that card
   if (App.sharedFlashcard) {
@@ -3478,11 +3478,16 @@ function loadDashboard() {
   statsPromise.then(function(stats) {
     App.stats = stats;
     // Restore user settings from GAS backup (only fills in missing localStorage values)
-    if (stats.savedSettings) restoreSettings_(stats.savedSettings);
-    renderDashboard(stats);
-    updateSidebarLevel(stats.level);
+    try { if (stats.savedSettings) restoreSettings_(stats.savedSettings); } catch(e) { console.warn('restoreSettings_ failed:', e); }
+    try {
+      renderDashboard(stats);
+      updateSidebarLevel(stats.level);
+    } catch(e) {
+      console.error('renderDashboard failed:', e);
+      el.innerHTML = '<div class="card"><p>Dashboard render error: ' + escapeHtml(e.message || String(e)) + '</p><p style="font-size:12px;color:var(--text-light)">Try refreshing the page.</p></div>';
+    }
     // Check for weekly report on Saturdays
-    checkWeeklyReport_(stats);
+    try { checkWeeklyReport_(stats); } catch(e) { console.warn('weeklyReport failed:', e); }
   }).catch(function(e) {
     el.innerHTML = '<div class="card"><p>Error loading dashboard: ' + escapeHtml(e.message || String(e)) + '</p></div>';
   });
