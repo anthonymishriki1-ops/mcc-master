@@ -2491,7 +2491,7 @@ body.kb-open #bottom-nav { display: none !important; }
     <button onclick="adjustZoom(10)" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 6px;color:var(--text);font-weight:700" title="Zoom in">+</button>
   </div>
   <!-- Auto-Translate Toggle + Language Picker -->
-  <div id="auto-translate-toggle" style="position:fixed;top:52px;right:10px;z-index:999;flex-direction:column;align-items:stretch;gap:4px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:6px 10px;box-shadow:0 2px 8px rgba(0,0,0,0.12);font-size:11px;opacity:0.85;transition:opacity 0.2s" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.85'">
+  <div id="auto-translate-toggle" style="position:fixed;top:104px;right:10px;z-index:999;flex-direction:column;align-items:stretch;gap:4px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:6px 10px;box-shadow:0 2px 8px rgba(0,0,0,0.12);font-size:11px;opacity:0.85;transition:opacity 0.2s" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.85'">
     <select id="lang-select" onchange="setLanguage(this.value)" title="Translation language" style="border:none;background:transparent;color:var(--text);font-size:11px;font-family:inherit;cursor:pointer;outline:none;padding:0;max-width:120px">
       <option value="">&#x1F310; Off</option>
       <option value="fr">&#x1F1EB;&#x1F1F7; French</option>
@@ -2629,7 +2629,8 @@ body.kb-open #bottom-nav { display: none !important; }
           </div>
         </div>
         <div class="chat-input-area">
-          <textarea id="drdata-input" placeholder="Ask Dr. Data anything..." rows="2" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendDrDataMessage()}"></textarea>
+          <textarea id="drdata-input" placeholder="Ask Dr. Data anything..." rows="2" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendDrDataMessage()}" oninput="try{window.speechSynthesis.cancel()}catch(e){}"></textarea>
+          <button class="btn btn-outline" id="dd-tts-btn" onclick="toggleDDTTS()" title="Read responses aloud" style="font-size:16px;padding:0 10px" data-tts-init="dd"></button>
           <button class="btn btn-primary" onclick="sendDrDataMessage()">Send</button>
         </div>
       </div>
@@ -3423,7 +3424,7 @@ function loginAsReturningGuest(guestId, displayName) {
 }
 
 // One-time onboarding reset for specific profiles — runs once per device then sets a done flag
-var ONBOARDING_RESET_PROFILES = ['noha'];
+var ONBOARDING_RESET_PROFILES = ['noha', 'roxana', 'roxanna'];
 function maybeResetOnboarding_(profileId) {
   if (ONBOARDING_RESET_PROFILES.indexOf(profileId.toLowerCase()) === -1) return;
   var doneKey = 'mcc_onboard_reset_done_' + profileId.toLowerCase();
@@ -4205,6 +4206,9 @@ function init() {
   }
 
   finishInit();
+  // Sync TTS button icon with stored state
+  var ddBtn = document.getElementById('dd-tts-btn');
+  if (ddBtn) ddBtn.innerHTML = App.ddTTS ? '&#x1F50A;' : '&#x1F507;';
 }
 
 function finishInit() {
@@ -5655,15 +5659,17 @@ function showQuizSetup() {
   var html = '<div class="quiz-setup card">';
   html += '<h3 style="margin-bottom:20px;text-align:center">Quiz Setup</h3>';
 
-  // Weak areas banner — show if user has history
-  var weakAreas = App.stats && App.stats.weakAreas && App.stats.weakAreas.length > 0 ? App.stats.weakAreas : [];
+  // Weak areas banner — show only if real (non-"All") weak specialties exist
+  var rawWeak = App.stats && App.stats.weakAreas ? App.stats.weakAreas : [];
+  var weakAreas = rawWeak.filter(function(w) { return w.specialty && w.specialty !== 'All'; });
   var defaultSpec = 'All';
   if (weakAreas.length > 0) {
     defaultSpec = weakAreas[0].specialty;
+    var weakList = weakAreas.slice(0, 3).map(function(w) { return '<strong>' + escapeHtml(w.specialty) + '</strong> (' + w.avgScore + '%)'; }).join(', ');
     html += '<div style="background:rgba(244,67,54,0.08);border:1px solid rgba(244,67,54,0.25);border-radius:12px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px">';
     html += '<span style="font-size:20px">&#x1F3AF;</span>';
     html += '<div><div style="font-size:13px;font-weight:700;color:var(--error)">Weak Areas Detected</div>';
-    html += '<div style="font-size:12px;color:var(--text-light);margin-top:2px">Defaulting to your weakest: <strong>' + escapeHtml(weakAreas[0].specialty) + '</strong> (' + weakAreas[0].avgScore + '% avg)</div></div>';
+    html += '<div style="font-size:12px;color:var(--text-light);margin-top:2px">Defaulting to your weakest: ' + weakList + '</div></div>';
     html += '<button onclick="document.getElementById(\'quiz-specialty\').value=\'All\'" style="margin-left:auto;background:none;border:none;font-size:11px;color:var(--text-light);cursor:pointer;white-space:nowrap">Use All</button>';
     html += '</div>';
   }
@@ -5671,7 +5677,7 @@ function showQuizSetup() {
   html += '<div class="form-group"><label>Specialty</label>';
   html += '<select id="quiz-specialty" style="width:100%"><option value="All">All Specialties (Random Mix)</option>';
   for (var i = 0; i < specs.length; i++) {
-    var isWeak = weakAreas.length > 0 && weakAreas[0].specialty === specs[i];
+    var isWeak = weakAreas.some(function(w) { return w.specialty === specs[i]; });
     html += '<option value="' + escapeHtml(specs[i]) + '"' + (specs[i] === defaultSpec ? ' selected' : '') + '>' + escapeHtml(specs[i]) + (isWeak ? ' ⚠️' : '') + '</option>';
   }
   html += '</select></div>';
@@ -5831,7 +5837,9 @@ function prevQuizQuestion() { if (App.quizCurrentIndex > 0) { App.quizCurrentInd
 function nextQuizQuestion() { if (App.quizCurrentIndex < App.quizQuestions.length - 1) { App.quizCurrentIndex++; renderQuizQuestion(); } }
 
 // ---- PatientBot Voice Mode ----
-App.pbTTS = false;
+App.pbTTS     = localStorage.getItem('mcc_pbTTS')    === '1';
+App.houseTTS  = localStorage.getItem('mcc_houseTTS') === '1';
+App.ddTTS     = localStorage.getItem('mcc_ddTTS')    === '1';
 App.pbMicActive = false;
 var pbMicRecognition = null;
 
@@ -5860,7 +5868,15 @@ function togglePBMic() {
       if (scoreMedicalPhrase_(alt) > scoreMedicalPhrase_(best)) best = alt;
     }
     var input = document.getElementById('pb-input');
-    if (input) { input.value = best; sendPBMessage(); }
+    if (input) {
+      // In PB mode only, check for action voice commands before sending as dialogue
+      if (App.currentPage !== 'house' && App.pbCaseId && handleVoiceCommand_(best)) {
+        // handled — do nothing further
+      } else {
+        input.value = best;
+        sendPBMessage();
+      }
+    }
     App.pbMicActive = false;
     if (btn) { btn.textContent = '\uD83C\uDFA4'; btn.style.background = ''; btn.style.color = ''; }
   };
@@ -5877,13 +5893,16 @@ function togglePBMic() {
 
 function togglePBTTS() {
   App.pbTTS = !App.pbTTS;
+  localStorage.setItem('mcc_pbTTS', App.pbTTS ? '1' : '0');
   var btn = document.getElementById('pb-tts-btn');
   if (btn) btn.innerHTML = App.pbTTS ? '&#x1F50A;' : '&#x1F507;';
   showToast('Voice responses ' + (App.pbTTS ? 'ON' : 'OFF'));
+  if (!App.pbTTS) try { window.speechSynthesis.cancel(); } catch(e) {}
 }
 
-function speakText_(text, voiceParams) {
-  if (!App.pbTTS || !text || !window.speechSynthesis) return;
+function speakText_(text, voiceParams, ttsEnabled) {
+  var isOn = (ttsEnabled !== undefined) ? ttsEnabled : App.pbTTS;
+  if (!isOn || !text || !window.speechSynthesis) return;
   try { window.speechSynthesis.cancel(); } catch(e) {}
   try { if (window.speechSynthesis.paused) window.speechSynthesis.resume(); } catch(e) {}
   var clean = text.replace(/\*+/g,'').replace(/\[.*?\]/g,'').replace(/[*_~`]/g,'').trim();
@@ -6042,6 +6061,125 @@ function pbSpeakLastMessage_() {
   if (!App.pbTTS) return;
   var last = App.pbHistory[App.pbHistory.length - 1];
   if (last && last.role === 'assistant') speakText_(last.content, getPBVoiceParams_());
+}
+
+function toggleHouseTTS() {
+  App.houseTTS = !App.houseTTS;
+  localStorage.setItem('mcc_houseTTS', App.houseTTS ? '1' : '0');
+  var btn = document.getElementById('house-tts-btn');
+  if (btn) btn.innerHTML = App.houseTTS ? '&#x1F50A;' : '&#x1F507;';
+  showToast('House voice ' + (App.houseTTS ? 'ON' : 'OFF'));
+  if (!App.houseTTS) try { window.speechSynthesis.cancel(); } catch(e) {}
+}
+function toggleDDTTS() {
+  App.ddTTS = !App.ddTTS;
+  localStorage.setItem('mcc_ddTTS', App.ddTTS ? '1' : '0');
+  var btn = document.getElementById('dd-tts-btn');
+  if (btn) btn.innerHTML = App.ddTTS ? '&#x1F50A;' : '&#x1F507;';
+  showToast('Dr. Data voice ' + (App.ddTTS ? 'ON' : 'OFF'));
+  if (!App.ddTTS) try { window.speechSynthesis.cancel(); } catch(e) {}
+}
+
+// House voice: deeper, slower, prefers male voice
+function speakTextHouse_(text, force) {
+  if ((!force && !App.houseTTS) || !text || !window.speechSynthesis) return;
+  try { window.speechSynthesis.cancel(); } catch(e) {}
+  var clean = text.replace(/\*+/g,'').replace(/\[.*?\]/g,'').replace(/[*_~`]/g,'').trim();
+  if (!clean) return;
+  var utt = new SpeechSynthesisUtterance(clean);
+  utt.lang = 'en-US'; utt.rate = 0.9; utt.pitch = 0.8; utt.volume = 1.0;
+  utt.onerror = function(ev) { if (ev.error && ev.error !== 'interrupted' && ev.error !== 'canceled') console.log('[TTS House] error:', ev.error); };
+  var voices = window.speechSynthesis.getVoices();
+  if (voices.length > 0) {
+    var best = voices[0], bestScore = -1;
+    for (var j = 0; j < voices.length; j++) {
+      var v = voices[j], s = 0, n = v.name.toLowerCase();
+      if (/en.us|en.gb|en.au/i.test(v.lang)) s += 3;
+      if (/male|man|daniel|david|alex|tom|james|mark|oliver/i.test(n)) s += 5;
+      if (/google|premium|neural|enhanced/i.test(n)) s += 2;
+      if (s > bestScore) { bestScore = s; best = v; }
+    }
+    utt.voice = best;
+  }
+  try { window.speechSynthesis.speak(utt); } catch(e) {}
+}
+function houseSpeakLast_() {
+  if (!App.houseTTS) return;
+  var last = App.pbHouseConvHistory[App.pbHouseConvHistory.length - 1];
+  if (last && last.role === 'assistant') speakTextHouse_(last.content);
+}
+function ddSpeakLast_() {
+  if (!App.ddTTS) return;
+  var last = App.drDataHistory[App.drDataHistory.length - 1];
+  if (last && last.role === 'assistant') speakText_(last.content, null, true);
+}
+
+// Voice command detection — intercepts mic transcripts in PB mode
+function handleVoiceCommand_(text) {
+  var t = text.trim();
+  var tl = t.toLowerCase();
+
+  // ORDER / LABS / IMAGING — "order CBC", "I'm ordering a chest X-ray"
+  var orderM = tl.match(/^(?:i'?m ordering|i am ordering|ordering|order(?:ing)?)\s+(.+)/);
+  if (orderM) {
+    var item = orderM[1].replace(/^(a|an|the)\s+/i, '').trim();
+    showToast('🔊 Ordering: ' + item);
+    insertPBAction(item);
+    return true;
+  }
+
+  // PRESCRIBE / MEDS — "prescribe amoxicillin 500mg", "I'm prescribing..."
+  var rxM = tl.match(/^(?:i'?m prescribing|i am prescribing|prescri(?:be|bing))\s+(.+)/);
+  if (rxM) {
+    var item = rxM[1].replace(/^(a|an|the)\s+/i, '').trim();
+    showToast('🔊 Prescribing: ' + item);
+    insertPBAction(item);
+    return true;
+  }
+
+  // GIVE / ADMINISTER / START IV
+  var giveM = tl.match(/^(?:give|administer|start iv(?: of)?|start an iv of|push)\s+(.+)/);
+  if (giveM) {
+    var item = giveM[1].replace(/^(a|an|the)\s+/i, '').trim();
+    showToast('🔊 Administering: ' + item);
+    insertPBAction(item);
+    return true;
+  }
+
+  // EXAMINE — "examine the abdomen", "I want to examine..."
+  var examM = tl.match(/^(?:examine|i want to examine|i'?m examining|i am examining)\s+(.+)/);
+  if (examM) {
+    var item = examM[1].replace(/^(a|an|the)\s+/i, '').trim();
+    showToast('🔊 Examining: ' + item);
+    insertPBAction(item);
+    return true;
+  }
+
+  // DIAGNOSE — "my diagnosis is X", "I'm diagnosing X", "the diagnosis is X"
+  var dxM = tl.match(/^(?:i'?m diagnosing|i am diagnosing|my diagnosis is|the diagnosis is|i think it(?:'s| is))\s+(.+)/);
+  if (dxM) {
+    var dx = dxM[1].trim();
+    showToast('🔊 Diagnosing: ' + dx);
+    showDiagnoseModal();
+    setTimeout(function() {
+      var inp = document.getElementById('pb-diag-input');
+      if (inp) { inp.value = dx; inp.focus(); }
+    }, 200);
+    return true;
+  }
+
+  return false;
+}
+
+// Per-message replay (force-speak regardless of toggle)
+function replayMsg_(idx, mode) {
+  var content;
+  if (mode === 'dd')    content = (App.drDataHistory[idx] || {}).content;
+  else if (mode === 'house') content = (App.pbHouseConvHistory[idx] || {}).content;
+  else                  content = (App.pbHistory[idx] || {}).content;
+  if (!content) return;
+  if (mode === 'house') speakTextHouse_(content, true);
+  else speakText_(content, mode === 'pb' ? getPBVoiceParams_() : null, true);
 }
 
 // (English Coach mode removed)
@@ -6590,13 +6728,14 @@ function renderSearchResults(results, query) {
 
 function sendDrDataMessage() {
   var input = document.getElementById('drdata-input'); var message = input.value.trim(); if (!message) return;
+  try { window.speechSynthesis.cancel(); } catch(e) {}
   input.value = ''; App.drDataHistory.push({ role: 'user', content: message }); renderDrDataChat();
   var msgs = document.getElementById('drdata-messages');
   msgs.innerHTML += '<div class="chat-message assistant typing" id="dd-typing">Dr. Data is thinking...</div>';
   msgs.scrollTop = msgs.scrollHeight; input.disabled = true;
 
   serverCall('askDrData', DR_DATA_PERSONA_LOCK, App.drDataHistory.slice(-18)).then(function(result) {
-    removeEl('dd-typing'); App.drDataHistory.push({ role: 'assistant', content: result.response }); renderDrDataChat(); input.disabled = false; input.focus();
+    removeEl('dd-typing'); App.drDataHistory.push({ role: 'assistant', content: result.response }); renderDrDataChat(); ddSpeakLast_(); input.disabled = false; input.focus();
   }).catch(function(e) {
     removeEl('dd-typing'); App.drDataHistory.push({ role: 'assistant', content: 'Error: ' + (e.message || String(e)) }); renderDrDataChat(); input.disabled = false;
   });
@@ -6615,7 +6754,8 @@ function renderDrDataChat() {
     var m = App.drDataHistory[i];
     var msgHtml = m.role === 'assistant' ? formatMarkdown(m.content) : escapeHtml(m.content);
     var flagHtml = m.role === 'assistant' ? ' <button class="flag-btn" style="float:right;margin:4px 0 0 8px;font-size:10px;padding:2px 6px" onclick=\'openFlagModal({"type":"drdata","id":' + i + ',"content":' + JSON.stringify((m.content||'').substring(0,200)).replace(/'/g,"&#39;") + '})\'>&#x1F6A9;</button>' : '';
-    html += '<div class="chat-message ' + m.role + '">' + flagHtml + msgHtml + '</div>';
+    var speakBtn = m.role === 'assistant' ? '<button class="flag-btn" style="float:right;margin:4px 4px 0 0;font-size:11px;padding:2px 6px" onclick="replayMsg_(' + i + ',\'dd\')" title="Replay">&#x1F50A;</button>' : '';
+    html += '<div class="chat-message ' + m.role + '">' + speakBtn + flagHtml + msgHtml + '</div>';
   }
   el.innerHTML = html; el.scrollTop = el.scrollHeight;
 }
@@ -7068,6 +7208,7 @@ function startNextPBCase() {
 function sendPBMessage() {
   if (App.currentPage === 'house') { sendHouseMessage(); return; }
   var input = document.getElementById('pb-input'); var message = input.value.trim(); if (!message) return;
+  try { window.speechSynthesis.cancel(); } catch(e) {}
 
   // Intercept "answernow" — trigger debrief instead of sending to patient
   if (message.toLowerCase().replace(/\s/g, '') === 'answernow') {
@@ -7374,7 +7515,7 @@ function renderHouseChat() {
     if (m.role === 'user') {
       html += '<div class="chat-message user">' + escapeHtml(m.content) + '</div>';
     } else if (m.role === 'assistant') {
-      html += '<div class="chat-message assistant" style="border-left:3px solid #7c3aed;padding-left:12px"><button class="flag-btn" style="float:right;font-size:10px;padding:2px 6px;margin:0 0 4px 8px" onclick=\'openFlagModal({"type":"house","id":' + i + ',"content":' + JSON.stringify((m.content||'').substring(0,200)).replace(/'/g,"&#39;") + '})\'>&#x1F6A9;</button><strong>Dr. House:</strong> ' + formatMarkdown(m.content) + '</div>';
+      html += '<div class="chat-message assistant" style="border-left:3px solid #7c3aed;padding-left:12px"><button class="flag-btn" style="float:right;font-size:10px;padding:2px 6px;margin:0 0 4px 8px" onclick=\'openFlagModal({"type":"house","id":' + i + ',"content":' + JSON.stringify((m.content||'').substring(0,200)).replace(/'/g,"&#39;") + '})\'>&#x1F6A9;</button><button class="flag-btn" style="float:right;font-size:11px;padding:2px 6px;margin:0 4px 4px 0" onclick="replayMsg_(' + i + ',\'house\')" title="Replay">&#x1F50A;</button><strong>Dr. House:</strong> ' + formatMarkdown(m.content) + '</div>';
     } else if (m.role === 'typing') {
       html += '<div class="chat-message assistant typing" id="pb-typing">House is thinking... or ignoring you. Hard to tell.</div>';
     }
@@ -7383,8 +7524,9 @@ function renderHouseChat() {
   // Input area
   html += '<div class="chat-input-area">';
   html += '<button class="btn btn-warning pb-diagnose-btn" onclick="endHouseMode_()">Diagnose</button>';
-  html += '<textarea id="pb-input" placeholder="Describe your symptoms... or tap 🎤" rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendPBMessage()}"></textarea>';
+  html += '<textarea id="pb-input" placeholder="Describe your symptoms... or tap 🎤" rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendPBMessage()}" oninput="try{window.speechSynthesis.cancel()}catch(e){}"></textarea>';
   html += '<button class="btn btn-outline" id="pb-mic-btn" onclick="togglePBMic()" title="Voice input" style="font-size:18px;padding:0 10px">&#x1F3A4;</button>';
+  html += '<button class="btn btn-outline" id="house-tts-btn" onclick="toggleHouseTTS()" title="Read responses aloud" style="font-size:16px;padding:0 10px">' + (App.houseTTS ? '&#x1F50A;' : '&#x1F507;') + '</button>';
   html += '<button class="btn btn-primary" onclick="sendPBMessage()">Send</button>';
   html += '</div></div>';
   el.innerHTML = html;
@@ -7396,6 +7538,7 @@ function sendHouseMessage() {
   var input = document.getElementById('pb-input');
   var message = input ? input.value.trim() : '';
   if (!message) return;
+  try { window.speechSynthesis.cancel(); } catch(e) {}
   if (input) input.value = '';
   App.pbHouseConvHistory.push({ role: 'user', content: message });
   App.pbHouseScore.turns++;
@@ -7426,6 +7569,7 @@ function sendHouseMessage() {
     var response = result.response || result;
     App.pbHouseConvHistory.push({ role: 'assistant', content: response });
     renderHouseChat();
+    houseSpeakLast_();
   }).catch(function(e) {
     // Remove typing indicator — don't inject any hardcoded House dialogue
     App.pbHouseConvHistory = App.pbHouseConvHistory.filter(function(m) { return m.role !== 'typing'; });
@@ -8331,10 +8475,10 @@ function renderPBChatInner() {
       html += '<div class="chat-action-banner">';
       html += '<strong>' + escapeHtml(actionVerb) + ':</strong> ' + escapeHtml(actionText);
       html += '</div>';
+    } else if (m.role === 'assistant') {
+      html += '<div class="chat-message assistant"><button class="flag-btn" style="float:right;font-size:11px;padding:2px 6px;margin:0 0 4px 4px" onclick="replayMsg_(' + i + ',\'pb\')" title="Replay">&#x1F50A;</button>' + formatMarkdown(stripPatientJSON(m.content)) + '</div>';
     } else {
-      html += '<div class="chat-message ' + m.role + '">';
-      html += m.role === 'user' ? formatPBInput(m.content) : formatMarkdown(stripPatientJSON(m.content));
-      html += '</div>';
+      html += '<div class="chat-message ' + m.role + '">' + formatPBInput(m.content) + '</div>';
     }
   }
   html += '</div>';
@@ -8508,7 +8652,7 @@ function renderPBChatInner() {
     html += '</div>'; // close #pb-actions-wrapper
 
     html += '<div class="chat-input-area">';
-    html += '<textarea id="pb-input" placeholder="Talk to the patient... or tap 🎤" rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendPBMessage()}"></textarea>';
+    html += '<textarea id="pb-input" placeholder="Talk to the patient... or tap 🎤" rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendPBMessage()}" oninput="try{window.speechSynthesis.cancel()}catch(e){}"></textarea>';
     html += '<button class="btn btn-warning pb-diagnose-btn" onclick="showDiagnoseModal()">Diagnose</button>';
     html += '<button class="btn btn-outline" id="pb-mic-btn" onclick="togglePBMic()" title="Voice input" style="font-size:18px;padding:0 10px">&#x1F3A4;</button>';
     html += '<button class="btn btn-outline" id="pb-tts-btn" onclick="togglePBTTS()" title="Read responses aloud" style="font-size:16px;padding:0 10px">' + (App.pbTTS ? '&#x1F50A;' : '&#x1F507;') + '</button>';
