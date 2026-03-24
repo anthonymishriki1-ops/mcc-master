@@ -1124,29 +1124,6 @@ body.auto-translate .med-auto-trans { display:inline; }
   align-self: flex-start;
 }
 
-/* --- Diagrams --- */
-.diagram-chapters-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
-.diagram-chapter-card { cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
-.diagram-chapter-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-.diagram-chapter-card h4 { margin: 0 0 6px; font-size: 14px; }
-.diagram-count { font-size: 12px; color: var(--text-light); }
-
-.diagram-header { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
-.diagram-header h3 { margin: 0; flex: 1; }
-
-.diagram-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
-.diagram-thumb { cursor: pointer; border-radius: 8px; overflow: hidden; background: var(--card); box-shadow: 0 1px 4px rgba(0,0,0,0.08); transition: transform 0.15s; position: relative; }
-.diagram-thumb:hover { transform: translateY(-2px); }
-.diagram-thumb img { width: 100%; height: auto; display: block; }
-.diagram-page-label { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.6); color: white; font-size: 11px; text-align: center; padding: 4px; }
-
-.diagram-pagination { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 20px; }
-.diagram-page-info { font-size: 13px; color: var(--text-light); }
-
-.diagram-viewer-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; }
-.diagram-viewer { max-width: 95vw; max-height: 95vh; display: flex; flex-direction: column; }
-.diagram-viewer-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; color: white; }
-.diagram-viewer img { max-width: 100%; max-height: calc(95vh - 50px); object-fit: contain; border-radius: 4px; }
 
 /* --- Empty States --- */
 .empty-state {
@@ -1790,9 +1767,7 @@ body.kb-open #bottom-nav { display: none !important; }
     grid-template-columns: repeat(3, 1fr);
   }
 
-  .diagram-grid {
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  }
+
 
   .achievements-grid {
     grid-template-columns: repeat(4, 1fr);
@@ -2457,7 +2432,7 @@ body.kb-open #bottom-nav { display: none !important; }
       <li data-page="flashcards" onclick="navigateTo('flashcards')">&#x1F0CF; Flashcards</li>
       <li data-page="dontmiss" onclick="navigateTo('dontmiss')">&#x1F4CC; Key Topics</li>
       <li data-page="notes" onclick="navigateTo('notes')">&#x1F4DD; Notes</li>
-      <li data-page="diagrams" onclick="navigateTo('diagrams')">&#x1F5BC; Diagrams</li>
+
 
       <li class="nav-group-label">PRACTICE</li>
       <li data-page="quiz" onclick="navigateTo('quiz')">&#x1F4CB; Practice Quiz</li>
@@ -2672,11 +2647,7 @@ body.kb-open #bottom-nav { display: none !important; }
       </div>
     </div>
 
-    <!-- DIAGRAMS -->
-    <div id="page-diagrams" class="page">
-      <div class="page-header"><h2>Diagrams</h2></div>
-      <div id="diagrams-content"></div>
-    </div>
+
 
     <!-- LIBRARY -->
     <div id="page-library" class="page">
@@ -2883,10 +2854,7 @@ var App = {
   // Dr. Data
   drDataHistory: [],
 
-  // Diagrams
-  diagramChapters: null,
-  diagramCurrentSlug: null,
-  diagramPage: 1,
+
 
   // PatientBot
   pbCaseId: null,
@@ -3140,7 +3108,7 @@ function navigateTo(page) {
     case 'search': document.getElementById('search-input').focus(); break;
     case 'patientbot': if (!App.pbCaseId) showPatientBotSetup(); break;
     case 'house': showHouseSetup(); break;
-    case 'diagrams': if (!App.diagramChapters) loadDiagramChapters(); break;
+
     case 'leaderboard': loadLeaderboard(); break;
     case 'achievements': loadAchievements(); break;
     case 'devpanel': loadDevPanel(); break;
@@ -4189,7 +4157,7 @@ function init() {
       _p(serverCall('getDontMiss', 'All').then(function(data) { App.dontMissItems = data; })),
     ]).then(function() { App._preloadDone = true; });
     loadGlossary();
-    serverCall('getImageChapters').then(function(ch) { App.diagramChapters = ch; });
+
     return;
   }
 
@@ -6760,66 +6728,6 @@ function renderDrDataChat() {
   el.innerHTML = html; el.scrollTop = el.scrollHeight;
 }
 
-// =============================================
-// DIAGRAMS
-// =============================================
-
-function loadDiagramChapters() {
-  var el = document.getElementById('diagrams-content');
-  if (App.diagramChapters && App.diagramChapters.length > 0) {
-    renderDiagramChapters();
-    return;
-  }
-  el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
-  serverCall('getImageChapters').then(function(chapters) { App.diagramChapters = chapters; renderDiagramChapters(); })
-    .catch(function(e) { el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>'; });
-}
-
-function renderDiagramChapters() {
-  var el = document.getElementById('diagrams-content'); var chapters = App.diagramChapters;
-  if (!chapters || chapters.length === 0) { el.innerHTML = '<div class="card" style="text-align:center;padding:40px"><h3>No images found</h3></div>'; return; }
-  var html = '<div class="diagram-chapters-grid">';
-  for (var i = 0; i < chapters.length; i++) {
-    var c = chapters[i];
-    html += '<div class="diagram-chapter-card card" onclick="loadChapterDiagrams(\'' + escapeHtml(c.slug) + '\', \'' + escapeHtml(c.name) + '\')"><h4>' + escapeHtml(c.name) + '</h4><span class="diagram-count">' + c.count + ' pages</span></div>';
-  }
-  html += '</div>'; el.innerHTML = html;
-}
-
-function loadChapterDiagrams(slug, name, page) {
-  page = page || 1; App.diagramCurrentSlug = slug; App.diagramPage = page;
-  var el = document.getElementById('diagrams-content');
-  el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
-  serverCall('getChapterImages', slug, page, 20).then(function(result) { renderChapterDiagrams(name, result); })
-    .catch(function(e) { el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>'; });
-}
-
-function renderChapterDiagrams(name, result) {
-  var el = document.getElementById('diagrams-content'); var images = result.images; var total = result.total; var page = result.page; var totalPages = Math.ceil(total / result.pageSize);
-  var html = '<div class="diagram-header"><button class="btn btn-sm" onclick="renderDiagramChapters()">&larr; All Chapters</button><h3>' + escapeHtml(name) + '</h3><span class="diagram-count">' + total + ' pages</span></div>';
-  if (images.length === 0) { el.innerHTML = html + '<div class="card" style="text-align:center;padding:40px"><p>No images.</p></div>'; return; }
-  html += '<div class="diagram-grid">';
-  for (var i = 0; i < images.length; i++) {
-    var img = images[i];
-    html += '<div class="diagram-thumb" onclick="openDiagramViewer(\'' + escapeHtml(img.url) + '\', ' + img.pageNum + ')"><img src="' + escapeHtml(img.url) + '" alt="Page ' + img.pageNum + '" loading="lazy"><span class="diagram-page-label">Page ' + img.pageNum + '</span></div>';
-  }
-  html += '</div>';
-  if (totalPages > 1) {
-    html += '<div class="diagram-pagination">';
-    if (page > 1) html += '<button class="btn btn-sm" onclick="loadChapterDiagrams(\'' + escapeHtml(App.diagramCurrentSlug) + '\', \'' + escapeHtml(name) + '\', ' + (page - 1) + ')">Prev</button>';
-    html += '<span class="diagram-page-info">Page ' + page + ' of ' + totalPages + '</span>';
-    if (page < totalPages) html += '<button class="btn btn-sm" onclick="loadChapterDiagrams(\'' + escapeHtml(App.diagramCurrentSlug) + '\', \'' + escapeHtml(name) + '\', ' + (page + 1) + ')">Next</button>';
-    html += '</div>';
-  }
-  el.innerHTML = html;
-}
-
-function openDiagramViewer(url, pageNum) {
-  var overlay = document.createElement('div'); overlay.className = 'diagram-viewer-overlay';
-  overlay.onclick = function(e) { if (e.target === overlay) document.body.removeChild(overlay); };
-  overlay.innerHTML = '<div class="diagram-viewer"><div class="diagram-viewer-header"><span>Page ' + pageNum + '</span><button class="btn btn-sm" onclick="this.closest(\'.diagram-viewer-overlay\').remove()">Close</button></div><img src="' + url + '" alt="Page ' + pageNum + '"></div>';
-  document.body.appendChild(overlay);
-}
 
 // =============================================
 // PATIENTBOT
@@ -7526,9 +7434,7 @@ function renderHouseChat() {
   // Input area
   html += '<div class="chat-input-area">';
   html += '<button class="btn btn-warning pb-diagnose-btn" onclick="endHouseMode_()">Diagnose</button>';
-  html += '<textarea id="pb-input" placeholder="Describe your symptoms... or tap 🎤" rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendPBMessage()}" oninput="try{window.speechSynthesis.cancel()}catch(e){}"></textarea>';
-  html += '<button class="btn btn-outline" id="pb-mic-btn" onclick="togglePBMic()" title="Voice input" style="font-size:18px;padding:0 10px">&#x1F3A4;</button>';
-  html += '<button class="btn btn-outline" id="house-tts-btn" onclick="toggleHouseTTS()" title="Read responses aloud" style="font-size:16px;padding:0 10px">' + (App.houseTTS ? '&#x1F50A;' : '&#x1F507;') + '</button>';
+  html += '<textarea id="pb-input" placeholder="Describe your symptoms..." rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendPBMessage()}"></textarea>';
   html += '<button class="btn btn-primary" onclick="sendPBMessage()">Send</button>';
   html += '</div></div>';
   el.innerHTML = html;
@@ -7575,7 +7481,6 @@ function sendHouseMessage() {
     var response = result.response || result;
     App.pbHouseConvHistory.push({ role: 'assistant', content: response });
     renderHouseChat();
-    houseSpeakLast_();
   }).catch(function(e) {
     // Remove typing indicator — don't inject any hardcoded House dialogue
     App.pbHouseConvHistory = App.pbHouseConvHistory.filter(function(m) { return m.role !== 'typing'; });
