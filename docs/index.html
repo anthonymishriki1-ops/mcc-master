@@ -839,10 +839,10 @@ body.auto-translate .med-auto-trans { display:inline; }
   display: flex;
   flex-direction: column;
   height: calc(100vh - 160px);
+  height: calc(100dvh - 160px);
   background: var(--card);
   border-radius: 12px;
   overflow: hidden;
-  overflow-y: auto;
   box-shadow: var(--shadow);
 }
 
@@ -850,6 +850,7 @@ body.auto-translate .med-auto-trans { display:inline; }
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
   padding: 20px;
   max-width: 100%;
 }
@@ -1880,12 +1881,15 @@ body.kb-open #bottom-nav { display: none !important; }
 
   .chat-container {
     height: calc(100vh - 200px);
+    height: calc(100dvh - 200px);
     max-width: 100%;
   }
 
   .chat-messages {
     max-width: 100%;
     overflow-x: hidden;
+    overflow-y: scroll;
+    -webkit-overflow-scrolling: touch;
   }
 
   .chat-message {
