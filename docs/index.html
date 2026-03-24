@@ -7443,9 +7443,9 @@ function renderHouseChat() {
   html += '</div></div>';
   // Input area
   html += '<div class="chat-input-area">';
-  html += '<button class="btn btn-warning pb-diagnose-btn" onclick="endHouseMode_()">Diagnose</button>';
   html += '<textarea id="pb-input" placeholder="Describe your symptoms..." rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendPBMessage()}"></textarea>';
   html += '<button class="btn btn-primary" onclick="sendPBMessage()">Send</button>';
+  html += '<button class="btn btn-warning pb-diagnose-btn" onclick="endHouseMode_()">Diagnose</button>';
   html += '</div></div>';
   el.innerHTML = html;
   var msgs = document.getElementById('pb-messages');
@@ -8574,10 +8574,10 @@ function renderPBChatInner() {
 
     html += '<div class="chat-input-area">';
     html += '<textarea id="pb-input" placeholder="Talk to the patient... or tap 🎤" rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendPBMessage()}" oninput="try{window.speechSynthesis.cancel()}catch(e){}"></textarea>';
-    html += '<button class="btn btn-warning pb-diagnose-btn" onclick="showDiagnoseModal()">Diagnose</button>';
     html += '<button class="btn btn-outline" id="pb-mic-btn" onclick="togglePBMic()" title="Voice input" style="font-size:18px;padding:0 10px">&#x1F3A4;</button>';
     html += '<button class="btn btn-outline" id="pb-tts-btn" onclick="togglePBTTS()" title="Read responses aloud" style="font-size:16px;padding:0 10px">' + (App.pbTTS ? '&#x1F50A;' : '&#x1F507;') + '</button>';
     html += '<button class="btn btn-primary" onclick="sendPBMessage()">Send</button>';
+    html += '<button class="btn btn-warning pb-diagnose-btn" onclick="showDiagnoseModal()">Diagnose</button>';
     html += buildFlagButton({ type: 'patientbot', id: App.pbCaseIndex || 0, specialty: App.pbSpecialty || '', content: 'Case: ' + (App.pbSpecialty || 'Unknown') });
     html += '</div>';
   } else {
