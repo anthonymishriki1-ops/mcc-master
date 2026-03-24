@@ -7444,7 +7444,29 @@ function renderHouseChat() {
     } else if (m.role === 'assistant') {
       html += '<div class="chat-message assistant" style="border-left:3px solid #7c3aed;padding-left:12px"><button class="flag-btn" style="float:right;font-size:10px;padding:2px 6px;margin:0 0 4px 8px" onclick=\'openFlagModal({"type":"house","id":' + i + ',"content":' + JSON.stringify((m.content||'').substring(0,200)).replace(/'/g,"&#39;") + '})\'>&#x1F6A9;</button><button class="flag-btn" style="float:right;font-size:11px;padding:2px 6px;margin:0 4px 4px 0" onclick="replayMsg_(' + i + ',\'house\')" title="Replay">&#x1F50A;</button><strong>Dr. House:</strong> ' + formatMarkdown(m.content) + '</div>';
     } else if (m.role === 'typing') {
-      html += '<div class="chat-message assistant typing" id="pb-typing">House is thinking... or ignoring you. Hard to tell.</div>';
+      var houseThinking_ = [
+        'House is thinking... or ignoring you. Hard to tell.',
+        'House is staring at the whiteboard. There\'s nothing on it.',
+        'House is questioning your life choices.',
+        'House is already bored.',
+        'House is Googling something unrelated.',
+        'House is deciding whether you\'re worth the effort.',
+        'House is eating someone else\'s lunch.',
+        'House is considering early retirement.',
+        'House is judging your symptom description.',
+        'House is on his third coffee and still hates everyone.',
+        'House is doing Sudoku. You\'re not a priority.',
+        'House is rolling his eyes so hard it counts as cardio.',
+        'House is reconsidering medicine as a career.',
+        'House is thinking of an insult that doubles as a diagnosis.',
+        'House is somewhere between contempt and mild curiosity.',
+        'House hasn\'t moved. Neither has his expression.',
+        'House is pretending he didn\'t hear you.',
+        'House is making a theory. It probably involves lupus.',
+        'House is limping to the answer.',
+        'House already knows. He just wants to make you sweat.'
+      ];
+      html += '<div class="chat-message assistant typing" id="pb-typing">' + houseThinking_[Math.floor(Math.random() * houseThinking_.length)] + '</div>';
     }
   }
   html += '</div></div>';
