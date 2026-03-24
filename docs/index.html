@@ -147,7 +147,7 @@ body {
   background: #0f172a;
   color: white;
   position: fixed;
-  height: 100vh;
+  height: calc(100vh / var(--body-zoom, 1));
   overflow-y: auto;
   z-index: 150;
   transition: transform 0.3s ease;
@@ -3120,25 +3120,32 @@ function toggleSidebar() {
 }
 
 // ===== ZOOM CONTROLS =====
+function applyZoom_(pct) {
+  var factor = pct / 100;
+  var inv = 1 / factor;
+  document.body.style.zoom = factor.toString();
+  document.documentElement.style.setProperty('--body-zoom', factor);
+  var el = document.getElementById('zoom-level');
+  if (el) el.textContent = pct + '%';
+  // Keep fixed UI widgets visually the same size regardless of body zoom
+  ['zoom-controls', 'auto-translate-toggle'].forEach(function(id) {
+    var w = document.getElementById(id);
+    if (w) w.style.zoom = inv.toString();
+  });
+}
 function adjustZoom(delta) {
   var current = parseInt(localStorage.getItem('mcc_zoom') || '100');
   var next = Math.max(70, Math.min(150, current + delta));
   localStorage.setItem('mcc_zoom', next);
-  document.body.style.zoom = (next / 100).toString();
-  document.getElementById('zoom-level').textContent = next + '%';
+  applyZoom_(next);
 }
 function resetZoom() {
   localStorage.setItem('mcc_zoom', '100');
-  document.body.style.zoom = '1';
-  document.getElementById('zoom-level').textContent = '100%';
+  applyZoom_(100);
 }
 (function() {
   var saved = parseInt(localStorage.getItem('mcc_zoom') || '100');
-  if (saved !== 100) {
-    document.body.style.zoom = (saved / 100).toString();
-    var el = document.getElementById('zoom-level');
-    if (el) el.textContent = saved + '%';
-  }
+  applyZoom_(saved);
 })();
 
 function toggleDarkMode() {
