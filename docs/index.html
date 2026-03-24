@@ -3264,7 +3264,7 @@ var ALLOWED_NAMES = ['tony','roxana','soroosh','amin','noha','said','sarah'];
 // Aliases → canonical name (case-insensitive matching applied before ALLOWED_NAMES check)
 // 'admin' and 'dev' map to 'tony' so they get Tony's profile + auto-enable dev mode
 var NAME_ALIASES = { 'roxanna': 'roxana', 'admin': 'tony', 'dev': 'tony' };
-var DEV_USERS = ['tony'];
+var DEV_USERS = ['tony', 'admin'];
 
 // ---- API / Notification Config ----
 // CLAUDE_API_KEY removed — English Coach now routes through the same GAS backend as Dr. Data/PatientBot
@@ -7379,6 +7379,26 @@ function renderHouseBriefing() {
 
 function startHouseConversation_() {
   App.pbHouseConvHistory = [];
+  // House introduces himself with an opening line
+  var intros = [
+    "Sit down. Don't talk yet. Actually — go ahead. I'm already not listening.",
+    "You have 30 seconds to convince me you're not wasting my time. Starting... now. Actually, starting 10 seconds ago.",
+    "Great. Another patient who Googled their symptoms at 3 AM. Let me guess — it's cancer.",
+    "I was having a perfectly good day. Doing nothing. You ruined it.",
+    "Before you start — I already know what's wrong with you. Dehydration. There. Go home.",
+    "I don't care about your feelings. I barely care about your symptoms. But here we are.",
+    "You're here because you're worried, your doctor is worried, or your mom is worried. Two of those aren't my problem.",
+    "Welcome. That's the last nice thing I'll say to you.",
+    "The fact that you're walking tells me it's probably not urgent. But sure, let's hear it.",
+    "I had three clinic patients cancel today. You're the fourth's replacement. Don't make me wish you'd cancelled too.",
+    "Let me save you some time — it's not lupus. It's never lupus. Unless it is. What do you want?",
+    "Take a seat. Try not to touch anything. This office is the only place I have any control over.",
+    "Oh good, a new patient. I was running dangerously low on disappointment today.",
+    "My team thinks I should be nicer. My Vicodin says otherwise. What's wrong with you?",
+    "Clinic duty. My favorite punishment for the crime of being a doctor."
+  ];
+  var intro = intros[Math.floor(Math.random() * intros.length)];
+  App.pbHouseConvHistory.push({ role: 'assistant', content: intro });
   renderHouseChat();
 }
 
@@ -7401,6 +7421,12 @@ function buildHousePrompt_(cond, difficulty) {
     '"Everybody lies" — including this patient. He\'s already got a (wrong) diagnosis and he\'s barely listening.\n' +
     'He gets interested when something doesn\'t fit. He never shows it directly — shows it by asking sharper questions.\n' +
     'Never breaks character. Never says he\'s an AI. Never refuses to engage.\n\n' +
+    'ENDING THE CASE:\n' +
+    'When you\'ve heard enough symptoms and evidence to reach the CORRECT diagnosis, end the case dramatically. ' +
+    'Say what the real diagnosis is, in your classic House style — as if you just had a eureka moment. Include the tag [DIAGNOSED] at the very end of your message.\n' +
+    'If the patient is clearly making things up, contradicting themselves, or doesn\'t know their own condition, call them out harshly. Include the tag [BUSTED] at the very end.\n' +
+    'Only use these tags when you\'re SURE. Don\'t end prematurely.\n' +
+    'The actual diagnosis is: ' + cond.name + ' — but do NOT say the name until you\'re ready to end. Build up to it.\n\n' +
     'RULES:\n' +
     '- Ask ONE question per turn max\n' +
     '- No bullet points, no lists, no headers\n' +
@@ -7444,7 +7470,8 @@ function renderHouseChat() {
     if (m.role === 'user') {
       html += '<div class="chat-message user">' + escapeHtml(m.content) + '</div>';
     } else if (m.role === 'assistant') {
-      html += '<div class="chat-message assistant" style="border-left:3px solid #7c3aed;padding-left:12px"><button class="flag-btn" style="float:right;font-size:10px;padding:2px 6px;margin:0 0 4px 8px" onclick=\'openFlagModal({"type":"house","id":' + i + ',"content":' + JSON.stringify((m.content||'').substring(0,200)).replace(/'/g,"&#39;") + '})\'>&#x1F6A9;</button><button class="flag-btn" style="float:right;font-size:11px;padding:2px 6px;margin:0 4px 4px 0" onclick="replayMsg_(' + i + ',\'house\')" title="Replay">&#x1F50A;</button><strong>Dr. House:</strong> ' + formatMarkdown(m.content) + '</div>';
+      var houseFlagCtx = escapeHtml(JSON.stringify({type:'house',id:i,content:(m.content||'').substring(0,200)}));
+      html += '<div class="chat-message assistant" style="border-left:3px solid #7c3aed;padding-left:12px"><button class="flag-btn" style="float:right;font-size:10px;padding:2px 6px;margin:0 0 4px 8px" data-flag-context="' + houseFlagCtx + '" onclick="openFlagModal(JSON.parse(this.dataset.flagContext))">&#x1F6A9;</button><button class="flag-btn" style="float:right;font-size:11px;padding:2px 6px;margin:0 4px 4px 0" onclick="replayMsg_(' + i + ',\'house\')" title="Replay">&#x1F50A;</button><strong>Dr. House:</strong> ' + formatMarkdown(m.content) + '</div>';
     } else if (m.role === 'typing') {
       var houseThinking_ = [
         'House is thinking... or ignoring you. Hard to tell.',
@@ -7524,10 +7551,25 @@ function sendHouseMessage() {
   serverCallHouse_(sysPrompt, apiHistory).then(function(result) {
     App.pbHouseConvHistory = App.pbHouseConvHistory.filter(function(m) { return m.role !== 'typing'; });
     var response = result.response || result;
+    var diagnosed = response.indexOf('[DIAGNOSED]') !== -1;
+    var busted = response.indexOf('[BUSTED]') !== -1;
+    // Strip tags from displayed message
+    response = response.replace(/\[DIAGNOSED\]/g, '').replace(/\[BUSTED\]/g, '').trim();
     App.pbHouseConvHistory.push({ role: 'assistant', content: response });
-    renderHouseChat();
-    var inp = document.getElementById('pb-input'); if (inp) inp.disabled = false;
-    var btn = document.querySelector('#page-patientbot .btn-primary'); if (btn) btn.disabled = false;
+    if (diagnosed) {
+      App.pbHouseScore.houseDiagnosed = true;
+      renderHouseChat();
+      // House figured it out — brief pause then show results
+      setTimeout(function() { endHouseMode_(); }, 2500);
+    } else if (busted) {
+      App.pbHouseScore.houseBusted = true;
+      renderHouseChat();
+      setTimeout(function() { endHouseMode_(); }, 2500);
+    } else {
+      renderHouseChat();
+      var inp = document.getElementById('pb-input'); if (inp) inp.disabled = false;
+      var btn = document.querySelector('#page-patientbot .btn-primary'); if (btn) btn.disabled = false;
+    }
   }).catch(function(e) {
     App.pbHouseConvHistory = App.pbHouseConvHistory.filter(function(m) { return m.role !== 'typing'; });
     renderHouseChat();
@@ -7542,15 +7584,74 @@ function endHouseMode_() {
   var cond = App.pbHouseCase;
   var score = App.pbHouseScore;
   var total_symptoms = cond.symptoms.length;
+  var total_tests = cond.push_for.length;
   var sym_pct = total_symptoms > 0 ? Math.round((score.symptoms_mentioned / total_symptoms) * 100) : 0;
-  var grade = sym_pct >= 80 ? 'A' : sym_pct >= 65 ? 'B' : sym_pct >= 50 ? 'C' : sym_pct >= 35 ? 'D' : 'F';
-  var gradeColor = sym_pct >= 65 ? '#22c55e' : sym_pct >= 50 ? '#f59e0b' : '#ef4444';
+  var test_pct = total_tests > 0 ? Math.round((score.tests_pushed / total_tests) * 100) : 0;
+  var combined = Math.round((sym_pct * 0.6) + (test_pct * 0.4)); // weighted score
+  var grade = combined >= 80 ? 'A' : combined >= 65 ? 'B' : combined >= 50 ? 'C' : combined >= 35 ? 'D' : 'F';
+  var gradeColor = combined >= 65 ? '#22c55e' : combined >= 50 ? '#f59e0b' : '#ef4444';
+
+  // Fun titles based on performance
+  var titles = {
+    A: ['House Is Impressed (He Won\'t Admit It)', 'You Made House Order the Right Test', 'Diagnostic Royalty', 'House Muttered "Not Bad" Under His Breath'],
+    B: ['House Raised an Eyebrow', 'You Earned a Reluctant Head Nod', 'Almost Made House Think Twice'],
+    C: ['House Sent You for More Tests', 'Partial Credit (House Doesn\'t Believe In That)', 'You Survived the Sass'],
+    D: ['House Is Writing You Off', 'Prescribed Ibuprofen and Sent Home', 'House Changed the Subject'],
+    F: ['House Paged Someone Else', 'Diagnosis: Wasting House\'s Time', 'You Got the Dehydration Speech']
+  };
+  var titlePool = titles[grade] || titles.F;
+  var title = titlePool[Math.floor(Math.random() * titlePool.length)];
+  // Override title for special endings
+  if (score.houseDiagnosed) title = 'House Cracked It';
+  if (score.houseBusted) title = 'House Called Your Bluff';
+  var outcomeEmoji = score.houseDiagnosed ? '&#x1F4A1;' : score.houseBusted ? '&#x1F440;' : (grade === 'A' ? '&#x1F3C6;' : grade === 'B' ? '&#x1F44F;' : grade === 'C' ? '&#x1F914;' : '&#x1F644;');
+  var outcomeBadge = score.houseDiagnosed ? '<span style="background:#7c3aed;color:white;font-size:11px;padding:3px 10px;border-radius:20px;font-weight:700;letter-spacing:0.5px">HOUSE DIAGNOSED</span>'
+    : score.houseBusted ? '<span style="background:#ef4444;color:white;font-size:11px;padding:3px 10px;border-radius:20px;font-weight:700;letter-spacing:0.5px">BUSTED</span>'
+    : '<span style="background:var(--text-light);color:var(--card);font-size:11px;padding:3px 10px;border-radius:20px;font-weight:700;letter-spacing:0.5px">SESSION ENDED</span>';
+
+  // Sass level based on turns + difficulty
+  var sassLevel = Math.min(5, Math.floor(score.turns / 3) + (['hard','hardest'].indexOf(App.pbDifficulty) !== -1 ? 1 : 0));
+  var sassBars = '';
+  for (var si = 0; si < 5; si++) sassBars += '<span style="display:inline-block;width:20px;height:8px;border-radius:4px;margin:0 1px;background:' + (si < sassLevel ? '#7c3aed' : 'rgba(124,58,237,0.15)') + '"></span>';
+  var sassLabel = sassLevel >= 4 ? 'Maximum Contempt' : sassLevel >= 3 ? 'Peak House' : sassLevel >= 2 ? 'Mildly Irritated' : sassLevel >= 1 ? 'Tolerating You' : 'Barely Noticed You';
+
   var html = '<div style="max-width:640px;margin:0 auto;padding:20px">';
-  html += '<div class="card" style="padding:32px;text-align:center">';
-  html += '<h3 style="margin:0 0 8px">Session Complete</h3>';
-  html += '<p style="color:var(--text-light);font-size:14px;margin:0 0 24px">' + escapeHtml(cond.name) + '</p>';
-  html += '<div class="daily-card-score-ring"><div class="daily-card-score-number" style="color:' + gradeColor + '">' + grade + '</div><div class="daily-card-score-label">' + sym_pct + '%</div></div>';
-  html += '<p style="margin:16px 0;font-weight:700">' + score.symptoms_mentioned + '/' + total_symptoms + ' key symptoms mentioned &bull; ' + score.turns + ' turns</p>';
+  html += '<div class="card" style="padding:32px;text-align:center;overflow:hidden;position:relative">';
+  html += '<div style="position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,#7c3aed,#a855f7,#7c3aed)"></div>';
+  html += '<div style="font-size:48px;margin-bottom:8px">' + outcomeEmoji + '</div>';
+  html += outcomeBadge;
+  html += '<h3 style="margin:8px 0 4px;font-size:20px">' + escapeHtml(title) + '</h3>';
+  html += '<p style="color:var(--text-light);font-size:13px;margin:0 0 24px">' + escapeHtml(cond.name) + ' &bull; ' + escapeHtml(cond.spec) + '</p>';
+  html += '<div class="daily-card-score-ring"><div class="daily-card-score-number" style="color:' + gradeColor + '">' + grade + '</div><div class="daily-card-score-label">' + combined + '%</div></div>';
+
+  // Stats grid
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:20px 0;text-align:center">';
+  html += '<div style="background:rgba(99,102,241,0.06);border-radius:10px;padding:12px 8px"><div style="font-size:22px;font-weight:900;color:var(--text)">' + score.symptoms_mentioned + '/' + total_symptoms + '</div><div style="font-size:11px;color:var(--text-light);margin-top:2px">Symptoms</div></div>';
+  html += '<div style="background:rgba(99,102,241,0.06);border-radius:10px;padding:12px 8px"><div style="font-size:22px;font-weight:900;color:var(--text)">' + score.tests_pushed + '/' + total_tests + '</div><div style="font-size:11px;color:var(--text-light);margin-top:2px">Tests Pushed</div></div>';
+  html += '<div style="background:rgba(99,102,241,0.06);border-radius:10px;padding:12px 8px"><div style="font-size:22px;font-weight:900;color:var(--text)">' + score.turns + '</div><div style="font-size:11px;color:var(--text-light);margin-top:2px">Turns</div></div>';
+  html += '</div>';
+
+  // Sass-O-Meter
+  html += '<div style="background:rgba(124,58,237,0.06);border-radius:10px;padding:14px;margin:0 0 16px">';
+  html += '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;color:#7c3aed">Sass-O-Meter</div>';
+  html += '<div style="margin-bottom:4px">' + sassBars + '</div>';
+  html += '<div style="font-size:12px;color:var(--text-light)">' + sassLabel + '</div>';
+  html += '</div>';
+
+  // What you missed (if anything)
+  var missedSymptoms = cond.symptoms.filter(function(s, idx) { return score.clues_hit.indexOf(idx) === -1; });
+  var missedTests = cond.push_for.filter(function(t, idx) { return !score.tests_hit || score.tests_hit.indexOf(idx) === -1; });
+  if (missedSymptoms.length > 0 || missedTests.length > 0) {
+    html += '<div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:10px;padding:14px;margin:0 0 16px;text-align:left">';
+    html += '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;color:#ef4444">What You Missed</div>';
+    if (missedSymptoms.length > 0) {
+      html += '<div style="font-size:12px;color:var(--text-light);margin-bottom:4px"><strong>Symptoms:</strong> ' + missedSymptoms.map(function(s) { return escapeHtml(s); }).join(', ') + '</div>';
+    }
+    if (missedTests.length > 0) {
+      html += '<div style="font-size:12px;color:var(--text-light)"><strong>Tests:</strong> ' + missedTests.map(function(t) { return escapeHtml(t); }).join(', ') + '</div>';
+    }
+    html += '</div>';
+  }
   html += '<div style="background:rgba(99,102,241,0.08);border-radius:10px;padding:16px;text-align:left;margin:16px 0">';
   html += '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;opacity:0.6">Clinical Pearl</div>';
   html += '<span style="font-size:14px;line-height:1.6">' + escapeHtml(cond.clues.join(' ')) + '</span></div>';
@@ -9796,23 +9897,7 @@ document.addEventListener('keydown', function(e) {
   btn.className = 'changelog-btn';
   btn.innerHTML = '&#x1F4CB; v' + APP_VERSION;
   btn.title = 'View changelog & bug fixes';
-  var tapCount = 0; var tapTimer = null;
   btn.onclick = function(e) {
-    tapCount++;
-    clearTimeout(tapTimer);
-    tapTimer = setTimeout(function() { tapCount = 0; }, 2500);
-    if (tapCount >= 5) {
-      tapCount = 0;
-      // Enable dev mode for current user
-      var profile = sessionStorage.getItem('mcc_profile') || '';
-      if (DEV_USERS.indexOf(profile.toLowerCase()) === -1) {
-        DEV_USERS.push(profile.toLowerCase());
-      }
-      var devNav = document.getElementById('nav-dev');
-      if (devNav) devNav.style.display = '';
-      showToast('🛠️ Dev mode enabled');
-      return;
-    }
     showChangelogModal();
   };
   document.body.appendChild(btn);
@@ -9939,9 +10024,6 @@ function submitFlag() {
     console.error('Failed to save flag:', e);
   });
 }
-
-// Dev mode: load flagged issues
-function loadFlaggedIssues_() { loadDevFlags_(); }
 
 var _devFlagsCache = null;
 
