@@ -2447,7 +2447,7 @@ body.kb-open #bottom-nav { display: none !important; }
       <li data-page="leaderboard" onclick="navigateTo('leaderboard')">&#x1F3C6; Leaderboard</li>
       <li data-page="achievements" onclick="navigateTo('achievements')">&#x1F396; Achievements</li>
 
-      <li data-page="devpanel" onclick="navigateTo('devpanel')" id="nav-dev" style="display:none;border-top:1px solid rgba(255,255,255,0.1);margin-top:8px;color:#ff9800">&#x1F6E0; Dev Panel</li>
+      <li data-page="devpanel" onclick="navigateTo('devpanel')" id="nav-dev" style="display:none;border-top:1px solid rgba(255,255,255,0.1);margin-top:8px;color:#ff9800">&#x1F451; Master Control</li>
     </ul>
     <div class="sidebar-footer">
       <button class="dark-mode-toggle" onclick="toggleDarkMode()" id="dark-mode-btn" title="Toggle dark mode" style="margin-top:8px">&#x1F319; Dark Mode</button>
@@ -2763,7 +2763,7 @@ body.kb-open #bottom-nav { display: none !important; }
 
     <!-- DEV PANEL (admin only) -->
     <div id="page-devpanel" class="page">
-      <div class="page-header"><h2>&#x1F6E0; Dev Panel</h2></div>
+      <div class="page-header"><h2>&#x1F6E0; Master Control Panel</h2></div>
       <div id="devpanel-content"></div>
     </div>
 
@@ -7302,7 +7302,28 @@ function showHouseSetup() {
   };
   html += '<div style="font-size:12px;color:var(--text-light);padding:8px 4px;line-height:1.6">' + (diffDesc[diff] || '') + '</div>';
   html += '</div>';
-  html += '<button class="btn btn-primary" style="width:100%;padding:16px;font-size:17px;font-weight:800" onclick="startHouseMode()">&#x1F92F; See What House Has to Say</button>';
+
+  // Game mode selector
+  html += '<div class="card" style="padding:20px;margin-bottom:16px">';
+  html += '<div style="font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;color:var(--text-light)">Game Mode</div>';
+  var houseMode = App.houseGameMode || 'assigned';
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">';
+  html += '<button class="quiz-count-btn' + (houseMode==='assigned'?' active':'') + '" onclick="App.houseGameMode=\'assigned\';showHouseSetup()" style="flex:1;min-width:120px">&#x1F3B2; Random Case</button>';
+  html += '<button class="quiz-count-btn' + (houseMode==='freeplay'?' active':'') + '" onclick="App.houseGameMode=\'freeplay\';showHouseSetup()" style="flex:1;min-width:120px">&#x1F3AF; Free Play</button>';
+  html += '</div>';
+  if (houseMode === 'freeplay') {
+    html += '<div style="font-size:12px;color:var(--text-light);line-height:1.6;margin-bottom:12px">Pick any disease. Present it to House as the patient. He doesn\'t know what you have — his job is to figure it out. Your grade is based on how accurately you present the real clinical picture.</div>';
+    html += '<input id="house-freeplay-disease" type="text" placeholder="Type a disease (e.g. Addison Disease, PE, Malaria...)" value="' + escapeHtml(App.houseFreeplayDisease || '') + '" oninput="App.houseFreeplayDisease=this.value" style="width:100%;padding:12px 14px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:15px;font-family:inherit;box-sizing:border-box">';
+  } else {
+    html += '<div style="font-size:12px;color:var(--text-light);line-height:1.6">House assigns you a condition with a briefing. You play the patient and fight for the right tests.</div>';
+  }
+  html += '</div>';
+
+  if (houseMode === 'freeplay') {
+    html += '<button class="btn btn-primary" style="width:100%;padding:16px;font-size:17px;font-weight:800" onclick="startHouseFreePlay()">&#x1F3AF; Walk Into House\'s Office</button>';
+  } else {
+    html += '<button class="btn btn-primary" style="width:100%;padding:16px;font-size:17px;font-weight:800" onclick="startHouseMode()">&#x1F92F; See What House Has to Say</button>';
+  }
   html += '</div>';
   el.innerHTML = html;
 }
@@ -7318,6 +7339,28 @@ function startHouseMode() {
   App.pbHouseConvHistory = [];
   App.pbHouseScore = { symptoms_mentioned: 0, tests_pushed: 0, turns: 0, clues_hit: [] };
   renderHouseBriefing();
+}
+
+function startHouseFreePlay() {
+  var disease = (App.houseFreeplayDisease || '').trim();
+  if (!disease) { showToast('Enter a disease name first'); return; }
+  // Create a minimal "condition" object for free play — no symptoms/tests (House doesn't know)
+  App.pbHouseCase = {
+    id: 'freeplay',
+    level: 'freeplay',
+    name: disease,
+    spec: 'Free Play',
+    symptoms: [],
+    history: [],
+    push_for: [],
+    red_herrings: [],
+    clues: [],
+    freeplay: true
+  };
+  App.pbHouseConvHistory = [];
+  App.pbHouseScore = { symptoms_mentioned: 0, tests_pushed: 0, turns: 0, clues_hit: [], freeplay: true, chosenDisease: disease };
+  // Skip briefing — go straight to conversation
+  startHouseConversation_();
 }
 
 function renderHouseBriefing() {
@@ -7403,11 +7446,15 @@ function startHouseConversation_() {
 }
 
 function buildHousePrompt_(cond, difficulty) {
+  var turnCount = App.pbHouseScore ? App.pbHouseScore.turns : 0;
+  var urgencyNote = turnCount >= 12 ? '\n\nIMPORTANT: This case has gone on for ' + turnCount + ' turns. You MUST wrap it up NOW. Either diagnose or call BS. End the case this turn or next. No more questions.\n' :
+    turnCount >= 8 ? '\n\nNote: ' + turnCount + ' turns in. Start leaning toward a diagnosis if the symptoms are adding up.\n' : '';
+
   var diffInstructions = {
-    easy: 'You\'re mildly annoyed but not hostile. Let real interest slip through when symptoms get specific. Pivot to correct diagnosis in 5-7 exchanges.',
-    medium: 'You decided dehydration before they sat down. Mildly committed. Make them work for it. Pivot when symptoms become clinically undeniable — 8-12 exchanges.',
-    hard: 'You have a specific wrong diagnosis and you\'re arguing for it. Pivot only after 12+ exchanges of hard evidence.',
-    hardest: 'You\'re actively building the case FOR your wrong diagnosis with real clinical reasoning. Only a bulletproof symptom picture changes your mind — 15+ exchanges. When you finally pivot, own it, then immediately act like you got there yourself.'
+    easy: 'You\'re mildly annoyed but not hostile. Let real interest slip through when symptoms get specific. Pivot to correct diagnosis in 5-7 exchanges. After 8 turns, you MUST diagnose.',
+    medium: 'You decided dehydration before they sat down. Mildly committed. Make them work for it. Pivot when symptoms become clinically undeniable — 6-10 exchanges. After 12 turns, you MUST diagnose.',
+    hard: 'You have a specific wrong diagnosis and you\'re arguing for it. Pivot after 8-12 exchanges of hard evidence. After 14 turns, you MUST diagnose.',
+    hardest: 'You\'re actively building the case FOR your wrong diagnosis with real clinical reasoning. Only a bulletproof symptom picture changes your mind — 10-15 exchanges. After 16 turns, you MUST diagnose even if reluctantly.'
   };
 
   return 'You are Dr. Gregory House MD.\n\n' +
@@ -7421,12 +7468,14 @@ function buildHousePrompt_(cond, difficulty) {
     '"Everybody lies" — including this patient. He\'s already got a (wrong) diagnosis and he\'s barely listening.\n' +
     'He gets interested when something doesn\'t fit. He never shows it directly — shows it by asking sharper questions.\n' +
     'Never breaks character. Never says he\'s an AI. Never refuses to engage.\n\n' +
-    'ENDING THE CASE:\n' +
-    'When you\'ve heard enough symptoms and evidence to reach the CORRECT diagnosis, end the case dramatically. ' +
-    'Say what the real diagnosis is, in your classic House style — as if you just had a eureka moment. Include the tag [DIAGNOSED] at the very end of your message.\n' +
-    'If the patient is clearly making things up, contradicting themselves, or doesn\'t know their own condition, call them out harshly. Include the tag [BUSTED] at the very end.\n' +
-    'Only use these tags when you\'re SURE. Don\'t end prematurely.\n' +
-    'The actual diagnosis is: ' + cond.name + ' — but do NOT say the name until you\'re ready to end. Build up to it.\n\n' +
+    'ENDING THE CASE — THIS IS CRITICAL:\n' +
+    'When you\'ve gathered enough clinical evidence, end the case with your diagnosis. Say it dramatically, in classic House eureka style. You MUST include the exact tag [DIAGNOSED] at the very end of that message (after your dialogue). This tag triggers the game to end.\n' +
+    'If the patient contradicts themselves or clearly doesn\'t know their condition, call them out and include [BUSTED] at the very end.\n' +
+    'You MUST eventually end the case. Do NOT keep asking questions forever. After gathering 3-4 key symptoms, start forming your diagnosis. Games that go past 12 turns are too long.\n' +
+    (cond.freeplay ? 'You do NOT know what the patient has. This is FREE PLAY mode — the patient chose their own disease and is presenting it to you. Your job is to figure it out purely from their symptoms. When you think you know, announce your diagnosis dramatically. You are genuinely trying to solve this — no cheating.\n' :
+    cond.name ? ('The actual diagnosis is: ' + cond.name + ' — but do NOT say the name until you\'re ready to end. Build up to it.\n') :
+    'You do NOT know what the patient has. Figure it out from their symptoms. When you think you know, announce it dramatically.\n') +
+    urgencyNote + '\n' +
     'RULES:\n' +
     '- Ask ONE question per turn max\n' +
     '- No bullet points, no lists, no headers\n' +
@@ -7443,26 +7492,35 @@ function renderHouseChat() {
   var history = App.pbHouseConvHistory;
   var html = '<div style="max-width:700px;margin:0 auto">';
   // Header
-  html += '<div class="pb-top-bar"><div class="pb-top-left"><h3>&#x1F9E0; Dr. House Mode &mdash; ' + escapeHtml(cond.name) + '</h3></div>';
+  var isFreeplay = !!(cond.freeplay);
+  html += '<div class="pb-top-bar"><div class="pb-top-left"><h3>&#x1F9E0; ' + (isFreeplay ? 'Free Play &mdash; ???' : 'Dr. House Mode &mdash; ' + escapeHtml(cond.name)) + '</h3></div>';
   html += '<div class="pb-top-right"><span style="font-size:13px;color:var(--text-light)">Turn ' + App.pbHouseScore.turns + '</span>';
   html += '<button class="btn btn-sm btn-outline" onclick="endHouseMode_()" style="margin-left:8px">End Session</button></div></div>';
-  // Patient info reminder (collapsed) — content depends on difficulty
-  var _hDiff = App.pbDifficulty || 'medium';
-  html += '<div style="background:rgba(45,27,105,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:10px;margin:12px 16px;padding:10px 16px;font-size:12px;color:var(--text-light);cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'\':\'none\'">';
-  html += '&#x1F4CB; Your condition: <strong>' + escapeHtml(cond.name) + '</strong>';
-  if (_hDiff !== 'hardest') html += ' &mdash; tap to see your briefing';
-  html += '</div>';
-  html += '<div style="display:none;background:rgba(45,27,105,0.06);border-radius:10px;margin:-8px 16px 12px;padding:12px 16px;font-size:13px">';
-  if (_hDiff === 'hardest') {
-    html += '<em style="opacity:0.6">No hints. You\'re on your own.</em>';
-  } else if (_hDiff === 'hard') {
-    html += '<strong>Hints:</strong> ' + cond.symptoms.slice(0, 3).join(', ');
-  } else if (_hDiff === 'medium') {
-    html += '<strong>Symptoms:</strong> ' + cond.symptoms.join(', ');
+
+  if (isFreeplay) {
+    // Free play: show what YOU chose, but remind user House doesn't know
+    html += '<div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:10px;margin:12px 16px;padding:10px 16px;font-size:12px;color:var(--text-light)">';
+    html += '&#x1F3AF; <strong>Your disease:</strong> ' + escapeHtml(cond.name) + ' &mdash; House doesn\'t know. Present your symptoms accurately.';
+    html += '</div>';
   } else {
+    // Standard mode: patient info reminder (collapsed)
+    var _hDiff = App.pbDifficulty || 'medium';
+    html += '<div style="background:rgba(45,27,105,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:10px;margin:12px 16px;padding:10px 16px;font-size:12px;color:var(--text-light);cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'\':\'none\'">';
+    html += '&#x1F4CB; Your condition: <strong>' + escapeHtml(cond.name) + '</strong>';
+    if (_hDiff !== 'hardest') html += ' &mdash; tap to see your briefing';
+    html += '</div>';
+    html += '<div style="display:none;background:rgba(45,27,105,0.06);border-radius:10px;margin:-8px 16px 12px;padding:12px 16px;font-size:13px">';
+    if (_hDiff === 'hardest') {
+      html += '<em style="opacity:0.6">No hints. You\'re on your own.</em>';
+    } else if (_hDiff === 'hard') {
+      html += '<strong>Hints:</strong> ' + cond.symptoms.slice(0, 3).join(', ');
+    } else if (_hDiff === 'medium') {
+      html += '<strong>Symptoms:</strong> ' + cond.symptoms.join(', ');
+    } else {
     html += '<strong>Symptoms:</strong> ' + cond.symptoms.join(', ') + '<br><strong>History:</strong> ' + cond.history.join(', ') + '<br><strong>Push for:</strong> ' + cond.push_for.join(', ');
-  }
-  html += '</div>';
+    }
+    html += '</div>';
+  } // end standard mode briefing
   // Chat messages
   html += '<div class="chat-container"><div class="chat-messages" id="pb-messages" style="min-height:300px">';
   for (var i = 0; i < history.length; i++) {
@@ -7520,20 +7578,22 @@ function sendHouseMessage() {
   App.pbHouseConvHistory.push({ role: 'user', content: message });
   App.pbHouseScore.turns++;
   renderHouseChat();
-  // Score: check if key clues mentioned
+  // Score: check if key clues mentioned (skip for free play — no reference list)
   var cond = App.pbHouseCase;
-  var msgLower = message.toLowerCase();
-  for (var ci = 0; ci < cond.symptoms.length; ci++) {
-    var symptomWords = cond.symptoms[ci].toLowerCase().split(' ').slice(0, 2).join(' ');
-    if (msgLower.indexOf(symptomWords) !== -1 && App.pbHouseScore.clues_hit.indexOf(ci) === -1) {
-      App.pbHouseScore.clues_hit.push(ci); App.pbHouseScore.symptoms_mentioned++;
+  if (!cond.freeplay) {
+    var msgLower = message.toLowerCase();
+    for (var ci = 0; ci < cond.symptoms.length; ci++) {
+      var symptomWords = cond.symptoms[ci].toLowerCase().split(' ').slice(0, 2).join(' ');
+      if (msgLower.indexOf(symptomWords) !== -1 && App.pbHouseScore.clues_hit.indexOf(ci) === -1) {
+        App.pbHouseScore.clues_hit.push(ci); App.pbHouseScore.symptoms_mentioned++;
+      }
     }
-  }
-  if (!App.pbHouseScore.tests_hit) App.pbHouseScore.tests_hit = [];
-  for (var ti = 0; ti < cond.push_for.length; ti++) {
-    var testWord = cond.push_for[ti].toLowerCase().split(' ')[0];
-    if (msgLower.indexOf(testWord) !== -1 && App.pbHouseScore.tests_hit.indexOf(ti) === -1) {
-      App.pbHouseScore.tests_hit.push(ti); App.pbHouseScore.tests_pushed++;
+    if (!App.pbHouseScore.tests_hit) App.pbHouseScore.tests_hit = [];
+    for (var ti = 0; ti < cond.push_for.length; ti++) {
+      var testWord = cond.push_for[ti].toLowerCase().split(' ')[0];
+      if (msgLower.indexOf(testWord) !== -1 && App.pbHouseScore.tests_hit.indexOf(ti) === -1) {
+        App.pbHouseScore.tests_hit.push(ti); App.pbHouseScore.tests_pushed++;
+      }
     }
   }
   // Show typing indicator
@@ -7583,15 +7643,26 @@ function endHouseMode_() {
   var el = document.getElementById('house-content');
   var cond = App.pbHouseCase;
   var score = App.pbHouseScore;
-  var total_symptoms = cond.symptoms.length;
-  var total_tests = cond.push_for.length;
-  var sym_pct = total_symptoms > 0 ? Math.round((score.symptoms_mentioned / total_symptoms) * 100) : 0;
-  var test_pct = total_tests > 0 ? Math.round((score.tests_pushed / total_tests) * 100) : 0;
-  var combined = Math.round((sym_pct * 0.6) + (test_pct * 0.4)); // weighted score
-  var grade = combined >= 80 ? 'A' : combined >= 65 ? 'B' : combined >= 50 ? 'C' : combined >= 35 ? 'D' : 'F';
-  var gradeColor = combined >= 65 ? '#22c55e' : combined >= 50 ? '#f59e0b' : '#ef4444';
+  var isFreeplay = !!(cond.freeplay);
 
-  // Fun titles based on performance
+  // --- Scoring ---
+  var combined, grade, gradeColor;
+  if (isFreeplay) {
+    // Free play: grade comes from Dr. Data eval (placeholder until eval loads)
+    combined = -1; // will be set by Dr. Data
+    grade = '?';
+    gradeColor = '#7c3aed';
+  } else {
+    var total_symptoms = cond.symptoms.length;
+    var total_tests = cond.push_for.length;
+    var sym_pct = total_symptoms > 0 ? Math.round((score.symptoms_mentioned / total_symptoms) * 100) : 0;
+    var test_pct = total_tests > 0 ? Math.round((score.tests_pushed / total_tests) * 100) : 0;
+    combined = Math.round((sym_pct * 0.6) + (test_pct * 0.4));
+    grade = combined >= 80 ? 'A' : combined >= 65 ? 'B' : combined >= 50 ? 'C' : combined >= 35 ? 'D' : 'F';
+    gradeColor = combined >= 65 ? '#22c55e' : combined >= 50 ? '#f59e0b' : '#ef4444';
+  }
+
+  // Fun titles
   var titles = {
     A: ['House Is Impressed (He Won\'t Admit It)', 'You Made House Order the Right Test', 'Diagnostic Royalty', 'House Muttered "Not Bad" Under His Breath'],
     B: ['House Raised an Eyebrow', 'You Earned a Reluctant Head Nod', 'Almost Made House Think Twice'],
@@ -7599,17 +7670,17 @@ function endHouseMode_() {
     D: ['House Is Writing You Off', 'Prescribed Ibuprofen and Sent Home', 'House Changed the Subject'],
     F: ['House Paged Someone Else', 'Diagnosis: Wasting House\'s Time', 'You Got the Dehydration Speech']
   };
-  var titlePool = titles[grade] || titles.F;
+  var titlePool = titles[grade] || titles.B; // free play defaults to B pool
   var title = titlePool[Math.floor(Math.random() * titlePool.length)];
-  // Override title for special endings
-  if (score.houseDiagnosed) title = 'House Cracked It';
+  if (score.houseDiagnosed) title = isFreeplay ? 'House Figured You Out' : 'House Cracked It';
   if (score.houseBusted) title = 'House Called Your Bluff';
-  var outcomeEmoji = score.houseDiagnosed ? '&#x1F4A1;' : score.houseBusted ? '&#x1F440;' : (grade === 'A' ? '&#x1F3C6;' : grade === 'B' ? '&#x1F44F;' : grade === 'C' ? '&#x1F914;' : '&#x1F644;');
-  var outcomeBadge = score.houseDiagnosed ? '<span style="background:#7c3aed;color:white;font-size:11px;padding:3px 10px;border-radius:20px;font-weight:700;letter-spacing:0.5px">HOUSE DIAGNOSED</span>'
+  if (isFreeplay && !score.houseDiagnosed && !score.houseBusted) title = 'Session Complete';
+  var outcomeEmoji = score.houseDiagnosed ? '&#x1F4A1;' : score.houseBusted ? '&#x1F440;' : (isFreeplay ? '&#x1F3AF;' : (grade === 'A' ? '&#x1F3C6;' : grade === 'B' ? '&#x1F44F;' : grade === 'C' ? '&#x1F914;' : '&#x1F644;'));
+  var outcomeBadge = score.houseDiagnosed ? '<span style="background:#7c3aed;color:white;font-size:11px;padding:3px 10px;border-radius:20px;font-weight:700;letter-spacing:0.5px">' + (isFreeplay ? 'HOUSE FIGURED IT OUT' : 'HOUSE DIAGNOSED') + '</span>'
     : score.houseBusted ? '<span style="background:#ef4444;color:white;font-size:11px;padding:3px 10px;border-radius:20px;font-weight:700;letter-spacing:0.5px">BUSTED</span>'
-    : '<span style="background:var(--text-light);color:var(--card);font-size:11px;padding:3px 10px;border-radius:20px;font-weight:700;letter-spacing:0.5px">SESSION ENDED</span>';
+    : '<span style="background:var(--text-light);color:var(--card);font-size:11px;padding:3px 10px;border-radius:20px;font-weight:700;letter-spacing:0.5px">' + (isFreeplay ? 'FREE PLAY' : 'SESSION ENDED') + '</span>';
 
-  // Sass level based on turns + difficulty
+  // Sass level
   var sassLevel = Math.min(5, Math.floor(score.turns / 3) + (['hard','hardest'].indexOf(App.pbDifficulty) !== -1 ? 1 : 0));
   var sassBars = '';
   for (var si = 0; si < 5; si++) sassBars += '<span style="display:inline-block;width:20px;height:8px;border-radius:4px;margin:0 1px;background:' + (si < sassLevel ? '#7c3aed' : 'rgba(124,58,237,0.15)') + '"></span>';
@@ -7617,18 +7688,30 @@ function endHouseMode_() {
 
   var html = '<div style="max-width:640px;margin:0 auto;padding:20px">';
   html += '<div class="card" style="padding:32px;text-align:center;overflow:hidden;position:relative">';
-  html += '<div style="position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,#7c3aed,#a855f7,#7c3aed)"></div>';
+  html += '<div style="position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,' + (isFreeplay ? '#10b981,#059669,#10b981' : '#7c3aed,#a855f7,#7c3aed') + ')"></div>';
   html += '<div style="font-size:48px;margin-bottom:8px">' + outcomeEmoji + '</div>';
   html += outcomeBadge;
   html += '<h3 style="margin:8px 0 4px;font-size:20px">' + escapeHtml(title) + '</h3>';
-  html += '<p style="color:var(--text-light);font-size:13px;margin:0 0 24px">' + escapeHtml(cond.name) + ' &bull; ' + escapeHtml(cond.spec) + '</p>';
-  html += '<div class="daily-card-score-ring"><div class="daily-card-score-number" style="color:' + gradeColor + '">' + grade + '</div><div class="daily-card-score-label">' + combined + '%</div></div>';
+  html += '<p style="color:var(--text-light);font-size:13px;margin:0 0 24px">' + escapeHtml(cond.name) + (isFreeplay ? ' &bull; Free Play' : ' &bull; ' + escapeHtml(cond.spec)) + '</p>';
+
+  if (isFreeplay) {
+    // Free play: score ring shows "?" until Dr. Data grades it
+    html += '<div class="daily-card-score-ring" id="house-fp-score-ring"><div class="daily-card-score-number" style="color:#7c3aed">?</div><div class="daily-card-score-label">Grading...</div></div>';
+    html += '<p style="font-size:13px;color:var(--text-light);margin:8px 0 0">Dr. Data is grading your clinical accuracy...</p>';
+  } else {
+    html += '<div class="daily-card-score-ring"><div class="daily-card-score-number" style="color:' + gradeColor + '">' + grade + '</div><div class="daily-card-score-label">' + combined + '%</div></div>';
+  }
 
   // Stats grid
-  html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:20px 0;text-align:center">';
-  html += '<div style="background:rgba(99,102,241,0.06);border-radius:10px;padding:12px 8px"><div style="font-size:22px;font-weight:900;color:var(--text)">' + score.symptoms_mentioned + '/' + total_symptoms + '</div><div style="font-size:11px;color:var(--text-light);margin-top:2px">Symptoms</div></div>';
-  html += '<div style="background:rgba(99,102,241,0.06);border-radius:10px;padding:12px 8px"><div style="font-size:22px;font-weight:900;color:var(--text)">' + score.tests_pushed + '/' + total_tests + '</div><div style="font-size:11px;color:var(--text-light);margin-top:2px">Tests Pushed</div></div>';
+  html += '<div style="display:grid;grid-template-columns:' + (isFreeplay ? '1fr 1fr' : '1fr 1fr 1fr') + ';gap:12px;margin:20px 0;text-align:center">';
+  if (!isFreeplay) {
+    html += '<div style="background:rgba(99,102,241,0.06);border-radius:10px;padding:12px 8px"><div style="font-size:22px;font-weight:900;color:var(--text)">' + score.symptoms_mentioned + '/' + cond.symptoms.length + '</div><div style="font-size:11px;color:var(--text-light);margin-top:2px">Symptoms</div></div>';
+    html += '<div style="background:rgba(99,102,241,0.06);border-radius:10px;padding:12px 8px"><div style="font-size:22px;font-weight:900;color:var(--text)">' + score.tests_pushed + '/' + cond.push_for.length + '</div><div style="font-size:11px;color:var(--text-light);margin-top:2px">Tests Pushed</div></div>';
+  }
   html += '<div style="background:rgba(99,102,241,0.06);border-radius:10px;padding:12px 8px"><div style="font-size:22px;font-weight:900;color:var(--text)">' + score.turns + '</div><div style="font-size:11px;color:var(--text-light);margin-top:2px">Turns</div></div>';
+  if (isFreeplay) {
+    html += '<div style="background:rgba(99,102,241,0.06);border-radius:10px;padding:12px 8px"><div style="font-size:22px;font-weight:900;color:var(--text)">' + (score.houseDiagnosed ? 'Yes' : 'No') + '</div><div style="font-size:11px;color:var(--text-light);margin-top:2px">House Got It?</div></div>';
+  }
   html += '</div>';
 
   // Sass-O-Meter
@@ -7638,26 +7721,31 @@ function endHouseMode_() {
   html += '<div style="font-size:12px;color:var(--text-light)">' + sassLabel + '</div>';
   html += '</div>';
 
-  // What you missed (if anything)
-  var missedSymptoms = cond.symptoms.filter(function(s, idx) { return score.clues_hit.indexOf(idx) === -1; });
-  var missedTests = cond.push_for.filter(function(t, idx) { return !score.tests_hit || score.tests_hit.indexOf(idx) === -1; });
-  if (missedSymptoms.length > 0 || missedTests.length > 0) {
-    html += '<div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:10px;padding:14px;margin:0 0 16px;text-align:left">';
-    html += '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;color:#ef4444">What You Missed</div>';
-    if (missedSymptoms.length > 0) {
-      html += '<div style="font-size:12px;color:var(--text-light);margin-bottom:4px"><strong>Symptoms:</strong> ' + missedSymptoms.map(function(s) { return escapeHtml(s); }).join(', ') + '</div>';
+  // What you missed (standard mode only)
+  if (!isFreeplay) {
+    var missedSymptoms = cond.symptoms.filter(function(s, idx) { return score.clues_hit.indexOf(idx) === -1; });
+    var missedTests = cond.push_for.filter(function(t, idx) { return !score.tests_hit || score.tests_hit.indexOf(idx) === -1; });
+    if (missedSymptoms.length > 0 || missedTests.length > 0) {
+      html += '<div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:10px;padding:14px;margin:0 0 16px;text-align:left">';
+      html += '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;color:#ef4444">What You Missed</div>';
+      if (missedSymptoms.length > 0) {
+        html += '<div style="font-size:12px;color:var(--text-light);margin-bottom:4px"><strong>Symptoms:</strong> ' + missedSymptoms.map(function(s) { return escapeHtml(s); }).join(', ') + '</div>';
+      }
+      if (missedTests.length > 0) {
+        html += '<div style="font-size:12px;color:var(--text-light)"><strong>Tests:</strong> ' + missedTests.map(function(t) { return escapeHtml(t); }).join(', ') + '</div>';
+      }
+      html += '</div>';
     }
-    if (missedTests.length > 0) {
-      html += '<div style="font-size:12px;color:var(--text-light)"><strong>Tests:</strong> ' + missedTests.map(function(t) { return escapeHtml(t); }).join(', ') + '</div>';
+    if (cond.clues && cond.clues.length > 0) {
+      html += '<div style="background:rgba(99,102,241,0.08);border-radius:10px;padding:16px;text-align:left;margin:0 0 16px">';
+      html += '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;opacity:0.6">Clinical Pearl</div>';
+      html += '<span style="font-size:14px;line-height:1.6">' + escapeHtml(cond.clues.join(' ')) + '</span></div>';
     }
-    html += '</div>';
   }
-  html += '<div style="background:rgba(99,102,241,0.08);border-radius:10px;padding:16px;text-align:left;margin:16px 0">';
-  html += '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;opacity:0.6">Clinical Pearl</div>';
-  html += '<span style="font-size:14px;line-height:1.6">' + escapeHtml(cond.clues.join(' ')) + '</span></div>';
+
   html += '<div style="display:flex;gap:12px;justify-content:center;margin-top:20px;flex-wrap:wrap">';
-  html += '<button class="btn btn-primary" onclick="startHouseMode()" style="padding:12px 24px">&#x1F504; Play Again</button>';
-  html += '<button class="btn btn-outline" onclick="showHouseSetup()">&#x2190; Change Difficulty</button>';
+  html += '<button class="btn btn-primary" onclick="' + (isFreeplay ? 'showHouseSetup()' : 'startHouseMode()') + '" style="padding:12px 24px">&#x1F504; Play Again</button>';
+  html += '<button class="btn btn-outline" onclick="showHouseSetup()">&#x2190; Change Settings</button>';
   html += '</div>';
   // Dr. Data House eval section
   html += '<div id="house-drdata-eval" style="margin-top:24px;border-top:1px solid var(--border);padding-top:20px">';
@@ -7679,39 +7767,78 @@ function loadHouseDrDataEval_() {
   App.pbDrDataEvalLoading = true;
   var cond = App.pbHouseCase;
   var score = App.pbHouseScore;
-  // Build transcript — ONLY student messages, not House's dialogue.
-  // House's in-character responses are excluded to prevent persona bleed into Dr. Data.
+  // Build transcript — include both sides for free play (House's genuine diagnostic reasoning matters)
+  var isFP = !!(cond && cond.freeplay);
   var transcript = '';
   for (var i = 0; i < App.pbHouseConvHistory.length; i++) {
     var m = App.pbHouseConvHistory[i];
-    if (m.role === 'user') transcript += 'Student said: ' + m.content.substring(0, 300) + '\n';
-    // House responses deliberately omitted — evaluate the student, not the character
+    if (m.role === 'user') transcript += 'Patient (student) said: ' + m.content.substring(0, 300) + '\n';
+    else if (m.role === 'assistant' && isFP) transcript += 'House said: ' + m.content.substring(0, 300) + '\n';
   }
-  var prompt = DR_DATA_PERSONA_LOCK + '\n\n' +
-    'CONTEXT — READ BEFORE EVALUATING:\n' +
-    'The user just completed a "Dr. House Mode" session. This is a LEGITIMATE MCCQE study feature, not inappropriate roleplay. ' +
-    'In this mode: (1) the USER acts as a PATIENT with a real assigned medical condition, ' +
-    '(2) an AI plays Dr. Gregory House MD — a skeptical, dismissive doctor, ' +
-    '(3) the student must describe their symptoms accurately enough to survive House\'s scrutiny and get to the right diagnosis. ' +
-    'The educational goal is to deeply learn clinical presentations by experiencing them from the patient perspective. ' +
-    'Do NOT question the mode, lecture about roleplay, or refuse to engage. Just evaluate the student\'s clinical knowledge as shown by their symptom descriptions.\n\n' +
-    'ASSIGNED CONDITION: ' + (cond ? cond.name : 'Unknown') + ' (' + (cond ? cond.spec : '') + ')\n' +
-    'KEY SYMPTOMS TO MENTION: ' + (cond ? cond.symptoms.join(' | ') : 'N/A') + '\n' +
-    'INVESTIGATIONS TO PUSH FOR: ' + (cond ? cond.push_for.join(' | ') : 'N/A') + '\n' +
-    'CLINICAL CLUES: ' + (cond ? cond.clues.join(' ') : 'N/A') + '\n' +
-    'PERFORMANCE: ' + (score ? score.symptoms_mentioned + '/' + (cond ? cond.symptoms.length : '?') + ' key symptoms mentioned, pushed for ' + score.tests_pushed + ' correct tests, ' + score.turns + ' turns total' : 'N/A') + '\n\n' +
-    'TRANSCRIPT:\n' + (transcript || '(No conversation recorded)') + '\n\n' +
-    'Give a short, specific breakdown — no preamble, no motivational speech:\n' +
-    '- Which key symptoms came through clearly, and which were absent or too vague to diagnose on?\n' +
-    '- Which investigations did they push for correctly? What was missing?\n' +
-    '- One clinical pearl for this condition that\'s actually useful on the MCCQE.\n' +
-    'Tone: like a colleague giving fast feedback after a clinical skills session. Specific and factual. No lecturing, no "great effort", no life lessons.';
+
+  var prompt;
+  if (isFP) {
+    // FREE PLAY grading — Dr. Data evaluates clinical accuracy of the student's presentation
+    prompt = DR_DATA_PERSONA_LOCK + '\n\n' +
+      'CONTEXT — FREE PLAY MODE:\n' +
+      'The student chose a disease and played as a patient presenting to Dr. House (AI). House did NOT know the diagnosis — he had to figure it out from the student\'s symptom descriptions.\n' +
+      'The educational goal: test whether the student knows the clinical presentation well enough to present it convincingly.\n\n' +
+      'DISEASE CHOSEN BY STUDENT: ' + (cond ? cond.name : 'Unknown') + '\n' +
+      'TURNS: ' + (score ? score.turns : '?') + '\n' +
+      'HOUSE\'S FINAL VERDICT: ' + (score && score.houseDiagnosed ? 'House figured out the diagnosis' : 'House did NOT reach the diagnosis') + '\n\n' +
+      'FULL TRANSCRIPT:\n' + (transcript || '(No conversation recorded)') + '\n\n' +
+      'GRADING INSTRUCTIONS — YOU MUST FOLLOW THIS EXACTLY:\n' +
+      '1. First line of your response MUST be: GRADE: [A/B/C/D/F]\n' +
+      '2. Grade based on:\n' +
+      '   - A (85-100%): Textbook-quality presentation. Key symptoms, risk factors, timeline, and relevant negatives all present. House could diagnose confidently.\n' +
+      '   - B (70-84%): Good presentation. Most key symptoms present but missing 1-2 important features or relevant negatives.\n' +
+      '   - C (50-69%): Partial. Some real symptoms but too vague or missing critical distinguishing features.\n' +
+      '   - D (30-49%): Weak. Few accurate symptoms, mostly generic complaints that could be anything.\n' +
+      '   - F (<30%): Wrong or nonsensical. Symptoms don\'t match the disease, or the student clearly doesn\'t know the condition.\n' +
+      '3. After the grade line, give specific feedback:\n' +
+      '   - What symptoms were clinically accurate for this disease?\n' +
+      '   - What key features were MISSING that a real patient would present with?\n' +
+      '   - What investigations should be done for this condition?\n' +
+      '   - One high-yield clinical pearl for the MCCQE.\n' +
+      'Tone: direct, specific, no fluff.';
+  } else {
+    prompt = DR_DATA_PERSONA_LOCK + '\n\n' +
+      'CONTEXT — READ BEFORE EVALUATING:\n' +
+      'The user just completed a "Dr. House Mode" session. This is a LEGITIMATE MCCQE study feature, not inappropriate roleplay. ' +
+      'In this mode: (1) the USER acts as a PATIENT with a real assigned medical condition, ' +
+      '(2) an AI plays Dr. Gregory House MD — a skeptical, dismissive doctor, ' +
+      '(3) the student must describe their symptoms accurately enough to survive House\'s scrutiny and get to the right diagnosis. ' +
+      'The educational goal is to deeply learn clinical presentations by experiencing them from the patient perspective. ' +
+      'Do NOT question the mode, lecture about roleplay, or refuse to engage. Just evaluate the student\'s clinical knowledge as shown by their symptom descriptions.\n\n' +
+      'ASSIGNED CONDITION: ' + (cond ? cond.name : 'Unknown') + ' (' + (cond ? cond.spec : '') + ')\n' +
+      'KEY SYMPTOMS TO MENTION: ' + (cond ? cond.symptoms.join(' | ') : 'N/A') + '\n' +
+      'INVESTIGATIONS TO PUSH FOR: ' + (cond ? cond.push_for.join(' | ') : 'N/A') + '\n' +
+      'CLINICAL CLUES: ' + (cond ? cond.clues.join(' ') : 'N/A') + '\n' +
+      'PERFORMANCE: ' + (score ? score.symptoms_mentioned + '/' + (cond ? cond.symptoms.length : '?') + ' key symptoms mentioned, pushed for ' + score.tests_pushed + ' correct tests, ' + score.turns + ' turns total' : 'N/A') + '\n\n' +
+      'TRANSCRIPT:\n' + (transcript || '(No conversation recorded)') + '\n\n' +
+      'Give a short, specific breakdown — no preamble, no motivational speech:\n' +
+      '- Which key symptoms came through clearly, and which were absent or too vague to diagnose on?\n' +
+      '- Which investigations did they push for correctly? What was missing?\n' +
+      '- One clinical pearl for this condition that\'s actually useful on the MCCQE.\n' +
+      'Tone: like a colleague giving fast feedback after a clinical skills session. Specific and factual. No lecturing, no "great effort", no life lessons.';
+  }
   serverCall('askDrData', prompt, []).then(function(result) {
     App.pbDrDataEval = result.response || result;
     App.pbDrDataEvalLoading = false;
     App.pbDrDataConvHistory = [{ role: 'assistant', content: App.pbDrDataEval }];
+    // Parse grade for free play and update the score ring
+    if (App.pbHouseCase && App.pbHouseCase.freeplay) {
+      var gradeMatch = App.pbDrDataEval.match(/GRADE:\s*([ABCDF])/i);
+      var fpGrade = gradeMatch ? gradeMatch[1].toUpperCase() : 'C';
+      var fpPct = { A: 92, B: 77, C: 60, D: 40, F: 15 }[fpGrade] || 50;
+      var fpColor = fpPct >= 70 ? '#22c55e' : fpPct >= 50 ? '#f59e0b' : '#ef4444';
+      var ring = document.getElementById('house-fp-score-ring');
+      if (ring) ring.innerHTML = '<div class="daily-card-score-number" style="color:' + fpColor + '">' + fpGrade + '</div><div class="daily-card-score-label">' + fpPct + '%</div>';
+    }
     var body = document.getElementById('house-drdata-body');
-    if (body) body.innerHTML = '<div style="color:var(--text);line-height:1.7">' + formatMarkdown(App.pbDrDataEval) + '</div>' +
+    // Strip the GRADE: line from display (it's shown in the ring)
+    var evalDisplay = App.pbDrDataEval.replace(/^GRADE:\s*[ABCDF]\s*\n?/i, '');
+    if (body) body.innerHTML = '<div style="color:var(--text);line-height:1.7">' + formatMarkdown(evalDisplay) + '</div>' +
       '<div style="margin-top:14px;display:flex;gap:8px">' +
       '<input id="house-drdata-input" placeholder="Ask Dr. Data about this condition..." style="flex:1;padding:8px 12px;border-radius:10px;border:1.5px solid var(--border);background:var(--card);color:var(--text);font-size:14px;font-family:inherit" onkeydown="if(event.key===\'Enter\')sendHouseDrDataMessage()">' +
       '<button class="btn btn-primary btn-sm" onclick="sendHouseDrDataMessage()">Ask</button></div>';
