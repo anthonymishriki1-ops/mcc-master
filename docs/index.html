@@ -6758,7 +6758,7 @@ function stripPatientJSON(text) {
 
 function showPBTutorial(onDone) {
   var steps = [
-    { title: 'Welcome to PatientBot', text: 'PatientBot is a clinical simulator where you practice real patient encounters. Each case is built from actual MCCQE clinical presentations with accurate vitals, labs, imaging, and physical exam findings.' },
+    { title: 'Welcome to PatientBot', text: 'PatientBot is a clinical simulator where you practice real patient encounters. Each case is built from actual NAC clinical presentations with accurate vitals, labs, imaging, and physical exam findings.' },
     { title: 'Talk to the Patient', text: 'Type naturally like a real encounter. Ask about symptoms, history, medications. Try: <strong>"Any chest pain?"</strong> or <strong>"Tell me about your symptoms."</strong> The patient responds based on the underlying diagnosis.' },
     { title: 'Physical Exam', text: 'Examine the patient by wrapping actions in asterisks: <strong>*palpate abdomen*</strong>, <strong>*auscultate lungs*</strong>, <strong>*check pupil reflexes*</strong>. Findings are consistent with the real diagnosis.' },
     { title: 'Action Palette', text: 'Use the colored buttons at the bottom to browse <strong>200+ medications</strong>, <strong>procedures</strong>, <strong>labs & imaging</strong>, <strong>equipment</strong>, and more. Tap any action to send it. You can also search within the palette.' },
@@ -6835,7 +6835,7 @@ function showPatientBotSetup() {
 
   html += '<div class="form-group" style="text-align:left"><label>Mode</label>';
   html += '<select id="pb-specialty" style="width:100%">';
-  html += '<option value="Random">&#x1F3AF; MCCQE Exam Mode (Random Presentation)</option>';
+  html += '<option value="Random">&#x1F3AF; NAC Exam Mode (Random Presentation)</option>';
   html += '<option value="house">&#x1F9E0; Dr. House Mode — You Are the Patient</option>';
   html += '<optgroup label="By Specialty">';
   var groupedSpecs = ['Cardiology','Respirology','GI / Hepatology','Neurology','Psychiatry','MSK / Rheumatology','Nephrology / Urology','Endocrinology','Hematology / Oncology','Dermatology','OB/GYN','Pediatrics','Emergency Medicine','Infectious Disease','Surgery','Ophthalmology / ENT','Family Medicine'];
@@ -6849,7 +6849,7 @@ function showPatientBotSetup() {
   html += '<div class="form-group" style="text-align:left"><label>Difficulty</label>';
   html += '<div class="quiz-count-btns">';
   html += '<button class="quiz-count-btn" onclick="setPBDiff(\'easy\',this)">Easy</button>';
-  html += '<button class="quiz-count-btn active" onclick="setPBDiff(\'medium\',this)">MCCQE &#x2705;</button>';
+  html += '<button class="quiz-count-btn active" onclick="setPBDiff(\'medium\',this)">NAC &#x2705;</button>';
   html += '<button class="quiz-count-btn" onclick="setPBDiff(\'hard\',this)">Hard</button>';
   html += '<button class="quiz-count-btn" onclick="setPBDiff(\'hardest\',this)">Expert</button>';
   html += '</div></div>';
@@ -7443,9 +7443,9 @@ function renderHouseChat() {
   html += '</div></div>';
   // Input area
   html += '<div class="chat-input-area">';
+  html += '<button class="btn btn-warning pb-diagnose-btn" onclick="endHouseMode_()">Diagnose</button>';
   html += '<textarea id="pb-input" placeholder="Describe your symptoms..." rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendPBMessage()}"></textarea>';
   html += '<button class="btn btn-primary" onclick="sendPBMessage()">Send</button>';
-  html += '<button class="btn btn-warning pb-diagnose-btn" onclick="endHouseMode_()">Diagnose</button>';
   html += '</div></div>';
   el.innerHTML = html;
   var msgs = document.getElementById('pb-messages');
@@ -8261,9 +8261,9 @@ function renderPBChatInner() {
 
     // Bedside monitor — only shown after user attaches it
     if (!App.pbMonitorAttached) {
-      html += '<div style="background:rgba(0,0,0,0.55);color:#888;text-align:center;padding:8px 16px;font-size:12px;letter-spacing:0.5px;display:flex;align-items:center;justify-content:center;gap:10px">';
-      html += '<span style="font-family:monospace">NO MONITOR ATTACHED</span>';
-      html += '<button onclick="attachPBMonitor_()" style="padding:4px 12px;font-size:11px;background:rgba(255,255,255,0.1);color:#aaa;border:1px solid rgba(255,255,255,0.25);border-radius:6px;cursor:pointer;font-weight:600">+ Attach Monitor</button>';
+      html += '<div style="background:rgba(0,0,0,0.7);text-align:center;padding:10px 16px;display:flex;align-items:center;justify-content:center;gap:12px">';
+      html += '<span style="font-family:monospace;font-size:11px;color:#666;letter-spacing:0.5px">NO MONITOR ATTACHED</span>';
+      html += '<button onclick="attachPBMonitor_()" style="padding:6px 16px;font-size:12px;background:#16a34a;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;letter-spacing:0.3px">&#x1F4C8; Attach Monitor</button>';
       html += '</div>';
     } else {
       var vd = VitalsEngine._display;
@@ -8671,7 +8671,7 @@ function renderPBChatInner() {
 
       if (sc.examTip) {
         html += '<div style="margin-top:20px;padding:16px 20px;background:rgba(99,102,241,0.08);border:1px solid var(--accent);border-radius:12px">';
-        html += '<strong style="color:var(--accent)">&#x1F4A1; MCCQE Tip:</strong> ';
+        html += '<strong style="color:var(--accent)">&#x1F4A1; NAC Tip:</strong> ';
         html += '<span style="font-size:14px">' + escapeHtml(sc.examTip) + '</span>';
         html += '</div>';
       }

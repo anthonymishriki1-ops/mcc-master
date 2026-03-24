@@ -61,7 +61,9 @@ function doGet(e) {
         'reportIssue': reportIssue,
         'getFlaggedIssues': getFlaggedIssues,
         'updateIssueStatus': updateIssueStatus,
-        'getDevStats': getDevStats
+        'getDevStats': getDevStats,
+        'generateCaseDebrief': generateCaseDebrief,
+        'getPBCaseLibrary': getPBCaseLibrary
       };
       if (!allowed[fn]) {
         return ContentService.createTextOutput(JSON.stringify({ error: 'Function not allowed: ' + fn }))
@@ -175,7 +177,9 @@ function doPost(e) {
       'reportIssue': reportIssue,
       'getFlaggedIssues': getFlaggedIssues,
       'updateIssueStatus': updateIssueStatus,
-      'getDevStats': getDevStats
+      'getDevStats': getDevStats,
+      'generateCaseDebrief': generateCaseDebrief,
+      'getPBCaseLibrary': getPBCaseLibrary
     };
 
     if (!allowed[fn]) {
