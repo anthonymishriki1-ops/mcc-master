@@ -2400,8 +2400,6 @@ body.kb-open #bottom-nav { display: none !important; }
 .flag-modal .flag-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
 /* Prevent sticky bottom bars from hiding content */
-.pb-chat { padding-bottom: 80px; }
-.flashcard-area { padding-bottom: 90px; }
 #page-patientbot { padding-bottom: 0; }
 </style>
 
@@ -2872,8 +2870,6 @@ var App = {
   pbDiagAttempts: 0,
   pbDiagResolved: false,
   pbPartialUsed: false,
-  pbPartialFeedback: null,
-  pbPartialScore: null,
   pbScorecard: null,
   pbScorecardLoading: false,
   pbScorecardError: false,
@@ -3353,18 +3349,6 @@ function getNextGuestNumber() {
   return num;
 }
 
-function loginAsGuest() {
-  var guestNum = getNextGuestNumber();
-  var guestId = 'guest_' + guestNum;
-  var displayName = 'Guest ' + guestNum;
-  sessionStorage.setItem('mcc_profile', guestId);
-  localStorage.setItem('mcc_last_name', guestId);
-  localStorage.setItem('mcc_last_display', displayName);
-  App.guestId = 'profile_' + guestId;
-  App.user = { name: displayName, email: displayName, isGuest: true };
-  afterLogin_(displayName);
-}
-
 function confirmNameEntry() {
   var input = document.getElementById('profile-name-input');
   var errorEl = document.getElementById('profile-name-error');
@@ -3460,7 +3444,7 @@ function showLoginLoading_() {
 }
 
 function copyAppLink_() {
-  var url = 'https://anthonyvince21.github.io/mcc-master/';
+  var url = 'https://anthonymishriki1-ops.github.io/mcc-master/';
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(url).then(function() {
       var btn = document.getElementById('copy-link-btn');
@@ -4048,12 +4032,12 @@ var VitalsEngine = {
 
   sync: function(sv) {
     if (!sv) return;
-    if (sv.hr || sv.heartRate)     this._base.hr   = sv.hr || sv.heartRate;
-    if (sv.systolic)               this._base.sbp  = sv.systolic;
-    if (sv.diastolic)              this._base.dbp  = sv.diastolic;
-    if (sv.spo2 || sv.o2sat)       this._base.spo2 = sv.spo2 || sv.o2sat;
-    if (sv.rr || sv.respiratoryRate) this._base.rr = sv.rr || sv.respiratoryRate;
-    if (sv.temp || sv.temperature) this._base.temp = sv.temp || sv.temperature;
+    if ((sv.hr != null && sv.hr !== '') || sv.heartRate != null)     this._base.hr   = sv.hr != null ? sv.hr : sv.heartRate;
+    if (sv.systolic != null)               this._base.sbp  = sv.systolic;
+    if (sv.diastolic != null)              this._base.dbp  = sv.diastolic;
+    if ((sv.spo2 != null && sv.spo2 !== '') || sv.o2sat != null)       this._base.spo2 = sv.spo2 != null ? sv.spo2 : sv.o2sat;
+    if ((sv.rr != null && sv.rr !== '') || sv.respiratoryRate != null) this._base.rr = sv.rr != null ? sv.rr : sv.respiratoryRate;
+    if ((sv.temp != null && sv.temp !== '') || sv.temperature != null) this._base.temp = sv.temp != null ? sv.temp : sv.temperature;
   },
 
   getLatestBP: function() {
@@ -4094,9 +4078,9 @@ var VitalsEngine = {
     var d = this._display;
     var set = function(id, val) { var el = document.getElementById(id); if (el) el.textContent = val; };
     var setHTML = function(id, val) { var el = document.getElementById(id); if (el) el.innerHTML = val; };
-    set('ve-hr', d.hr || '--');
+    set('ve-hr', d.hr != null ? d.hr : '--');
     set('ve-spo2', (d.spo2 != null ? d.spo2 : '--') + '%');
-    set('ve-rr', d.rr || '--');
+    set('ve-rr', d.rr != null ? d.rr : '--');
     set('ve-temp', (d.temp != null ? d.temp : '--') + '\u00B0C');
     var bp = this.getLatestBP();
     if (this._bpMeasuring) {
@@ -4241,7 +4225,6 @@ function finishInit() {
   }
 
   navigateTo('dashboard');
-  loadDashboard();
 
 
   // If shared flashcard link, navigate directly to that card
@@ -4249,7 +4232,10 @@ function finishInit() {
     setTimeout(function() {
       navigateTo('flashcards');
       // loadFlashcards will be called by navigateTo — wait for it, then jump
+      var checkAttempts = 0;
       var checkReady = setInterval(function() {
+        checkAttempts++;
+        if (checkAttempts > 150) { clearInterval(checkReady); return; } // 30s timeout
         if (App.flashcards && App.flashcards.length > 0) {
           clearInterval(checkReady);
           var spec = App.sharedFlashcardSpec;
@@ -4784,8 +4770,6 @@ function startDailyPBCase() {
     App.pbDiagAttempts = 0;
     App.pbDiagResolved = false;
     App.pbPartialUsed = false;
-    App.pbPartialFeedback = null;
-    App.pbPartialScore = null;
     App.pbScorecard = null;
     App.pbCurrentCase = App.dailyPBIndex + 1;
     App.pbTotalCases = specs.length;
@@ -5190,6 +5174,7 @@ function getFlashcardProgressKey_(specialty) {
 }
 
 function saveFlashcardProgress_() {
+  if (App._fcReviewMode) return; // don't save review deck positions to main deck progress
   var key = getFlashcardProgressKey_(App.flashcardSpecialty);
   var progress = {
     index: App.flashcardIndex,
@@ -5199,7 +5184,6 @@ function saveFlashcardProgress_() {
     timestamp: Date.now()
   };
   localStorage.setItem(key, JSON.stringify(progress));
-  console.log('[FC] Saved progress: card', App.flashcardIndex + 1, 'of', App.flashcards.length);
 }
 
 function loadFlashcardProgress_() {
@@ -5219,6 +5203,7 @@ function loadFlashcardProgress_() {
 function loadFlashcards(specialty) {
   specialty = specialty || 'All';
   App.flashcardSpecialty = specialty;
+  App._fcReviewMode = false;
   var el = document.getElementById('flashcard-content');
 
   // If full card set is already loaded, just re-filter client-side (no GAS call needed)
@@ -5439,12 +5424,6 @@ function renderFlashcardDone() {
   }
 }
 
-function skipToFlashcard() {
-  var total = App.flashcards.length;
-  var input = prompt('Skip to card number (1-' + total + '):', (App.flashcardIndex + 1));
-  if (input === null) return;
-  jumpToCard_(parseInt(input, 10));
-}
 
 function jumpToFlashcard() {
   var input = document.getElementById('fc-jump-input');
@@ -5530,6 +5509,7 @@ function restartFlashcardsReview() {
   App.flashcardIndex = 0; App.flashcardFlipped = false;
   App.flashcardGotIt = 0; App.flashcardReview = 0; App.flashcardReviewCards = [];
   App.flashcardResumed = false;
+  App._fcReviewMode = true; // flag so saveFlashcardProgress_ doesn't corrupt main deck progress
   localStorage.removeItem(getFlashcardProgressKey_(App.flashcardSpecialty));
   renderFlashcard();
 }
@@ -5544,14 +5524,22 @@ function nextFlashcard() { if (App.flashcardIndex < App.flashcards.length - 1) {
 function loadBulletNotes(specialty) {
   var el = document.getElementById('notes-content');
   el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
-  // Use preloaded notes if available and requesting All
   var spec = specialty || 'All';
-  if (spec === 'All' && App.bulletNotes && App.bulletNotes.length > 0) {
+  if (spec === 'All' && App._bulletNotesAll && App._bulletNotesAll.length > 0) {
+    App.bulletNotes = App._bulletNotesAll;
     renderBulletNotes();
     return;
   }
-  serverCall('getBulletNotes', spec).then(function(data) { App.bulletNotes = data; renderBulletNotes(); })
-    .catch(function(e) { el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>'; });
+  if (spec === 'All' && App.bulletNotes && App.bulletNotes.length > 0) {
+    App._bulletNotesAll = App.bulletNotes;
+    renderBulletNotes();
+    return;
+  }
+  serverCall('getBulletNotes', spec).then(function(data) {
+    App.bulletNotes = data;
+    if (spec === 'All') App._bulletNotesAll = data;
+    renderBulletNotes();
+  }).catch(function(e) { el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>'; });
 }
 
 function renderBulletNotes(filterText) {
@@ -6044,8 +6032,12 @@ function scoreMedicalPhrase_(text) {
 // Called after PatientBot renders a new assistant message — speak it if TTS on
 function pbSpeakLastMessage_() {
   if (!App.pbTTS) return;
-  var last = App.pbHistory[App.pbHistory.length - 1];
-  if (last && last.role === 'assistant') speakText_(last.content, getPBVoiceParams_());
+  var idx = App.pbHistory.length - 1;
+  var last = App.pbHistory[idx];
+  if (last && last.role === 'assistant' && App._pbLastSpokenIdx !== idx) {
+    App._pbLastSpokenIdx = idx;
+    speakText_(last.content, getPBVoiceParams_());
+  }
 }
 
 function toggleHouseTTS() {
@@ -6406,12 +6398,21 @@ function loadDontMiss(specialty) {
   var el = document.getElementById('dontmiss-content');
   el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
   var spec = specialty || 'All';
-  if (spec === 'All' && App.dontMissItems && App.dontMissItems.length > 0) {
+  if (spec === 'All' && App._dontMissAll && App._dontMissAll.length > 0) {
+    App.dontMissItems = App._dontMissAll;
     renderDontMiss();
     return;
   }
-  serverCall('getDontMiss', spec).then(function(data) { App.dontMissItems = data; renderDontMiss(); })
-    .catch(function(e) { el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>'; });
+  if (spec === 'All' && App.dontMissItems && App.dontMissItems.length > 0) {
+    App._dontMissAll = App.dontMissItems;
+    renderDontMiss();
+    return;
+  }
+  serverCall('getDontMiss', spec).then(function(data) {
+    App.dontMissItems = data;
+    if (spec === 'All') App._dontMissAll = data;
+    renderDontMiss();
+  }).catch(function(e) { el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>'; });
 }
 
 function renderDontMiss(filterText) {
@@ -6738,7 +6739,8 @@ function renderDrDataChat() {
   for (var i = 0; i < App.drDataHistory.length; i++) {
     var m = App.drDataHistory[i];
     var msgHtml = m.role === 'assistant' ? formatMarkdown(m.content) : escapeHtml(m.content);
-    var flagHtml = m.role === 'assistant' ? ' <button class="flag-btn" style="float:right;margin:4px 0 0 8px;font-size:10px;padding:2px 6px" onclick=\'openFlagModal({"type":"drdata","id":' + i + ',"content":' + JSON.stringify((m.content||'').substring(0,200)).replace(/'/g,"&#39;") + '})\'>&#x1F6A9;</button>' : '';
+    var flagCtx = m.role === 'assistant' ? escapeHtml(JSON.stringify({type:'drdata',id:i,content:(m.content||'').substring(0,200)})) : '';
+    var flagHtml = m.role === 'assistant' ? ' <button class="flag-btn" style="float:right;margin:4px 0 0 8px;font-size:10px;padding:2px 6px" data-flag-context="' + flagCtx + '" onclick="openFlagModal(JSON.parse(this.dataset.flagContext))">&#x1F6A9;</button>' : '';
     var speakBtn = m.role === 'assistant' ? '<button class="flag-btn" style="float:right;margin:4px 4px 0 0;font-size:11px;padding:2px 6px" onclick="replayMsg_(' + i + ',\'dd\')" title="Replay">&#x1F50A;</button>' : '';
     html += '<div class="chat-message ' + m.role + '">' + speakBtn + flagHtml + msgHtml + '</div>';
   }
@@ -7114,7 +7116,7 @@ function startNextPBCase() {
   serverCall('startPatientBotCase', App.pbSetupSpecialty, App.pbCheatMode, App.pbDifficulty, App.pbCustom || {}).then(function(result) {
     App.pbCaseId = result.caseId; App.pbSpecialty = result.specialty; App.pbPresentation = result.presentation || '';
     App.pbDiagnosis = null; App.pbPatientInfo = null; App.pbDiagnosing = false; App.pbDiagAttempts = 0; App.pbDiagResolved = false;
-    App.pbPartialUsed = false; App.pbPartialFeedback = null; App.pbPartialScore = null; App.pbScorecard = null; App.pbScorecardLoading = false; App.pbScorecardError = false;
+    App.pbPartialUsed = false; App.pbScorecard = null; App.pbScorecardLoading = false; App.pbScorecardError = false;
     App.pbDrDataEval = null; App.pbDrDataEvalLoading = false; App.pbDrDataEvalError = false; App.pbDrDataConvHistory = [];
     App.pbMonitorAttached = false;
     VitalsEngine.init(result.vitals || result.patient || {});
@@ -7485,7 +7487,9 @@ function sendHouseMessage() {
   var message = input ? input.value.trim() : '';
   if (!message) return;
   try { window.speechSynthesis.cancel(); } catch(e) {}
-  if (input) input.value = '';
+  if (input) { input.value = ''; input.disabled = true; }
+  var sendBtn = document.querySelector('#page-patientbot .btn-primary');
+  if (sendBtn) sendBtn.disabled = true;
   App.pbHouseConvHistory.push({ role: 'user', content: message });
   App.pbHouseScore.turns++;
   renderHouseChat();
@@ -7498,9 +7502,12 @@ function sendHouseMessage() {
       App.pbHouseScore.clues_hit.push(ci); App.pbHouseScore.symptoms_mentioned++;
     }
   }
+  if (!App.pbHouseScore.tests_hit) App.pbHouseScore.tests_hit = [];
   for (var ti = 0; ti < cond.push_for.length; ti++) {
     var testWord = cond.push_for[ti].toLowerCase().split(' ')[0];
-    if (msgLower.indexOf(testWord) !== -1) App.pbHouseScore.tests_pushed++;
+    if (msgLower.indexOf(testWord) !== -1 && App.pbHouseScore.tests_hit.indexOf(ti) === -1) {
+      App.pbHouseScore.tests_hit.push(ti); App.pbHouseScore.tests_pushed++;
+    }
   }
   // Show typing indicator
   App.pbHouseConvHistory.push({ role: 'typing', content: '' });
@@ -7519,10 +7526,13 @@ function sendHouseMessage() {
     var response = result.response || result;
     App.pbHouseConvHistory.push({ role: 'assistant', content: response });
     renderHouseChat();
+    var inp = document.getElementById('pb-input'); if (inp) inp.disabled = false;
+    var btn = document.querySelector('#page-patientbot .btn-primary'); if (btn) btn.disabled = false;
   }).catch(function(e) {
-    // Remove typing indicator — don't inject any hardcoded House dialogue
     App.pbHouseConvHistory = App.pbHouseConvHistory.filter(function(m) { return m.role !== 'typing'; });
     renderHouseChat();
+    var inp = document.getElementById('pb-input'); if (inp) inp.disabled = false;
+    var btn = document.querySelector('#page-patientbot .btn-primary'); if (btn) btn.disabled = false;
     showToast('Connection error — please try again');
   });
 }
@@ -7643,11 +7653,6 @@ function quickNewPBCase() {
   App.pbCurrentCase = 0; App.pbCaseScores = []; App.pbTotalCases = 1;
   App.pbVitals = null; App.pbMRN = null;
   startNextPBCase();
-}
-
-function togglePBTips() {
-  var panel = document.getElementById('pb-actions-panel');
-  if (panel) panel.style.display = panel.style.display === 'none' ? '' : 'none';
 }
 
 function togglePBActionsBar() {
@@ -7985,7 +7990,7 @@ function loadOSCEScorecard() {
   });
 }
 
-function endPBCase() { VitalsEngine.stop(); App.pbMonitorAttached = false; App.pbCaseId = null; App.pbHistory = []; App.pbSpecialty = null; App.pbPartialUsed = false; App.pbPartialFeedback = null; App.pbPartialScore = null; App.pbScorecard = null; App.pbScorecardLoading = false; App.pbScorecardError = false; App.pbDrDataEval = null; App.pbDrDataEvalLoading = false; App.pbDrDataEvalError = false; App.pbDrDataConvHistory = []; showPatientBotSetup(); }
+function endPBCase() { VitalsEngine.stop(); App.pbMonitorAttached = false; App.pbCodeBlue = false; App.pbCaseId = null; App.pbHistory = []; App.pbSpecialty = null; App.pbPartialUsed = false; App.pbScorecard = null; App.pbScorecardLoading = false; App.pbScorecardError = false; App.pbDrDataEval = null; App.pbDrDataEvalLoading = false; App.pbDrDataEvalError = false; App.pbDrDataConvHistory = []; showPatientBotSetup(); }
 
 function attachPBMonitor_() {
   App.pbMonitorAttached = true;
@@ -8264,13 +8269,19 @@ function renderPBChatInner() {
   // Patient info bar (sticky) — uses live vitals if available
   if (p) {
     var v = App.pbVitals || p; // live vitals from consequence engine, or initial
-    var sexLabel = p.sex === 'NB' ? 'NB' : (p.sex === 'F' ? 'F' : 'M');
-    var hrAlert = (v.hr > 120 || v.hr < 50);
-    var spo2Alert = (v.spo2 < 92);
-    var rrAlert = (v.rr > 24 || v.rr < 8);
-    var bpParts = (v.bp || '?/?').split('/');
-    var bpAlert = (parseInt(bpParts[0]) > 180 || parseInt(bpParts[0]) < 90 || parseInt(bpParts[1]) > 120 || parseInt(bpParts[1]) < 60);
-    var tempAlert = (v.temp > 38.5 || v.temp < 35.5);
+    var vd = VitalsEngine._display || {}; // use live vitals engine display if running
+    var sexLabel = (p.sex === 'nonbinary' || p.sex === 'NB') ? 'NB' : ((p.sex === 'female' || p.sex === 'F' || p.sex === 'trans_f') ? 'F' : ((p.sex === 'trans_m') ? 'M (trans)' : 'M'));
+    var liveHR = vd.hr != null ? vd.hr : v.hr;
+    var liveSpo2 = vd.spo2 != null ? vd.spo2 : v.spo2;
+    var liveRR = vd.rr != null ? vd.rr : v.rr;
+    var liveTemp = vd.temp != null ? vd.temp : v.temp;
+    var liveSBP = vd.sbp != null ? vd.sbp : (v.systolic || v.sbp);
+    var liveDBP = vd.dbp != null ? vd.dbp : (v.diastolic || v.dbp);
+    var hrAlert = (liveHR > 120 || liveHR < 50);
+    var spo2Alert = (liveSpo2 < 92);
+    var rrAlert = (liveRR > 24 || liveRR < 8);
+    var bpAlert = (liveSBP > 180 || liveSBP < 90 || liveDBP > 120 || liveDBP < 60);
+    var tempAlert = (liveTemp > 38.5 || liveTemp < 35.5);
 
     // Patient chart header card
     html += '<div style="background:var(--card);border-bottom:2px solid var(--border);padding:14px 18px 12px">';
@@ -8606,7 +8617,7 @@ function renderPBChatInner() {
     html += '<button class="btn btn-outline" id="pb-tts-btn" onclick="togglePBTTS()" title="Read responses aloud" style="font-size:16px;padding:0 10px">' + (App.pbTTS ? '&#x1F50A;' : '&#x1F507;') + '</button>';
     html += '<button class="btn btn-primary" onclick="sendPBMessage()">Send</button>';
     html += '<button class="btn btn-warning pb-diagnose-btn" onclick="showDiagnoseModal()">Diagnose</button>';
-    html += buildFlagButton({ type: 'patientbot', id: App.pbCaseIndex || 0, specialty: App.pbSpecialty || '', content: 'Case: ' + (App.pbSpecialty || 'Unknown') });
+    html += buildFlagButton({ type: 'patientbot', id: App.pbCaseId || 0, specialty: App.pbSpecialty || '', content: 'Case: ' + (App.pbSpecialty || 'Unknown') });
     html += '</div>';
   } else {
     html += '<div style="padding:16px 20px;border-top:1px solid var(--border);background:var(--bg);display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap">';
@@ -9762,7 +9773,7 @@ document.addEventListener('keydown', function(e) {
       var idx = parseInt(e.key) - 1;
       if (idx < opts.length) selectDailyQuizAnswer(opts[idx]);
     }
-    if (e.key === 'ArrowRight') { e.preventDefault(); if (App.dailyQuizIndex < App.dailyData.mcqs.length - 1) { App.dailyQuizIndex++; renderDailyQuiz(); } }
+    if (e.key === 'ArrowRight') { e.preventDefault(); if (App.dailyQuizIndex < App.dailyData.mcq.length - 1) { App.dailyQuizIndex++; renderDailyQuiz(); } }
     if (e.key === 'ArrowLeft') { e.preventDefault(); if (App.dailyQuizIndex > 0) { App.dailyQuizIndex--; renderDailyQuiz(); } }
   }
 
@@ -9852,7 +9863,8 @@ function showChangelogModal() {
 
 function buildFlagButton(context) {
   // context: { type: 'flashcard'|'quiz'|'note'|'patientbot', id: ..., specialty: ..., content: ... }
-  return '<button class="flag-btn" onclick=\'openFlagModal(' + JSON.stringify(context).replace(/'/g, "&#39;") + ')\'>' +
+  var safeJson = escapeHtml(JSON.stringify(context));
+  return '<button class="flag-btn" data-flag-context="' + safeJson + '" onclick="openFlagModal(JSON.parse(this.dataset.flagContext))">' +
     '&#x1F6A9; Flag Issue</button>';
 }
 
