@@ -7472,7 +7472,6 @@ function renderHouseChat() {
   html += '</div></div>';
   // Input area
   html += '<div class="chat-input-area">';
-  html += '<button class="btn btn-warning pb-diagnose-btn" onclick="endHouseMode_()">Diagnose</button>';
   html += '<textarea id="pb-input" placeholder="Describe your symptoms..." rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendPBMessage()}"></textarea>';
   html += '<button class="btn btn-primary" onclick="sendPBMessage()">Send</button>';
   html += '</div></div>';
