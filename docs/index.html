@@ -7943,7 +7943,7 @@ function getPBTranscript() {
 function loadOSCEScorecard() {
   App.pbScorecardLoading = true;
   App.pbScorecardError = false;
-  serverCall('generateCaseDebrief', App.pbCaseId, App.pbHistory.slice(-40)).then(function(result) {
+  serverCall('debriefPatientBot', App.pbCaseId, App.pbHistory.slice(-40)).then(function(result) {
     App.pbScorecard = result;
     App.pbScorecardLoading = false;
     var renderFn = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
@@ -8610,69 +8610,34 @@ function renderPBChatInner() {
 
     if (App.pbScorecard) {
       var sc = App.pbScorecard;
-      var cats = [
-        { key: 'history', label: 'History Taking' },
-        { key: 'exam', label: 'Physical Exam' },
-        { key: 'investigations', label: 'Investigations' },
-        { key: 'diagnosis', label: 'Diagnosis' },
-        { key: 'management', label: 'Management' },
-        { key: 'communication', label: 'Communication' },
-        { key: 'safety', label: 'Patient Safety' }
-      ];
-      var gradeColors = { A: '#2e7d32', B: '#558b2f', C: '#f9a825', D: '#e65100', F: '#c62828' };
-      var gradeColor = gradeColors[sc.grade] || '#666';
+      var scScore = sc.score || 0;
+      var scGrade = scScore >= 9 ? 'A+' : scScore >= 8 ? 'A' : scScore >= 7 ? 'B' : scScore >= 6 ? 'C' : scScore >= 5 ? 'D' : 'F';
+      var scGradeColor = scScore >= 8 ? '#2e7d32' : scScore >= 6 ? '#f9a825' : scScore >= 5 ? '#e65100' : '#c62828';
+      var scBarColor = scScore >= 8 ? '#2e7d32' : scScore >= 6 ? '#f9a825' : '#c62828';
 
-      html += '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:16px;margin:16px;padding:28px;box-shadow:0 2px 12px rgba(0,0,0,0.08);max-height:70vh;overflow-y:auto;-webkit-overflow-scrolling:touch">';
-      html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">';
-      html += '<h3 style="margin:0;font-size:20px;font-weight:800">OSCE Scorecard</h3>';
-      html += '<div style="width:64px;height:64px;border-radius:50%;background:' + gradeColor + ';color:white;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;box-shadow:0 2px 8px rgba(0,0,0,0.15)">' + escapeHtml(sc.grade || '?') + '</div>';
+      html += '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:16px;margin:16px;padding:24px;box-shadow:0 2px 12px rgba(0,0,0,0.08)">';
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">';
+      html += '<div><h3 style="margin:0 0 4px;font-size:20px;font-weight:800">Case Debrief</h3>';
+      html += '<div style="font-size:13px;color:var(--text-light)">Diagnosis: <strong>' + escapeHtml(sc.diagnosis || App.pbDiagnosis || '?') + '</strong></div></div>';
+      html += '<div style="width:60px;height:60px;border-radius:50%;background:' + scGradeColor + ';color:white;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:900;flex-shrink:0">' + scGrade + '</div>';
       html += '</div>';
 
-      html += '<div style="margin-bottom:8px;font-size:14px;color:var(--text-light)">Overall: <strong style="color:var(--text);font-size:16px">' + (sc.overall || 0) + '/10</strong></div>';
+      html += '<div style="margin-bottom:16px">';
+      html += '<div style="display:flex;justify-content:space-between;margin-bottom:6px">';
+      html += '<span style="font-size:13px;font-weight:600;color:var(--text-light)">Overall Score</span>';
+      html += '<span style="font-size:14px;font-weight:700;color:' + scBarColor + '">' + scScore + '/10</span>';
+      html += '</div>';
+      html += '<div style="background:var(--bg);border-radius:6px;height:12px;overflow:hidden">';
+      html += '<div style="background:' + scBarColor + ';width:' + (scScore * 10) + '%;height:100%;border-radius:6px;transition:width 0.6s ease"></div>';
+      html += '</div></div>';
 
-      for (var sci = 0; sci < cats.length; sci++) {
-        var c = cats[sci];
-        var val = (sc.scores && sc.scores[c.key]) || 0;
-        var pct = val * 10;
-        var barColor = val > 7 ? '#2e7d32' : (val >= 4 ? '#f9a825' : '#c62828');
-        html += '<div style="margin-bottom:12px">';
-        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
-        html += '<span style="font-size:14px;font-weight:600">' + c.label + '</span>';
-        html += '<span style="font-size:14px;font-weight:700;color:' + barColor + '">' + val + '/10</span>';
-        html += '</div>';
-        html += '<div style="background:var(--bg);border-radius:6px;height:10px;overflow:hidden">';
-        html += '<div style="background:' + barColor + ';width:' + pct + '%;height:100%;border-radius:6px;transition:width 0.5s ease"></div>';
-        html += '</div></div>';
+      if (sc.feedback) {
+        html += '<div style="font-size:14px;line-height:1.7;color:var(--text);margin-bottom:' + (sc.callouts ? '16px' : '0') + '">' + formatMarkdown(sc.feedback) + '</div>';
       }
 
-      if (sc.strengths && sc.strengths.length > 0) {
-        html += '<div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">';
-        html += '<h4 style="margin:0 0 8px;font-size:15px;color:#2e7d32">Strengths</h4>';
-        html += '<ul style="margin:0;padding-left:20px;font-size:14px;line-height:1.7">';
-        for (var si = 0; si < sc.strengths.length; si++) html += '<li>' + escapeHtml(sc.strengths[si]) + '</li>';
-        html += '</ul></div>';
-      }
-
-      if (sc.improvements && sc.improvements.length > 0) {
-        html += '<div style="margin-top:16px">';
-        html += '<h4 style="margin:0 0 8px;font-size:15px;color:#e65100">Areas for Improvement</h4>';
-        html += '<ul style="margin:0;padding-left:20px;font-size:14px;line-height:1.7">';
-        for (var ii = 0; ii < sc.improvements.length; ii++) html += '<li>' + escapeHtml(sc.improvements[ii]) + '</li>';
-        html += '</ul></div>';
-      }
-
-      if (sc.missed && sc.missed.length > 0) {
-        html += '<div style="margin-top:16px">';
-        html += '<h4 style="margin:0 0 8px;font-size:15px;color:#c62828">Missed Items</h4>';
-        html += '<ul style="margin:0;padding-left:20px;font-size:14px;line-height:1.7">';
-        for (var mi = 0; mi < sc.missed.length; mi++) html += '<li>' + escapeHtml(sc.missed[mi]) + '</li>';
-        html += '</ul></div>';
-      }
-
-      if (sc.examTip) {
-        html += '<div style="margin-top:20px;padding:16px 20px;background:rgba(99,102,241,0.08);border:1px solid var(--accent);border-radius:12px">';
-        html += '<strong style="color:var(--accent)">&#x1F4A1; NAC Tip:</strong> ';
-        html += '<span style="font-size:14px">' + escapeHtml(sc.examTip) + '</span>';
+      if (sc.callouts) {
+        html += '<div style="margin-top:4px;padding:12px 16px;background:rgba(99,102,241,0.08);border:1px solid var(--accent);border-radius:10px;font-size:13px;color:var(--text)">';
+        html += '&#x1F4A1; ' + escapeHtml(sc.callouts);
         html += '</div>';
       }
 
