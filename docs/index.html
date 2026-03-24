@@ -5860,7 +5860,11 @@ function togglePBMic() {
       if (scoreMedicalPhrase_(alt) > scoreMedicalPhrase_(best)) best = alt;
     }
     var input = document.getElementById('pb-input');
-    if (input) { input.value = best; sendPBMessage(); }
+    if (input) {
+      input.value = best;
+      if (App.currentPage === 'house') sendHouseMessage();
+      else sendPBMessage();
+    }
     App.pbMicActive = false;
     if (btn) { btn.textContent = '\uD83C\uDFA4'; btn.style.background = ''; btn.style.color = ''; }
   };
@@ -6595,11 +6599,7 @@ function sendDrDataMessage() {
   msgs.innerHTML += '<div class="chat-message assistant typing" id="dd-typing">Dr. Data is thinking...</div>';
   msgs.scrollTop = msgs.scrollHeight; input.disabled = true;
 
-  var ddHistory = [
-    { role: 'user', content: DR_DATA_PERSONA_LOCK },
-    { role: 'assistant', content: 'Understood. I am Dr. Data.' }
-  ].concat(App.drDataHistory.slice(-18));
-  serverCall('askDrData', message, ddHistory).then(function(result) {
+  serverCall('askDrData', DR_DATA_PERSONA_LOCK, App.drDataHistory.slice(-18)).then(function(result) {
     removeEl('dd-typing'); App.drDataHistory.push({ role: 'assistant', content: result.response }); renderDrDataChat(); input.disabled = false; input.focus();
   }).catch(function(e) {
     removeEl('dd-typing'); App.drDataHistory.push({ role: 'assistant', content: 'Error: ' + (e.message || String(e)) }); renderDrDataChat(); input.disabled = false;
@@ -7529,11 +7529,8 @@ function sendHouseDrDataMessage() {
   var cond = App.pbHouseCase;
   var ctx = 'Context: House Mode session on ' + (cond ? cond.name : 'Unknown') + '. Evaluation already provided below.';
   App.pbDrDataConvHistory.push({ role: 'user', content: message });
-  var apiHistory = [
-    { role: 'user', content: DR_DATA_PERSONA_LOCK + '\n\n' + ctx + '\n\n' + (App.pbDrDataEval || '') },
-    { role: 'assistant', content: 'Understood. I am Dr. Data. Ready for follow-up questions about this case.' }
-  ].concat(App.pbDrDataConvHistory.slice(-10));
-  serverCall('askDrData', message, apiHistory).then(function(result) {
+  var sysPromptDrData = DR_DATA_PERSONA_LOCK + '\n\n' + ctx + '\n\n' + (App.pbDrDataEval || '');
+  serverCall('askDrData', sysPromptDrData, App.pbDrDataConvHistory.slice(-10)).then(function(result) {
     App.pbDrDataConvHistory.push({ role: 'assistant', content: result.response || result });
     if (input) input.disabled = false;
     var body = document.getElementById('house-drdata-body');
