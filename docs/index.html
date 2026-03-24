@@ -7559,11 +7559,15 @@ function sendHouseMessage() {
   // Show typing indicator
   App.pbHouseConvHistory.push({ role: 'typing', content: '' });
   renderHouseChat();
-  // Route House through askDrData — the only deployed AI endpoint
+  // Route House through askDrData — inject persona into history so server-side Dr. Data lock can't override
   var sysPrompt = buildHousePrompt_(cond, App.pbDifficulty);
-  var apiHistory = App.pbHouseConvHistory
+  var realHistory = App.pbHouseConvHistory
     .filter(function(m) { return m.role === 'user' || m.role === 'assistant'; })
-    .slice(-16); // Keep last 8 exchanges to stay within URL limits
+    .slice(-14);
+  var apiHistory = [
+    { role: 'user', content: sysPrompt + '\n\nPatient is entering your office now.' },
+    { role: 'assistant', content: "(doesn't look up) Sit. You've got two minutes." }
+  ].concat(realHistory);
   serverCall('askDrData', sysPrompt, apiHistory).then(function(result) {
     App.pbHouseConvHistory = App.pbHouseConvHistory.filter(function(m) { return m.role !== 'typing'; });
     var response = result.response || result;
