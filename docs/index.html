@@ -5860,11 +5860,7 @@ function togglePBMic() {
       if (scoreMedicalPhrase_(alt) > scoreMedicalPhrase_(best)) best = alt;
     }
     var input = document.getElementById('pb-input');
-    if (input) {
-      input.value = best;
-      if (App.currentPage === 'house') sendHouseMessage();
-      else sendPBMessage();
-    }
+    if (input) { input.value = best; sendPBMessage(); }
     App.pbMicActive = false;
     if (btn) { btn.textContent = '\uD83C\uDFA4'; btn.style.background = ''; btn.style.color = ''; }
   };
@@ -7070,6 +7066,7 @@ function startNextPBCase() {
 }
 
 function sendPBMessage() {
+  if (App.currentPage === 'house') { sendHouseMessage(); return; }
   var input = document.getElementById('pb-input'); var message = input.value.trim(); if (!message) return;
 
   // Intercept "answernow" — trigger debrief instead of sending to patient
@@ -7386,9 +7383,9 @@ function renderHouseChat() {
   // Input area
   html += '<div class="chat-input-area">';
   html += '<button class="btn btn-warning pb-diagnose-btn" onclick="endHouseMode_()">Diagnose</button>';
-  html += '<textarea id="pb-input" placeholder="Describe your symptoms... or tap 🎤" rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendHouseMessage()}"></textarea>';
+  html += '<textarea id="pb-input" placeholder="Describe your symptoms... or tap 🎤" rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendPBMessage()}"></textarea>';
   html += '<button class="btn btn-outline" id="pb-mic-btn" onclick="togglePBMic()" title="Voice input" style="font-size:18px;padding:0 10px">&#x1F3A4;</button>';
-  html += '<button class="btn btn-primary" onclick="sendHouseMessage()">Send</button>';
+  html += '<button class="btn btn-primary" onclick="sendPBMessage()">Send</button>';
   html += '</div></div>';
   el.innerHTML = html;
   var msgs = document.getElementById('pb-messages');
