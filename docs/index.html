@@ -3190,6 +3190,16 @@ function serverCall(funcName) {
   });
 }
 
+// House-specific call — no profile so GAS won't inject Dr. Data study context
+function serverCallHouse_(sysPrompt, history) {
+  var GAS_API = 'https://script.google.com/macros/s/AKfycbz6k69fs4pqcHvLP2H9S8B7abKCZ0axS9wIR5ZoMSk1vyZgJCaSN5Kxetup02QF56Pk/exec';
+  var payload = JSON.stringify({ fn: 'askDrData', args: [sysPrompt, history], profile: '' });
+  var url = GAS_API + '?apiCall=' + encodeURIComponent(payload);
+  return fetch(url)
+  .then(function(resp) { if (!resp.ok) throw new Error('API error: ' + resp.status); return resp.json(); })
+  .then(function(data) { if (data.error) throw new Error(data.error); return data.result; });
+}
+
 // Client-side patches — no Apps Script redeploy needed
 function patchApiResult_(fn, result) {
   if (fn === 'getMCQQuiz' && Array.isArray(result)) {
@@ -4225,7 +4235,7 @@ function finishInit() {
 
   navigateTo('dashboard');
   loadDashboard();
-  checkLangPrompt_();
+
 
   // If shared flashcard link, navigate directly to that card
   if (App.sharedFlashcard) {
@@ -7467,16 +7477,16 @@ function sendHouseMessage() {
   // Show typing indicator
   App.pbHouseConvHistory.push({ role: 'typing', content: '' });
   renderHouseChat();
-  // Route House through askDrData — inject persona into history so server-side Dr. Data lock can't override
+  // Route House through a profile-free call so GAS doesn't inject Dr. Data study context
   var sysPrompt = buildHousePrompt_(cond, App.pbDifficulty);
   var realHistory = App.pbHouseConvHistory
     .filter(function(m) { return m.role === 'user' || m.role === 'assistant'; })
-    .slice(-14);
+    .slice(-6);
   var apiHistory = [
-    { role: 'user', content: sysPrompt + '\n\nPatient is entering your office now.' },
+    { role: 'user', content: sysPrompt + '\n\nPatient is entering your office.' },
     { role: 'assistant', content: "Sit." }
   ].concat(realHistory);
-  serverCall('askDrData', sysPrompt, apiHistory).then(function(result) {
+  serverCallHouse_(sysPrompt, apiHistory).then(function(result) {
     App.pbHouseConvHistory = App.pbHouseConvHistory.filter(function(m) { return m.role !== 'typing'; });
     var response = result.response || result;
     App.pbHouseConvHistory.push({ role: 'assistant', content: response });
@@ -8770,35 +8780,6 @@ function setLanguage(lang) {
   }
 }
 
-function checkLangPrompt_() {
-  if (localStorage.getItem('mcc_lang_prompted')) return; // already asked
-  if (localStorage.getItem('mcc_lang')) return; // already set by old user
-
-  // Show after a short delay so the dashboard renders first
-  setTimeout(function() {
-    var overlay = document.createElement('div');
-    overlay.id = 'lang-prompt-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn 0.3s ease;backdrop-filter:blur(4px)';
-    var btnStyle = 'padding:14px;border-radius:12px;border:2px solid var(--border);background:var(--bg);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;transition:border-color 0.15s;width:100%;text-align:left';
-    overlay.innerHTML =
-      '<div style="background:var(--card);border-radius:20px;padding:32px;max-width:380px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,0.4)">' +
-      '<h3 style="margin:0 0 20px;text-align:center;font-size:18px">Choose your language</h3>' +
-      '<div style="display:flex;flex-direction:column;gap:10px">' +
-      '<button onclick="pickLang_(\'fa\')" style="' + btnStyle + '" onmouseenter="this.style.borderColor=\'var(--primary)\'" onmouseleave="this.style.borderColor=\'var(--border)\'">🦁&nbsp; فارسی</button>' +
-      '<button onclick="pickLang_(\'ar\')" style="' + btnStyle + '" onmouseenter="this.style.borderColor=\'var(--primary)\'" onmouseleave="this.style.borderColor=\'var(--border)\'">&#x1F1F8;&#x1F1E6;&nbsp; العربية</button>' +
-      '<button onclick="pickLang_(\'fr\')" style="' + btnStyle + '" onmouseenter="this.style.borderColor=\'var(--primary)\'" onmouseleave="this.style.borderColor=\'var(--border)\'">&#x1F1EB;&#x1F1F7;&nbsp; Français</button>' +
-      '<button onclick="pickLang_(\'\')" style="' + btnStyle + ';color:var(--text-light)" onmouseenter="this.style.borderColor=\'var(--primary)\'" onmouseleave="this.style.borderColor=\'var(--border)\'">&#x1F1EC;&#x1F1E7;&nbsp; English only</button>' +
-      '</div></div>';
-    document.body.appendChild(overlay);
-  }, 800);
-}
-
-function pickLang_(lang) {
-  localStorage.setItem('mcc_lang_prompted', '1');
-  setLanguage(lang);
-  var overlay = document.getElementById('lang-prompt-overlay');
-  if (overlay) overlay.remove();
-}
 
 var FALLBACK_GLOSSARY = [
   {Term:'hypertension',Category:'Cardiology',Definition:'Persistently elevated blood pressure ≥130/80 mmHg',fa:'فشار خون بالا',ar:'ارتفاع ضغط الدم',fr:'hypertension artérielle'},
