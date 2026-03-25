@@ -8746,7 +8746,7 @@ function showNACSetup() {
   html += '&#x1FA7A; 7 unique practice tests &mdash; 84 stations total<br>';
   html += '</div>';
 
-  html += '<button class="btn btn-success" style="width:100%;padding:14px;font-size:16px" onclick="startNACExam()">&#x1FA7A; Start NAC-OSCE Exam</button>';
+  html += '<button class="btn btn-success" style="width:100%;padding:14px;font-size:16px" onclick="startNACExam()">&#x1F4DE; Start NAC-OSCE Exam (Hands-Free)</button>';
   html += '</div>';
   el.innerHTML = html;
 }
@@ -8790,8 +8790,15 @@ function startNACExam() {
   App.pbDifficulty = App.nacDifficulty;
   App.pbCustom = {};
   App.pbCaseScores = [];
-  App.pbTotalCases = count;
+  App.pbTotalCases = stations.length;
   App.pbCurrentCase = 0;
+
+  // NAC is hands-free only
+  App.pbHandsFree = true;
+  App.pbTTS = true;
+  App.pbOpenAITTS = true;
+  localStorage.setItem('mcc_pbTTS', '1');
+  localStorage.setItem('mcc_openaiTTS', '1');
 
   startNextNACStation();
 }
