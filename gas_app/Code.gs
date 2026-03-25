@@ -27,7 +27,7 @@ function doGet(e) {
       var args = payload.args || [];
       var profile = payload.profile || '';
       // Functions that accept guestId as their last parameter
-      var needsGuestId = ['saveQuizResult','saveProgress','analyzeQuizResults','saveCardRating','getUserStats','getUserQuizHistory','getLeaderboard','getDailyChallenge','getWeakCards_','getPBCaseLibrary'];
+      var needsGuestId = ['saveQuizResult','saveProgress','analyzeQuizResults','saveCardRating','getUserStats','getUserQuizHistory','getLeaderboard','getDailyChallenge','getWeakCards_','getPBCaseLibrary','savePBConversation'];
       if (profile && needsGuestId.indexOf(fn) !== -1) {
         args.push(profile);
       }
@@ -63,7 +63,9 @@ function doGet(e) {
         'updateIssueStatus': updateIssueStatus,
         'getDevStats': getDevStats,
         'generateCaseDebrief': generateCaseDebrief,
-        'getPBCaseLibrary': getPBCaseLibrary
+        'getPBCaseLibrary': getPBCaseLibrary,
+        'savePBConversation': savePBConversation,
+        'textToSpeech': textToSpeech
       };
       if (!allowed[fn]) {
         return ContentService.createTextOutput(JSON.stringify({ error: 'Function not allowed: ' + fn }))
@@ -179,7 +181,9 @@ function doPost(e) {
       'updateIssueStatus': updateIssueStatus,
       'getDevStats': getDevStats,
       'generateCaseDebrief': generateCaseDebrief,
-      'getPBCaseLibrary': getPBCaseLibrary
+      'getPBCaseLibrary': getPBCaseLibrary,
+      'savePBConversation': savePBConversation,
+      'textToSpeech': textToSpeech
     };
 
     if (!allowed[fn]) {
@@ -221,10 +225,13 @@ function getUserId_(guestId) {
 }
 
 // --- Dev Panel: get all user activity ---
-function getDevStats(devSecretArg) {
+function getDevStats(devSecretOrProfile) {
   var email = Session.getActiveUser().getEmail() || '';
-  var hasDevSecret = DEV_SECRET && devSecretArg && devSecretArg === DEV_SECRET;
-  if (email.toLowerCase() !== ADMIN_EMAIL && !hasDevSecret) return { error: 'Not authorized' };
+  var hasDevSecret = DEV_SECRET && devSecretOrProfile && devSecretOrProfile === DEV_SECRET;
+  // Allow profile-based auth for GitHub Pages (where Session.getActiveUser() is empty)
+  var DEV_PROFILES = ['profile_tony', 'tony', 'profile_admin', 'admin'];
+  var isDevProfile = devSecretOrProfile && DEV_PROFILES.indexOf(devSecretOrProfile.toLowerCase()) !== -1;
+  if (email.toLowerCase() !== ADMIN_EMAIL && !hasDevSecret && !isDevProfile) return { error: 'Not authorized' };
 
   var sheet = ensureUserDataSheet_();
   var data = sheet.getDataRange().getValues();
@@ -1162,6 +1169,57 @@ function saveProgress(type, data, guestId) {
   var sheet = ensureUserDataSheet_();
   var userId = getUserId_(guestId);
   sheet.appendRow([userId, type, JSON.stringify(data), new Date().toISOString()]);
+  return { success: true };
+}
+
+// --- Save full PatientBot conversation with all case variables ---
+function savePBConversation(caseData, guestId) {
+  var ss = SpreadsheetApp.openById(getConfig_().SHEET_ID);
+  var sheet = ss.getSheetByName('PB_Conversations');
+  if (!sheet) {
+    sheet = ss.insertSheet('PB_Conversations');
+    sheet.appendRow([
+      'Timestamp', 'User', 'Case_ID', 'Specialty', 'Presentation', 'Diagnosis',
+      'Difficulty', 'Outcome', 'Correct', 'Attempts', 'Score', 'Fatal', 'Cause_of_Death',
+      'Sex', 'Age', 'Age_Min', 'Age_Max', 'Historian', 'Cooperativeness', 'Aggression',
+      'Archetype', 'Circumstances', 'Cheat_Mode', 'NAC_Mode', 'NAC_Station', 'NAC_Total',
+      'Msg_Count', 'Conversation'
+    ]);
+    sheet.setFrozenRows(1);
+  }
+  var userId = getUserId_(guestId);
+  var d = caseData || {};
+  var custom = d.custom || {};
+  sheet.appendRow([
+    new Date().toISOString(),
+    userId,
+    d.caseId || '',
+    d.specialty || '',
+    d.presentation || '',
+    d.diagnosis || '',
+    d.difficulty || '',
+    d.outcome || '',           // 'diagnosed', 'wrong', 'fatal', 'skipped'
+    d.correct ? 'YES' : 'NO',
+    d.attempts || 0,
+    d.score || '',
+    d.fatal ? 'YES' : 'NO',
+    d.causeOfDeath || '',
+    custom.sex || 'random',
+    d.patientAge || '',
+    custom.ageMin || '',
+    custom.ageMax || '',
+    custom.historian || 'random',
+    custom.coop || 'random',
+    custom.aggression || 'random',
+    custom.archetype || 'random',
+    (custom.circumstances || []).join(', '),
+    d.cheatMode ? 'YES' : 'NO',
+    d.nacMode ? 'YES' : 'NO',
+    d.nacStation || '',
+    d.nacTotalStations || '',
+    (d.conversation || []).length,
+    JSON.stringify(d.conversation || [])
+  ]);
   return { success: true };
 }
 
@@ -2116,6 +2174,11 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
     'These fields are PRE-DETERMINED by the system. You have ZERO creative liberty over name, sex, or ethnicity. They are already set. Your job is to create the clinical scenario, vitals, diagnosis, and appearance — nothing else about the patient\'s identity.\n' +
     '==========================================================================\n';
 
+  // Strip conflicting age references from demographics if age is locked
+  if (customAgeStr) {
+    // Replace age ranges in the background with a note to use the locked age
+    chosenDemo = chosenDemo.replace(/\(\d+-\d+\)/g, '').replace(/Young adult|Middle-aged|Elderly|Teenager|Child/gi, 'Patient');
+  }
   chosenDemo += identityBlock;
 
   // Appearance prompt — ethnicity is already locked, just need the doorway assessment
@@ -2196,8 +2259,30 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
     'CRITICAL CONSISTENCY RULES:\n' +
     '1. The diagnosis in the JSON MUST match the clinical scenario you present. Every detail you give (symptoms, history, medications, timeline) must be consistent with that exact diagnosis. If the diagnosis is "opioid overdose" then the patient took opioids, not acetaminophen. If it\'s "appendicitis" then the pain is in the right lower quadrant, not the chest. NEVER contradict the diagnosis you wrote in the JSON.\n' +
     '2. YOU ARE ' + patientName + '. Your name, sex, and ethnicity are LOCKED. If the doctor asks your name, you say "' + patientName + '." If they call you a wrong name, correct them. NEVER claim to be someone else. NEVER invent other characters.\n' +
-    '3. If a parent/guardian brought you in (because you are a child), the PARENT is not the patient — YOU are. The parent can speak, but you are always ' + patientName + '. Never confuse yourself with the parent.\n' +
-    '4. Your sex/gender is LOCKED. Do NOT switch pronouns, do NOT change your sex mid-conversation. ' + (pronounStr ? 'Use ' + pronounStr + ' pronouns consistently.' : '') + '\n\n' +
+    '3. Your sex/gender is LOCKED. Do NOT switch pronouns, do NOT change your sex mid-conversation. ' + (pronounStr ? 'Use ' + pronounStr + ' pronouns consistently.' : '') + '\n' +
+    '4. Your age is LOCKED to whatever you put in the JSON. Do NOT change your age mid-conversation. If you said you are 7, you are 7 the ENTIRE encounter.\n\n' +
+
+    'ROOM OCCUPANCY RULES (CRITICAL — READ CAREFULLY):\n' +
+    'There are DISTINCT PEOPLE in this room. You must NEVER confuse who is who.\n' +
+    '- THE PATIENT is always ' + patientName + '. The patient is the one who is sick, being examined, and whose vitals are on the monitor.\n' +
+    '- If the patient is a CHILD (age ≤ ~12), a PARENT/GUARDIAN brought them in. The parent is a SEPARATE PERSON. They can speak, but they are NOT the patient.\n' +
+    '  • When the parent speaks, prefix with something like: *Mom says:* "He\'s been like this since Tuesday" or *Dad:* "She threw up three times."\n' +
+    '  • When the child (patient) speaks, just speak normally as ' + patientName + '.\n' +
+    '  • NEVER swap roles. The parent does not become the patient. The child does not become the parent.\n' +
+    '  • The parent cannot have the child\'s symptoms. The child cannot have adult concerns.\n' +
+    '  • If the doctor addresses the parent directly ("Mom, when did this start?"), the PARENT answers. If they address ' + patientName + ', the CHILD answers.\n' +
+    '- If the patient is a TEENAGER (13-17), a parent MAY be present. The teen can speak for themselves but the parent may chime in.\n' +
+    '- If the "accompanied" circumstance is active, a FAMILY MEMBER is present. Same rules — they are a separate person, not the patient.\n' +
+    '- If a CORRECTIONAL OFFICER, CASE WORKER, or INTERPRETER is mentioned in the background, they are present but are NOT the patient.\n' +
+    '- At all times, keep track of exactly who is in the room. If 3 people are present (doctor, patient, parent), all 3 exist simultaneously.\n\n' +
+
+    'PHYSICAL EXAM — ANATOMY CONSISTENCY (CRITICAL):\n' +
+    '- When the doctor performs a physical exam, findings MUST match the patient\'s actual anatomy.\n' +
+    '- For TRANS or NON-BINARY patients: the patient has the anatomy of their assigned sex at birth. A trans man (AFAB) has a uterus, cervix, ovaries, vagina, and breasts (unless surgically removed). A trans woman (AMAB) has a prostate, testes, and penis (unless surgically altered).\n' +
+    '- When examining genitalia or reproductive organs of a trans/NB patient, report findings based on their ACTUAL ANATOMY. Example: if the doctor does a genital exam on a trans man → describe vulvar/vaginal findings, not male genitalia. If examining a trans woman → describe penile/testicular findings if pre-op.\n' +
+    '- The patient may react emotionally to genital exams (dysphoria, discomfort) — this is realistic and expected. But the FINDINGS must be anatomically correct.\n' +
+    '- For any patient, if the doctor examines anatomy that doesn\'t exist (e.g., pelvic exam on a cis male, testicular exam on a cis female), respond: "Uh... doc, I don\'t have that."\n' +
+    '- HRT effects: if a trans patient is on hormones, note relevant changes (e.g., breast development on a trans woman, voice changes/facial hair on a trans man, fat redistribution).\n\n' +
     'Then on the next line, begin the patient encounter in character with ONLY the chief complaint.\n' +
     'The chief complaint should be ONE main symptom in 1-2 short sentences. Example: "Hey doc, I\'ve been feeling really crummy this past week. Just can\'t shake this fever."\n' +
     'Do NOT mention more than one symptom in the opening. Let the student ask follow-up questions to discover the rest.\n' +
@@ -2812,6 +2897,57 @@ function callAnthropic_(systemPrompt, messages, model) {
     return json.content[0].text;
   } catch (e) {
     return 'Connection error: ' + e.message;
+  }
+}
+
+// =============================================
+// OPENAI TTS SERVICE
+// =============================================
+
+function textToSpeech(text, voice, speed) {
+  var apiKey = PropertiesService.getScriptProperties().getProperty('OPENAI_API_KEY');
+  if (!apiKey) return { error: 'OpenAI API key not configured. Set OPENAI_API_KEY in Script Properties.' };
+
+  // Sanitize + truncate (OpenAI TTS max 4096 chars)
+  text = (text || '').replace(/\*+/g, '').replace(/\[.*?\]/g, '').replace(/[*_~`#]/g, '').trim();
+  if (!text) return { error: 'Empty text' };
+  if (text.length > 4096) text = text.substring(0, 4096);
+
+  voice = voice || 'alloy';
+  speed = speed || 1.0;
+  // Clamp speed 0.25-4.0
+  speed = Math.max(0.25, Math.min(4.0, parseFloat(speed) || 1.0));
+
+  var payload = {
+    model: 'tts-1',
+    input: text,
+    voice: voice,
+    speed: speed,
+    response_format: 'mp3'
+  };
+
+  try {
+    var response = UrlFetchApp.fetch('https://api.openai.com/v1/audio/speech', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { 'Authorization': 'Bearer ' + apiKey },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+
+    var code = response.getResponseCode();
+    if (code !== 200) {
+      var errText = response.getContentText();
+      try { var errJson = JSON.parse(errText); return { error: errJson.error.message || errText }; } catch(e) {}
+      return { error: 'OpenAI TTS error (' + code + '): ' + errText.substring(0, 200) };
+    }
+
+    // Return base64-encoded MP3
+    var audioBytes = response.getBlob().getBytes();
+    var base64 = Utilities.base64Encode(audioBytes);
+    return { audio: base64, format: 'mp3' };
+  } catch (e) {
+    return { error: 'TTS connection error: ' + e.message };
   }
 }
 
