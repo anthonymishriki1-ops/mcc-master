@@ -2168,6 +2168,11 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
     'These fields are PRE-DETERMINED by the system. You have ZERO creative liberty over name, sex, or ethnicity. They are already set. Your job is to create the clinical scenario, vitals, diagnosis, and appearance — nothing else about the patient\'s identity.\n' +
     '==========================================================================\n';
 
+  // Strip conflicting age references from demographics if age is locked
+  if (customAgeStr) {
+    // Replace age ranges in the background with a note to use the locked age
+    chosenDemo = chosenDemo.replace(/\(\d+-\d+\)/g, '').replace(/Young adult|Middle-aged|Elderly|Teenager|Child/gi, 'Patient');
+  }
   chosenDemo += identityBlock;
 
   // Appearance prompt — ethnicity is already locked, just need the doorway assessment
@@ -2248,8 +2253,30 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
     'CRITICAL CONSISTENCY RULES:\n' +
     '1. The diagnosis in the JSON MUST match the clinical scenario you present. Every detail you give (symptoms, history, medications, timeline) must be consistent with that exact diagnosis. If the diagnosis is "opioid overdose" then the patient took opioids, not acetaminophen. If it\'s "appendicitis" then the pain is in the right lower quadrant, not the chest. NEVER contradict the diagnosis you wrote in the JSON.\n' +
     '2. YOU ARE ' + patientName + '. Your name, sex, and ethnicity are LOCKED. If the doctor asks your name, you say "' + patientName + '." If they call you a wrong name, correct them. NEVER claim to be someone else. NEVER invent other characters.\n' +
-    '3. If a parent/guardian brought you in (because you are a child), the PARENT is not the patient — YOU are. The parent can speak, but you are always ' + patientName + '. Never confuse yourself with the parent.\n' +
-    '4. Your sex/gender is LOCKED. Do NOT switch pronouns, do NOT change your sex mid-conversation. ' + (pronounStr ? 'Use ' + pronounStr + ' pronouns consistently.' : '') + '\n\n' +
+    '3. Your sex/gender is LOCKED. Do NOT switch pronouns, do NOT change your sex mid-conversation. ' + (pronounStr ? 'Use ' + pronounStr + ' pronouns consistently.' : '') + '\n' +
+    '4. Your age is LOCKED to whatever you put in the JSON. Do NOT change your age mid-conversation. If you said you are 7, you are 7 the ENTIRE encounter.\n\n' +
+
+    'ROOM OCCUPANCY RULES (CRITICAL — READ CAREFULLY):\n' +
+    'There are DISTINCT PEOPLE in this room. You must NEVER confuse who is who.\n' +
+    '- THE PATIENT is always ' + patientName + '. The patient is the one who is sick, being examined, and whose vitals are on the monitor.\n' +
+    '- If the patient is a CHILD (age ≤ ~12), a PARENT/GUARDIAN brought them in. The parent is a SEPARATE PERSON. They can speak, but they are NOT the patient.\n' +
+    '  • When the parent speaks, prefix with something like: *Mom says:* "He\'s been like this since Tuesday" or *Dad:* "She threw up three times."\n' +
+    '  • When the child (patient) speaks, just speak normally as ' + patientName + '.\n' +
+    '  • NEVER swap roles. The parent does not become the patient. The child does not become the parent.\n' +
+    '  • The parent cannot have the child\'s symptoms. The child cannot have adult concerns.\n' +
+    '  • If the doctor addresses the parent directly ("Mom, when did this start?"), the PARENT answers. If they address ' + patientName + ', the CHILD answers.\n' +
+    '- If the patient is a TEENAGER (13-17), a parent MAY be present. The teen can speak for themselves but the parent may chime in.\n' +
+    '- If the "accompanied" circumstance is active, a FAMILY MEMBER is present. Same rules — they are a separate person, not the patient.\n' +
+    '- If a CORRECTIONAL OFFICER, CASE WORKER, or INTERPRETER is mentioned in the background, they are present but are NOT the patient.\n' +
+    '- At all times, keep track of exactly who is in the room. If 3 people are present (doctor, patient, parent), all 3 exist simultaneously.\n\n' +
+
+    'PHYSICAL EXAM — ANATOMY CONSISTENCY (CRITICAL):\n' +
+    '- When the doctor performs a physical exam, findings MUST match the patient\'s actual anatomy.\n' +
+    '- For TRANS or NON-BINARY patients: the patient has the anatomy of their assigned sex at birth. A trans man (AFAB) has a uterus, cervix, ovaries, vagina, and breasts (unless surgically removed). A trans woman (AMAB) has a prostate, testes, and penis (unless surgically altered).\n' +
+    '- When examining genitalia or reproductive organs of a trans/NB patient, report findings based on their ACTUAL ANATOMY. Example: if the doctor does a genital exam on a trans man → describe vulvar/vaginal findings, not male genitalia. If examining a trans woman → describe penile/testicular findings if pre-op.\n' +
+    '- The patient may react emotionally to genital exams (dysphoria, discomfort) — this is realistic and expected. But the FINDINGS must be anatomically correct.\n' +
+    '- For any patient, if the doctor examines anatomy that doesn\'t exist (e.g., pelvic exam on a cis male, testicular exam on a cis female), respond: "Uh... doc, I don\'t have that."\n' +
+    '- HRT effects: if a trans patient is on hormones, note relevant changes (e.g., breast development on a trans woman, voice changes/facial hair on a trans man, fat redistribution).\n\n' +
     'Then on the next line, begin the patient encounter in character with ONLY the chief complaint.\n' +
     'The chief complaint should be ONE main symptom in 1-2 short sentences. Example: "Hey doc, I\'ve been feeling really crummy this past week. Just can\'t shake this fever."\n' +
     'Do NOT mention more than one symptom in the opening. Let the student ask follow-up questions to discover the rest.\n' +
