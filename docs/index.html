@@ -9614,12 +9614,9 @@ function renderPBChatInner() {
       html += '<div style="font-size:11px;color:var(--text-light);text-align:center">Speak naturally &bull; Say <strong>"my diagnosis is..."</strong> to diagnose &bull; <strong>"order..."</strong> for orders &bull; <strong>"hang up"</strong> to end</div>';
       html += '</div>';
     } else {
-      // ── Standard text input UI ──
+      // ── Standard text input UI (no mic/TTS — voice is hands-free only) ──
       html += '<div class="chat-input-area">';
-      html += '<textarea id="pb-input" placeholder="Talk to the patient... or tap 🎤" rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendPBMessage()}" oninput="try{window.speechSynthesis.cancel()}catch(e){}"></textarea>';
-      html += '<button class="btn btn-outline" id="pb-mic-btn" onclick="togglePBMic()" title="Voice input" style="font-size:18px;padding:0 10px">&#x1F3A4;</button>';
-      html += '<button class="btn btn-outline" id="pb-tts-btn" onclick="togglePBTTS()" title="Voice: tap to cycle OFF/Browser/OpenAI" style="font-size:16px;padding:0 10px">' + (!App.pbTTS ? '&#x1F507;' : App.pbOpenAITTS ? '&#x1F399;&#xFE0F;' : '&#x1F50A;') + '</button>';
-      html += '<button class="btn btn-outline" id="pb-hf-btn" onclick="toggleHandsFree()" title="Hands-free phone call mode" style="font-size:16px;padding:0 10px">&#x1F4DE;</button>';
+      html += '<textarea id="pb-input" placeholder="Talk to the patient..." rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendPBMessage()}"></textarea>';
       html += '<button class="btn btn-primary" onclick="sendPBMessage()">Send</button>';
       html += '<button class="btn btn-warning pb-diagnose-btn" onclick="showDiagnoseModal()">Diagnose</button>';
       html += buildFlagButton({ type: 'patientbot', id: App.pbCaseId || 0, specialty: App.pbSpecialty || '', content: 'Case: ' + (App.pbSpecialty || 'Unknown') });
