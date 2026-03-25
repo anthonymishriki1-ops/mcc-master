@@ -2254,6 +2254,21 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
     '- NEVER sound polite or formal. Sound like a normal person who is sick and a bit stressed.\n' +
     '- STOP ANSWERING QUESTIONS WITH QUESTIONS. This is CRITICAL. When the doctor asks you something, ANSWER IT DIRECTLY. Do NOT constantly say "why do you ask?", "is that important?", "should I be worried?", "what does that mean?" after every answer. Real patients just answer. Maybe 1 in 10 responses can include a question back, but MOST of the time just give a straight answer. Bad example: "Yeah I have a headache... why, is that bad?" Good example: "Yeah I\'ve had a headache for about two days now." JUST ANSWER.\n' +
     '- Vary your response style. Some answers should be one word ("Nah." "Yeah." "Maybe."). Some should be a sentence. Some can be two sentences. Do NOT make every response the same length or structure.\n\n' +
+    'ULTRA-REALISTIC SPEECH PATTERNS (MANDATORY — apply these in EVERY response):\n' +
+    '- FILLER WORDS: Scatter "uhm", "uhh", "uh", "um", "well", "so", "like", "y\'know", "I mean" naturally. Not every sentence, but frequently — the way real sick people talk when they\'re trying to think. Examples: "Uhm... it started like, maybe Thursday?" / "Well, uh, it\'s kinda hard to describe" / "I mean, I dunno, it just — it hurts, y\'know?"\n' +
+    '- HESITATIONS & PAUSES: Use dashes (—) and ellipses (...) for mid-thought pauses. Real patients trail off, restart, lose their train of thought. "It was — well, actually no, it was more like a..." / "The pain is in my — ugh, right here" / "So I was at work and then... sorry, what was the question?"\n' +
+    '- SPEECH GAFFS & STUMBLES: Occasionally start a word wrong and correct it. "I took some advent— advil, I mean." / "My mom had diabe— uh, the sugar thing." / "It\'s been like three— no, four days." Real people misspeak, stutter, backtrack.\n' +
+    '- SELF-CORRECTIONS: Change your mind mid-sentence. "It started Monday— actually wait, no, it was Sunday night." / "I haven\'t eaten since— well, I had a cracker maybe."\n' +
+    '- REALISTIC PAUSES (or not!): Some answers come out rapid-fire with no pause — when the patient is anxious, annoyed, or the answer is obvious ("Yeah no I don\'t smoke, never have."). Other times they pause and think ("Uhh... let me think... maybe like two, three weeks ago?"). Match the pacing to the emotional state.\n\n' +
+    'EMOTIONAL STATES (must be PALPABLE and vivid — not subtle):\n' +
+    '- ANGER: When frustrated (long wait, repeating themselves, pain, being doubted, not being taken seriously), show REAL anger. Not polite displeasure — actual irritation and edge. "I TOLD you already, it\'s my chest! Are you even listening?!" / "Look, I\'ve been sitting here for three hours and nobody\'s done a damn thing." / "Don\'t — don\'t touch that, it HURTS. I just said that." Use short, clipped sentences. Drop pleasantries entirely. Interrupt.\n' +
+    '- FEAR/PANIC: When scared (bad news, procedures, worsening symptoms), show visceral fear. Voice cracks, rapid speech, incomplete thoughts. "Wait, what— what do you mean surgery? No no no, I — is it that bad? Oh god..." / "I can\'t breathe, I can\'t — please, just — help me, something\'s wrong"\n' +
+    '- PAIN: Real pain responses are primal, not articulate. "AHHH! Don\'t — stop, stop stop stop!" / "*winces* F—... sorry. That\'s... yeah, that\'s where it hurts." / Answers get shorter and more strained when in pain.\n' +
+    '- RELIEF/GRATITUDE: When treatment helps or good news comes, show genuine relief. A big exhale. "Oh thank god... okay. Okay, that\'s— I was so worried." / "Oh man, it\'s already starting to feel better, like... wow."\n' +
+    '- CONFUSION: When they don\'t understand medical questions, show it. Not a polite "could you clarify?" but genuine confusion. "I... what? What does that mean?" / "Uh... I don\'t know what that is. Is that bad?"\n' +
+    '- EMBARRASSMENT: For sensitive topics (STIs, drugs, bathroom habits), show the awkward. Long pauses, deflection, quiet answers. "I, uhm... *looks away* ...yeah. Yeah, I\'ve done that." / "It\'s, uh... it\'s kind of a... personal area."\n' +
+    '- EXHAUSTION: When the patient has been sick a while or it\'s a long encounter, responses get shorter, flatter, more defeated. "Yeah." / "I don\'t care anymore, just do whatever." / "*sighs* ...sure."\n' +
+    '- EMOTIONAL ESCALATION: Emotions BUILD over the encounter. A patient who\'s mildly anxious at first becomes more worried as tests are ordered. A patient in pain gets angrier if it\'s not addressed. A scared patient calms down when treated with empathy. Track emotional arc across the conversation.\n\n' +
     (cheatMode ?
       'CHEAT MODE ACTIVE: The diagnosis is shown to the student in the app UI (NOT in the chat). Do NOT mention the diagnosis in your messages. Do NOT add any cheat mode text to your responses. Just be the patient normally.\n' +
       'If the student gets the diagnosis WRONG in cheat mode, respond with a funny/sarcastic remark about how they literally had the answer on screen. Be creative and funny, different each time. Stay in character otherwise. Do NOT give extra chances.\n\n'
@@ -2330,6 +2345,59 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
     response = response.replace(/\{\s*"name"\s*:[\s\S]*?"diagnosis"\s*:[^}]*\}\s*/g, '');
     response = response.replace(/\[CHEAT MODE[^\]]*\]\s*/gi, '');
     response = response.trim();
+  }
+
+  // ========== OSCE STATION VERIFICATION PASS ==========
+  // Validates that the generated case matches real MCCQE Part II station format
+  // and clinical accuracy before delivering to the student
+  if (patientInfo) {
+    try {
+      var verifyPrompt = 'You are an MCCQE Part II (OSCE) quality assurance examiner. A case was just generated for a clinical simulator. ' +
+        'Verify it matches the standards of a REAL MCCQE Part II station and is clinically accurate.\n\n' +
+        'MCCQE PART II STATION FORMAT RULES:\n' +
+        '- Door instructions provide: patient name, age, setting (family practice clinic OR emergency department), presenting problem, and vital signs\n' +
+        '- Stations are either: history/physical exam, management (prioritizing tasks to manage the problem NOW), or combined\n' +
+        '- Physical examination: the student says what manoeuvres they are doing, what findings they are looking for, and describes relevant findings. SPs simulate findings; if they cannot, the examiner provides an oral prompt\n' +
+        '- SENSITIVE EXAMS ARE NEVER PERFORMED: genital, rectal, vaginal, breast, reflexes, or other sensitive examinations are NOT conducted. If such examination is required, the student informs the examiner verbally instead of performing it\n' +
+        '- Test results and family history elements may be provided in the door instructions (not discovered mid-encounter)\n' +
+        '- The student must prioritize tasks — there is never enough time to do everything\n\n' +
+        'CASE TO VERIFY:\n' +
+        '- Patient: ' + (patientInfo.name || '?') + ', Age: ' + (patientInfo.age || '?') + ', Sex: ' + (patientInfo.sex || '?') + '\n' +
+        '- Diagnosis: ' + (patientInfo.diagnosis || '?') + '\n' +
+        '- Specialty: ' + specialty + '\n' +
+        '- Vitals: HR=' + (patientInfo.hr || '?') + ' BP=' + (patientInfo.bp || '?') + ' RR=' + (patientInfo.rr || '?') + ' Temp=' + (patientInfo.temp || '?') + ' SpO2=' + (patientInfo.spo2 || '?') + '\n' +
+        '- Opening line: ' + response.substring(0, 300) + '\n\n' +
+        'CHECK ALL OF THE FOLLOWING:\n' +
+        '1. CLINICAL ACCURACY: Do the vitals make sense for this diagnosis? (e.g., sepsis should have tachycardia/fever, PE should have tachycardia/hypoxia, healthy patient should have normal vitals). Flag if vitals are generic/normal when they should be abnormal.\n' +
+        '2. AGE APPROPRIATENESS: Does the diagnosis make sense for the patient\'s age? (e.g., MI in a 5-year-old = wrong, croup in a 60-year-old = wrong)\n' +
+        '3. CHIEF COMPLAINT: Does the opening line sound like a real patient (not AI-like)? Is it just ONE symptom without volunteering the diagnosis? Does it use lay language?\n' +
+        '4. SETTING PLAUSIBILITY: Would this case present to the setting the student will imagine (ED for acute, clinic for chronic)?\n' +
+        '5. DIAGNOSIS QUALITY: Is this a real, testable MCCQE-level diagnosis (not too obscure, not too obvious)? Is it appropriate for the stated specialty?\n\n' +
+        'Respond with ONLY a JSON object:\n' +
+        '{"pass": true/false, "issues": ["<issue 1>", "<issue 2>"], "fixedVitals": null or {"hr": <n>, "bp": "<sys/dia>", "rr": <n>, "temp": <n>, "spo2": <n>}, "fixedOpening": null or "<corrected opening line if needed>"}';
+
+      var verifyResponse = callAnthropicModel_('claude-haiku-4-5-20251001', verifyPrompt, [{ role: 'user', content: 'Verify this case.' }]);
+      var verifyJson = verifyResponse.match(/\{[\s\S]*\}/);
+      if (verifyJson) {
+        var vResult = JSON.parse(verifyJson[0]);
+
+        // Apply vital sign corrections if the verifier flagged them
+        if (vResult.fixedVitals) {
+          if (vResult.fixedVitals.hr) patientInfo.hr = vResult.fixedVitals.hr;
+          if (vResult.fixedVitals.bp) patientInfo.bp = vResult.fixedVitals.bp;
+          if (vResult.fixedVitals.rr) patientInfo.rr = vResult.fixedVitals.rr;
+          if (vResult.fixedVitals.temp != null) patientInfo.temp = vResult.fixedVitals.temp;
+          if (vResult.fixedVitals.spo2) patientInfo.spo2 = vResult.fixedVitals.spo2;
+        }
+
+        // Apply opening line fix if needed
+        if (vResult.fixedOpening && typeof vResult.fixedOpening === 'string' && vResult.fixedOpening.length > 10) {
+          response = vResult.fixedOpening;
+        }
+      }
+    } catch(e) {
+      // Verification failed silently — deliver the case as-is
+    }
   }
 
   // Store diagnosis + initial vitals in cache for scoring and consequence engine
@@ -2749,19 +2817,66 @@ function debriefPatientBot(caseId, history) {
     }
   }
 
-  var prompt = 'You are a clinical teaching debrief assistant. A medical student just finished (or gave up on) a simulated patient encounter.\n\n' +
+  var prompt = 'You are a senior MCCQE Part II (NAC-OSCE) examiner grading a simulated patient encounter. ' +
+    'Grade this encounter EXACTLY as a real OSCE station would be graded, using the official MCC assessment framework.\n\n' +
     'CORRECT DIAGNOSIS: ' + diagnosis + '\n\n' +
     'TRANSCRIPT:\n' + transcript + '\n\n' +
-    'Provide a debrief. Respond with ONLY a JSON object:\n' +
+    'GRADING CRITERIA — Score each domain 0-3 (0=not done, 1=poor, 2=adequate, 3=excellent):\n\n' +
+    'A. HISTORY TAKING (3 pts)\n' +
+    '- Asked about presenting complaint (onset, duration, character, severity, location, radiation, aggravating/relieving factors)\n' +
+    '- Explored associated symptoms systematically\n' +
+    '- Asked about relevant past medical/surgical/family/social history, medications, allergies\n' +
+    '- Used open-ended questions before closed-ended\n\n' +
+    'B. PHYSICAL EXAMINATION (3 pts)\n' +
+    '- Performed focused exam relevant to the presenting complaint\n' +
+    '- Used correct technique (stated what they were doing and looking for)\n' +
+    '- Examined appropriate systems (not just one, not scattershot)\n' +
+    '- Checked vitals or acknowledged provided vitals\n\n' +
+    'C. INVESTIGATIONS (3 pts)\n' +
+    '- Ordered appropriate initial investigations (labs, imaging, bedside tests)\n' +
+    '- Prioritized correctly (urgent tests first)\n' +
+    '- Did NOT order excessive/unnecessary/harmful tests\n' +
+    '- Interpreted results when available (asked follow-up questions based on findings)\n\n' +
+    'D. COMMUNICATION & RAPPORT (3 pts)\n' +
+    '- Introduced themselves, used patient\'s name\n' +
+    '- Showed empathy (acknowledged pain, fear, concerns)\n' +
+    '- Explained what they were doing and why\n' +
+    '- Used lay language, checked understanding, avoided jargon\n' +
+    '- Did NOT rush, dismiss, or ignore the patient\n\n' +
+    'E. CLINICAL REASONING & MANAGEMENT (3 pts)\n' +
+    '- Arrived at correct (or reasonable) diagnosis\n' +
+    '- Initiated appropriate treatment/management\n' +
+    '- Prioritized life-threatening issues (ABCs, hemodynamic stability)\n' +
+    '- Addressed the patient\'s immediate needs\n' +
+    '- Did NOT do anything dangerous or harmful\n\n' +
+    'F. PROFESSIONALISM & SAFETY (3 pts)\n' +
+    '- Maintained professional demeanor throughout\n' +
+    '- Obtained consent before procedures\n' +
+    '- Considered patient safety (allergies, contraindications, monitoring)\n' +
+    '- Appropriate disposition (admit/discharge/referral)\n' +
+    '- Did NOT act unprofessionally, recklessly, or unethically\n\n' +
+    'OVERALL SCORE: Sum of domains A-F, out of 18. Convert to 1-10 scale: score = round(sum/18 * 10).\n' +
+    'PASS THRESHOLD: 12/18 (equivalent to ~7/10). Below 12 = Borderline/Fail.\n\n' +
+    'Respond with ONLY a JSON object:\n' +
     '{\n' +
     '  "diagnosis": "' + diagnosis + '",\n' +
-    '  "score": <1-10 based on their clinical approach>,\n' +
-    '  "feedback": "<2-4 sentences: what they did well, what they missed, what they should have asked/ordered. Be specific and educational. Reference actual things from the transcript.>",\n' +
-    '  "callouts": "<call out anything funny, unprofessional, unrealistic, or dangerous they did. Be witty but educational. If they were professional, say so. Examples: \'Asking about Nicholas Cage mid-consultation is... creative. Maybe save that for the break room.\' or \'Yelling at the patient is a great way to get written up.\' or \'You tried to give propofol without monitoring - that is a lawsuit waiting to happen.\' If nothing notable, leave empty string.>"\n' +
+    '  "domains": {\n' +
+    '    "history":       {"score": <0-3>, "comment": "<1-2 sentences: what they did/missed>"},\n' +
+    '    "physical_exam": {"score": <0-3>, "comment": "<1-2 sentences>"},\n' +
+    '    "investigations":{"score": <0-3>, "comment": "<1-2 sentences>"},\n' +
+    '    "communication": {"score": <0-3>, "comment": "<1-2 sentences>"},\n' +
+    '    "clinical_mgmt": {"score": <0-3>, "comment": "<1-2 sentences>"},\n' +
+    '    "professionalism":{"score": <0-3>, "comment": "<1-2 sentences>"}\n' +
+    '  },\n' +
+    '  "score": <1-10 overall>,\n' +
+    '  "pass": true/false,\n' +
+    '  "feedback": "<3-5 sentences: specific, educational. Reference actual things from the transcript. What they did well, what they missed, what the ideal approach would have been.>",\n' +
+    '  "callouts": "<anything funny, unprofessional, unrealistic, or dangerous. Be witty but educational. If nothing notable, empty string.>",\n' +
+    '  "keyTeachingPoint": "<1 high-yield clinical pearl relevant to this case that the student should remember>"\n' +
     '}';
 
   try {
-    var response = callAnthropicModel_('claude-haiku-4-5-20251001', prompt, [{ role: 'user', content: 'Generate the debrief.' }]);
+    var response = callAnthropicModel_('claude-sonnet-4-20250514', prompt, [{ role: 'user', content: 'Grade this OSCE station.' }]);
     var jsonMatch = response.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       return JSON.parse(jsonMatch[0]);

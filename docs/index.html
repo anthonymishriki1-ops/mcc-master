@@ -8595,70 +8595,114 @@ function logPBConversation(outcome, extraData) {
 // NAC-OSCE SIMULATOR
 // =============================================
 
-// 48 NAC-OSCE stations following the real NAC blueprint distribution
-// Each station: { presentation, specialty, focus }
-var NAC_STATION_POOL = [
-  // MEDICINE (Internal) — 12 stations
-  { presentation: 'Chest Pain', specialty: 'Cardiology', focus: 'ACS workup' },
-  { presentation: 'Dyspnea', specialty: 'Respirology', focus: 'PE vs CHF vs pneumonia' },
-  { presentation: 'Abdominal Pain', specialty: 'GI / Hepatology', focus: 'Acute abdomen DDx' },
-  { presentation: 'Headache', specialty: 'Neurology', focus: 'Red flags, SAH rule-out' },
-  { presentation: 'Polyuria/Polydipsia', specialty: 'Endocrinology', focus: 'New-onset DM or DKA' },
-  { presentation: 'Joint Pain', specialty: 'MSK / Rheumatology', focus: 'Septic vs crystal arthropathy' },
-  { presentation: 'Hematuria', specialty: 'Nephrology / Urology', focus: 'Glomerular vs urologic' },
-  { presentation: 'Fever', specialty: 'Infectious Disease', focus: 'Fever workup, sepsis screen' },
-  { presentation: 'Peripheral Edema', specialty: 'Cardiology', focus: 'CHF assessment' },
-  { presentation: 'Jaundice', specialty: 'GI / Hepatology', focus: 'Obstructive vs hepatic' },
-  { presentation: 'Anemia', specialty: 'Hematology / Oncology', focus: 'Iron deficiency vs chronic disease' },
-  { presentation: 'Dizziness/Vertigo', specialty: 'Neurology', focus: 'Central vs peripheral' },
-
-  // SURGERY — 6 stations
-  { presentation: 'Abdominal Pain', specialty: 'Surgery', focus: 'Surgical abdomen assessment' },
-  { presentation: 'GI Bleeding', specialty: 'Surgery', focus: 'Upper vs lower GI bleed' },
-  { presentation: 'Palpable Mass', specialty: 'Surgery', focus: 'Breast or thyroid mass workup' },
-  { presentation: 'Trauma/Injury', specialty: 'Emergency Medicine', focus: 'ATLS primary survey' },
-  { presentation: 'Fracture/Trauma', specialty: 'Surgery', focus: 'MSK injury management' },
-  { presentation: 'Wound/Ulcer', specialty: 'Surgery', focus: 'Wound assessment, I&D' },
-
-  // OB/GYN — 6 stations
-  { presentation: 'Vaginal Bleeding', specialty: 'OB/GYN', focus: 'Early pregnancy bleeding' },
-  { presentation: 'Pelvic Pain', specialty: 'OB/GYN', focus: 'Ectopic vs PID vs torsion' },
-  { presentation: 'Amenorrhea', specialty: 'OB/GYN', focus: 'Primary vs secondary' },
-  { presentation: 'Pregnancy Concern', specialty: 'OB/GYN', focus: 'Prenatal visit or complication' },
-  { presentation: 'Breast Lump', specialty: 'OB/GYN', focus: 'Triple assessment' },
-  { presentation: 'Vaginal Bleeding', specialty: 'OB/GYN', focus: 'Postmenopausal bleeding' },
-
-  // PEDIATRICS — 6 stations
-  { presentation: 'Pediatric Fever', specialty: 'Pediatrics', focus: 'Febrile child workup' },
-  { presentation: 'Crying/Irritable Child', specialty: 'Pediatrics', focus: 'Infant assessment' },
-  { presentation: 'Rash in a Child', specialty: 'Pediatrics', focus: 'Viral exanthem vs serious' },
-  { presentation: 'Developmental Delay', specialty: 'Pediatrics', focus: 'Milestone assessment' },
-  { presentation: 'Failure to Thrive', specialty: 'Pediatrics', focus: 'Growth faltering workup' },
-  { presentation: 'Wheezing', specialty: 'Pediatrics', focus: 'Asthma vs bronchiolitis' },
-
-  // PSYCHIATRY — 6 stations
-  { presentation: 'Depressed Mood', specialty: 'Psychiatry', focus: 'MDD + safety assessment' },
-  { presentation: 'Anxiety', specialty: 'Psychiatry', focus: 'GAD vs panic vs medical cause' },
-  { presentation: 'Psychosis', specialty: 'Psychiatry', focus: 'First-episode psychosis' },
-  { presentation: 'Suicidal Ideation', specialty: 'Psychiatry', focus: 'Risk assessment + safety plan' },
-  { presentation: 'Substance Abuse', specialty: 'Psychiatry', focus: 'Alcohol use disorder' },
-  { presentation: 'Insomnia', specialty: 'Psychiatry', focus: 'Sleep hygiene + DDx' },
-
-  // EMERGENCY MEDICINE — 6 stations
-  { presentation: 'Poisoning/Overdose', specialty: 'Emergency Medicine', focus: 'Toxidrome recognition' },
-  { presentation: 'Allergic Reaction', specialty: 'Emergency Medicine', focus: 'Anaphylaxis management' },
-  { presentation: 'Altered Mental Status', specialty: 'Emergency Medicine', focus: 'AMS workup' },
-  { presentation: 'Burns', specialty: 'Emergency Medicine', focus: 'Burn assessment + fluid resuscitation' },
-  { presentation: 'Syncope', specialty: 'Emergency Medicine', focus: 'Cardiac vs vasovagal vs neuro' },
-  { presentation: 'Cardiac Arrest', specialty: 'Emergency Medicine', focus: 'ACLS algorithm' },
-
-  // FAMILY MEDICINE / PREVENTIVE — 6 stations
-  { presentation: 'Hypertension', specialty: 'Family Medicine', focus: 'New HTN workup + counseling' },
-  { presentation: 'Back Pain', specialty: 'Family Medicine', focus: 'Red flags + conservative management' },
-  { presentation: 'Skin Rash', specialty: 'Family Medicine', focus: 'Dermatology DDx' },
-  { presentation: 'Weight Loss', specialty: 'Family Medicine', focus: 'Unintentional weight loss' },
-  { presentation: 'Fatigue', specialty: 'Family Medicine', focus: 'Broad DDx + screening' },
-  { presentation: 'Cough', specialty: 'Family Medicine', focus: 'Chronic cough workup' }
+// 7 NAC Practice Tests — 12 stations each (84 total), real NAC blueprint per test
+// Each test: 2 Medicine, 2 Surgery/EM, 2 OB/GYN, 2 Peds, 2 Psych, 1 FM, 1 flex
+var NAC_PRACTICE_TESTS = [
+  // ─── Practice Test 1 ───
+  [
+    { presentation: 'Chest Pain', specialty: 'Cardiology', focus: 'ACS workup' },
+    { presentation: 'Dyspnea', specialty: 'Respirology', focus: 'PE vs CHF vs pneumonia' },
+    { presentation: 'Abdominal Pain', specialty: 'Surgery', focus: 'Surgical abdomen assessment' },
+    { presentation: 'Trauma/Injury', specialty: 'Emergency Medicine', focus: 'ATLS primary survey' },
+    { presentation: 'Vaginal Bleeding', specialty: 'OB/GYN', focus: 'Early pregnancy bleeding' },
+    { presentation: 'Pelvic Pain', specialty: 'OB/GYN', focus: 'Ectopic vs PID vs torsion' },
+    { presentation: 'Pediatric Fever', specialty: 'Pediatrics', focus: 'Febrile child workup' },
+    { presentation: 'Crying/Irritable Child', specialty: 'Pediatrics', focus: 'Infant assessment' },
+    { presentation: 'Depressed Mood', specialty: 'Psychiatry', focus: 'MDD + safety assessment' },
+    { presentation: 'Anxiety', specialty: 'Psychiatry', focus: 'GAD vs panic vs medical cause' },
+    { presentation: 'Hypertension', specialty: 'Family Medicine', focus: 'New HTN workup + counseling' },
+    { presentation: 'Headache', specialty: 'Neurology', focus: 'Red flags, SAH rule-out' }
+  ],
+  // ─── Practice Test 2 ───
+  [
+    { presentation: 'Peripheral Edema', specialty: 'Cardiology', focus: 'CHF assessment' },
+    { presentation: 'Jaundice', specialty: 'GI / Hepatology', focus: 'Obstructive vs hepatic' },
+    { presentation: 'GI Bleeding', specialty: 'Surgery', focus: 'Upper vs lower GI bleed' },
+    { presentation: 'Poisoning/Overdose', specialty: 'Emergency Medicine', focus: 'Toxidrome recognition' },
+    { presentation: 'Amenorrhea', specialty: 'OB/GYN', focus: 'Primary vs secondary amenorrhea' },
+    { presentation: 'Pregnancy Concern', specialty: 'OB/GYN', focus: 'Prenatal visit or complication' },
+    { presentation: 'Rash in a Child', specialty: 'Pediatrics', focus: 'Viral exanthem vs serious' },
+    { presentation: 'Developmental Delay', specialty: 'Pediatrics', focus: 'Milestone assessment' },
+    { presentation: 'Psychosis', specialty: 'Psychiatry', focus: 'First-episode psychosis' },
+    { presentation: 'Suicidal Ideation', specialty: 'Psychiatry', focus: 'Risk assessment + safety plan' },
+    { presentation: 'Back Pain', specialty: 'Family Medicine', focus: 'Red flags + conservative management' },
+    { presentation: 'Polyuria/Polydipsia', specialty: 'Endocrinology', focus: 'New-onset DM or DKA' }
+  ],
+  // ─── Practice Test 3 ───
+  [
+    { presentation: 'Abdominal Pain', specialty: 'GI / Hepatology', focus: 'Acute abdomen DDx' },
+    { presentation: 'Anemia', specialty: 'Hematology / Oncology', focus: 'Iron deficiency vs chronic disease' },
+    { presentation: 'Palpable Mass', specialty: 'Surgery', focus: 'Breast or thyroid mass workup' },
+    { presentation: 'Allergic Reaction', specialty: 'Emergency Medicine', focus: 'Anaphylaxis management' },
+    { presentation: 'Breast Lump', specialty: 'OB/GYN', focus: 'Triple assessment' },
+    { presentation: 'Vaginal Bleeding', specialty: 'OB/GYN', focus: 'Postmenopausal bleeding' },
+    { presentation: 'Failure to Thrive', specialty: 'Pediatrics', focus: 'Growth faltering workup' },
+    { presentation: 'Wheezing', specialty: 'Pediatrics', focus: 'Asthma vs bronchiolitis' },
+    { presentation: 'Substance Abuse', specialty: 'Psychiatry', focus: 'Alcohol use disorder' },
+    { presentation: 'Insomnia', specialty: 'Psychiatry', focus: 'Sleep hygiene + DDx' },
+    { presentation: 'Skin Rash', specialty: 'Family Medicine', focus: 'Dermatology DDx' },
+    { presentation: 'Fever', specialty: 'Infectious Disease', focus: 'Fever workup, sepsis screen' }
+  ],
+  // ─── Practice Test 4 ───
+  [
+    { presentation: 'Palpitations', specialty: 'Cardiology', focus: 'Arrhythmia workup' },
+    { presentation: 'Dizziness/Vertigo', specialty: 'Neurology', focus: 'Central vs peripheral vertigo' },
+    { presentation: 'Fracture/Trauma', specialty: 'Surgery', focus: 'MSK injury management' },
+    { presentation: 'Altered Mental Status', specialty: 'Emergency Medicine', focus: 'AMS workup' },
+    { presentation: 'Pelvic Pain', specialty: 'OB/GYN', focus: 'Ovarian torsion vs cyst rupture' },
+    { presentation: 'Pregnancy Concern', specialty: 'OB/GYN', focus: 'Gestational diabetes screening' },
+    { presentation: 'Pediatric Fever', specialty: 'Pediatrics', focus: 'Meningitis rule-out' },
+    { presentation: 'Rash in a Child', specialty: 'Pediatrics', focus: 'Kawasaki vs scarlet fever' },
+    { presentation: 'Depressed Mood', specialty: 'Psychiatry', focus: 'Postpartum depression' },
+    { presentation: 'Anxiety', specialty: 'Psychiatry', focus: 'PTSD assessment' },
+    { presentation: 'Fatigue', specialty: 'Family Medicine', focus: 'Broad DDx + screening' },
+    { presentation: 'Hematuria', specialty: 'Nephrology / Urology', focus: 'Glomerular vs urologic' }
+  ],
+  // ─── Practice Test 5 ───
+  [
+    { presentation: 'Dyspnea', specialty: 'Respirology', focus: 'Asthma exacerbation vs COPD' },
+    { presentation: 'Joint Pain', specialty: 'MSK / Rheumatology', focus: 'Septic vs crystal arthropathy' },
+    { presentation: 'Wound/Ulcer', specialty: 'Surgery', focus: 'Wound assessment, I&D' },
+    { presentation: 'Burns', specialty: 'Emergency Medicine', focus: 'Burn assessment + fluid resuscitation' },
+    { presentation: 'Vaginal Bleeding', specialty: 'OB/GYN', focus: 'Placenta previa vs abruption' },
+    { presentation: 'Amenorrhea', specialty: 'OB/GYN', focus: 'PCOS workup' },
+    { presentation: 'Crying/Irritable Child', specialty: 'Pediatrics', focus: 'Colic vs intussusception' },
+    { presentation: 'Developmental Delay', specialty: 'Pediatrics', focus: 'Autism screening' },
+    { presentation: 'Psychosis', specialty: 'Psychiatry', focus: 'Substance-induced psychosis' },
+    { presentation: 'Suicidal Ideation', specialty: 'Psychiatry', focus: 'Adolescent self-harm' },
+    { presentation: 'Weight Loss', specialty: 'Family Medicine', focus: 'Unintentional weight loss' },
+    { presentation: 'Syncope', specialty: 'Emergency Medicine', focus: 'Cardiac vs vasovagal vs neuro' }
+  ],
+  // ─── Practice Test 6 ───
+  [
+    { presentation: 'Chest Pain', specialty: 'Cardiology', focus: 'Pericarditis vs aortic dissection' },
+    { presentation: 'Seizures', specialty: 'Neurology', focus: 'New-onset seizure workup' },
+    { presentation: 'Abdominal Pain', specialty: 'Surgery', focus: 'Appendicitis vs cholecystitis' },
+    { presentation: 'Cardiac Arrest', specialty: 'Emergency Medicine', focus: 'ACLS algorithm' },
+    { presentation: 'Breast Lump', specialty: 'OB/GYN', focus: 'Fibroadenoma vs carcinoma' },
+    { presentation: 'Pelvic Pain', specialty: 'OB/GYN', focus: 'Endometriosis workup' },
+    { presentation: 'Failure to Thrive', specialty: 'Pediatrics', focus: 'Neglect vs organic cause' },
+    { presentation: 'Wheezing', specialty: 'Pediatrics', focus: 'Foreign body aspiration' },
+    { presentation: 'Substance Abuse', specialty: 'Psychiatry', focus: 'Opioid use disorder + harm reduction' },
+    { presentation: 'Insomnia', specialty: 'Psychiatry', focus: 'Insomnia with comorbid anxiety' },
+    { presentation: 'Cough', specialty: 'Family Medicine', focus: 'Chronic cough workup' },
+    { presentation: 'Lymphadenopathy', specialty: 'Hematology / Oncology', focus: 'Lymphoma vs reactive' }
+  ],
+  // ─── Practice Test 7 ───
+  [
+    { presentation: 'Peripheral Edema', specialty: 'Cardiology', focus: 'Nephrotic syndrome vs CHF' },
+    { presentation: 'Memory Loss', specialty: 'Neurology', focus: 'Dementia vs delirium' },
+    { presentation: 'GI Bleeding', specialty: 'Surgery', focus: 'Variceal bleed management' },
+    { presentation: 'Poisoning/Overdose', specialty: 'Emergency Medicine', focus: 'Acetaminophen overdose' },
+    { presentation: 'Vaginal Bleeding', specialty: 'OB/GYN', focus: 'Miscarriage management' },
+    { presentation: 'Pregnancy Concern', specialty: 'OB/GYN', focus: 'Pre-eclampsia assessment' },
+    { presentation: 'Pediatric Fever', specialty: 'Pediatrics', focus: 'UTI in a child' },
+    { presentation: 'Crying/Irritable Child', specialty: 'Pediatrics', focus: 'Non-accidental injury screening' },
+    { presentation: 'Depressed Mood', specialty: 'Psychiatry', focus: 'Bipolar vs unipolar depression' },
+    { presentation: 'Anxiety', specialty: 'Psychiatry', focus: 'OCD assessment' },
+    { presentation: 'Hypertension', specialty: 'Family Medicine', focus: 'Secondary HTN workup' },
+    { presentation: 'Thyroid Enlargement', specialty: 'Endocrinology', focus: 'Thyroid nodule workup' }
+  ]
 ];
 
 function showNACSetup() {
@@ -8669,13 +8713,13 @@ function showNACSetup() {
   html += '<h2>NAC-OSCE Simulator</h2>';
   html += '<p style="color:var(--text-light);margin:12px 0 20px">Practice the National Assessment Collaboration OSCE. Each station is a timed patient encounter with structured scoring.</p>';
 
-  html += '<div class="form-group" style="text-align:left"><label>Exam Length</label>';
-  html += '<div class="quiz-count-btns">';
-  html += '<button class="quiz-count-btn" onclick="setNACCount(12,this)">12 Stations (1x NAC)</button>';
-  html += '<button class="quiz-count-btn" onclick="setNACCount(24,this)">24 Stations (2x NAC)</button>';
-  html += '<button class="quiz-count-btn active" onclick="setNACCount(48,this)">48 Stations (Full Pool)</button>';
+  html += '<div class="form-group" style="text-align:left"><label>Practice Test</label>';
+  html += '<div class="quiz-count-btns" style="flex-wrap:wrap">';
+  for (var ti = 0; ti < NAC_PRACTICE_TESTS.length; ti++) {
+    html += '<button class="quiz-count-btn' + (ti === 0 ? ' active' : '') + '" onclick="setNACTest(' + (ti+1) + ',this)">Test ' + (ti+1) + '</button>';
+  }
   html += '</div>';
-  html += '<input type="number" id="nac-count" value="48" min="1" max="48" placeholder="Custom...">';
+  html += '<input type="hidden" id="nac-test-num" value="1">';
   html += '</div>';
 
   html += '<div class="form-group" style="text-align:left"><label>Station Timer</label>';
@@ -8699,7 +8743,7 @@ function showNACSetup() {
   html += '&#x23F1; Timer counts down (if enabled) — manage your time like the real NAC<br>';
   html += '&#x1F4CB; Full OSCE scorecard after each station<br>';
   html += '&#x1F4CA; Blueprint follows real NAC distribution: Medicine, Surgery, OB/GYN, Peds, Psych, EM, FM<br>';
-  html += '&#x1FA7A; All 48 stations logged for your review<br>';
+  html += '&#x1FA7A; 7 unique practice tests &mdash; 84 stations total<br>';
   html += '</div>';
 
   html += '<button class="btn btn-success" style="width:100%;padding:14px;font-size:16px" onclick="startNACExam()">&#x1FA7A; Start NAC-OSCE Exam</button>';
@@ -8707,8 +8751,8 @@ function showNACSetup() {
   el.innerHTML = html;
 }
 
-function setNACCount(n, btn) {
-  document.getElementById('nac-count').value = n;
+function setNACTest(n, btn) {
+  document.getElementById('nac-test-num').value = n;
   var btns = btn.parentElement.querySelectorAll('.quiz-count-btn');
   for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
   btn.classList.add('active');
@@ -8729,18 +8773,13 @@ function setNACDiff(diff, btn) {
 }
 
 function startNACExam() {
-  var count = parseInt(document.getElementById('nac-count').value) || 48;
-  count = Math.min(count, NAC_STATION_POOL.length);
-
-  // Shuffle and pick stations
-  var pool = NAC_STATION_POOL.slice();
-  for (var i = pool.length - 1; i > 0; i--) {
-    var j = Math.floor(Math.random() * (i + 1));
-    var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
-  }
-  App.nacStations = pool.slice(0, count);
+  var testNum = parseInt(document.getElementById('nac-test-num').value) || 1;
+  testNum = Math.max(1, Math.min(testNum, NAC_PRACTICE_TESTS.length));
+  var stations = NAC_PRACTICE_TESTS[testNum - 1];
+  App.nacTestNumber = testNum;
+  App.nacStations = stations.slice();
   App.nacCurrentStation = 0;
-  App.nacTotalStations = count;
+  App.nacTotalStations = stations.length;
   App.nacActive = true;
   App.nacScores = [];
   App.nacTimerMinutes = App.nacTimerMinutes || 11;
@@ -8780,7 +8819,7 @@ function startNextNACStation() {
   navigateTo('patientbot');
   var el = document.getElementById('patientbot-content');
   el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div>' +
-    '<p style="margin-top:16px;color:var(--text-light)">NAC Station ' + App.nacCurrentStation + ' of ' + App.nacTotalStations + '</p>' +
+    '<p style="margin-top:16px;color:var(--text-light)">Test ' + (App.nacTestNumber || '') + ' &mdash; Station ' + App.nacCurrentStation + ' of ' + App.nacTotalStations + '</p>' +
     '<p style="margin-top:4px;color:var(--accent);font-weight:700">' + escapeHtml(station.specialty) + ' — ' + escapeHtml(station.presentation) + '</p>' +
     '<p style="margin-top:4px;font-size:12px;color:var(--text-light)">' + escapeHtml(station.focus) + '</p></div>';
 
@@ -8910,7 +8949,7 @@ function showNACSummary() {
 
   var html = '<div class="card" style="text-align:center;padding:40px">';
   html += '<div style="font-size:48px;margin-bottom:8px">&#x1FA7A;</div>';
-  html += '<h2>NAC-OSCE Complete</h2>';
+  html += '<h2>NAC-OSCE Complete &mdash; Test ' + (App.nacTestNumber || '?') + '</h2>';
   html += '<div class="daily-card-score-ring" style="margin:20px auto"><div class="daily-card-score-number">' + correct + '/' + total + '</div><div class="daily-card-score-label">' + pct + '% Diagnosed</div></div>';
   html += '</div>';
 
@@ -9225,7 +9264,7 @@ function startPBMonitorAnimation() {
 
 function renderPBChatInner() {
   var caseLabel = App.pbTotalCases > 1 ? ' (Case ' + App.pbCurrentCase + '/' + App.pbTotalCases + ')' : '';
-  var nacLabel = App.nacActive ? ' (Station ' + App.nacCurrentStation + '/' + App.nacTotalStations + ')' : '';
+  var nacLabel = App.nacActive ? ' (Test ' + (App.nacTestNumber || '') + ' &mdash; Station ' + App.nacCurrentStation + '/' + App.nacTotalStations + ')' : '';
   var p = App.pbPatientInfo;
 
   var html = '<div class="pb-top-bar"><div class="pb-top-left"><h3>' + (App.nacActive ? 'NAC-OSCE' : 'PatientBot') + ' &mdash; ' + escapeHtml(App.pbSpecialty) + (App.nacActive ? nacLabel : caseLabel) + '</h3></div>';
@@ -9656,18 +9695,23 @@ function renderPBChatInner() {
     if (App.pbScorecard) {
       var sc = App.pbScorecard;
       var scScore = sc.score || 0;
+      var scPass = sc.pass !== undefined ? sc.pass : (scScore >= 7);
       var scGrade = scScore >= 9 ? 'A+' : scScore >= 8 ? 'A' : scScore >= 7 ? 'B' : scScore >= 6 ? 'C' : scScore >= 5 ? 'D' : 'F';
       var scGradeColor = scScore >= 8 ? '#2e7d32' : scScore >= 6 ? '#f9a825' : scScore >= 5 ? '#e65100' : '#c62828';
       var scBarColor = scScore >= 8 ? '#2e7d32' : scScore >= 6 ? '#f9a825' : '#c62828';
 
       html += '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:16px;margin:16px;padding:24px;box-shadow:0 2px 12px rgba(0,0,0,0.08)">';
+
+      // Header with grade badge
       html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">';
-      html += '<div><h3 style="margin:0 0 4px;font-size:20px;font-weight:800">Case Debrief</h3>';
+      html += '<div><h3 style="margin:0 0 4px;font-size:20px;font-weight:800">OSCE Scorecard</h3>';
       html += '<div style="font-size:13px;color:var(--text-light)">Diagnosis: <strong>' + escapeHtml(sc.diagnosis || App.pbDiagnosis || '?') + '</strong></div></div>';
-      html += '<div style="width:60px;height:60px;border-radius:50%;background:' + scGradeColor + ';color:white;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:900;flex-shrink:0">' + scGrade + '</div>';
+      html += '<div style="text-align:center"><div style="width:60px;height:60px;border-radius:50%;background:' + scGradeColor + ';color:white;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:900;flex-shrink:0">' + scGrade + '</div>';
+      html += '<div style="font-size:11px;font-weight:700;margin-top:4px;color:' + (scPass ? '#2e7d32' : '#c62828') + '">' + (scPass ? 'PASS' : 'BELOW STANDARD') + '</div></div>';
       html += '</div>';
 
-      html += '<div style="margin-bottom:16px">';
+      // Overall score bar
+      html += '<div style="margin-bottom:20px">';
       html += '<div style="display:flex;justify-content:space-between;margin-bottom:6px">';
       html += '<span style="font-size:13px;font-weight:600;color:var(--text-light)">Overall Score</span>';
       html += '<span style="font-size:14px;font-weight:700;color:' + scBarColor + '">' + scScore + '/10</span>';
@@ -9676,12 +9720,62 @@ function renderPBChatInner() {
       html += '<div style="background:' + scBarColor + ';width:' + (scScore * 10) + '%;height:100%;border-radius:6px;transition:width 0.6s ease"></div>';
       html += '</div></div>';
 
-      if (sc.feedback) {
-        html += '<div style="font-size:14px;line-height:1.7;color:var(--text);margin-bottom:' + (sc.callouts ? '16px' : '0') + '">' + formatMarkdown(sc.feedback) + '</div>';
+      // Domain breakdown (6 OSCE domains)
+      if (sc.domains) {
+        var domainLabels = {
+          'history': { icon: '&#x1F4DD;', name: 'History Taking' },
+          'physical_exam': { icon: '&#x1FA7A;', name: 'Physical Examination' },
+          'investigations': { icon: '&#x1F52C;', name: 'Investigations' },
+          'communication': { icon: '&#x1F4AC;', name: 'Communication & Rapport' },
+          'clinical_mgmt': { icon: '&#x1F3AF;', name: 'Clinical Reasoning & Mgmt' },
+          'professionalism': { icon: '&#x2696;&#xFE0F;', name: 'Professionalism & Safety' }
+        };
+        var domainOrder = ['history', 'physical_exam', 'investigations', 'communication', 'clinical_mgmt', 'professionalism'];
+
+        html += '<div style="margin-bottom:20px">';
+        html += '<div style="font-size:13px;font-weight:700;color:var(--text-light);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px">Domain Breakdown</div>';
+
+        for (var di = 0; di < domainOrder.length; di++) {
+          var dk = domainOrder[di];
+          var dd = sc.domains[dk];
+          if (!dd) continue;
+          var dl = domainLabels[dk] || { icon: '', name: dk };
+          var ds = dd.score || 0;
+          var dColor = ds >= 3 ? '#2e7d32' : ds >= 2 ? '#f9a825' : ds >= 1 ? '#e65100' : '#c62828';
+          var dLabel = ds >= 3 ? 'Excellent' : ds >= 2 ? 'Adequate' : ds >= 1 ? 'Poor' : 'Not Done';
+          var dPct = Math.round(ds / 3 * 100);
+
+          html += '<div style="margin-bottom:12px">';
+          html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
+          html += '<span style="font-size:13px;color:var(--text)">' + dl.icon + ' ' + dl.name + '</span>';
+          html += '<span style="font-size:12px;font-weight:700;color:' + dColor + '">' + ds + '/3 · ' + dLabel + '</span>';
+          html += '</div>';
+          html += '<div style="background:var(--bg);border-radius:4px;height:8px;overflow:hidden">';
+          html += '<div style="background:' + dColor + ';width:' + dPct + '%;height:100%;border-radius:4px;transition:width 0.5s ease"></div>';
+          html += '</div>';
+          if (dd.comment) {
+            html += '<div style="font-size:12px;color:var(--text-light);margin-top:3px;line-height:1.4">' + escapeHtml(dd.comment) + '</div>';
+          }
+          html += '</div>';
+        }
+        html += '</div>';
       }
 
+      // Feedback
+      if (sc.feedback) {
+        html += '<div style="font-size:14px;line-height:1.7;color:var(--text);margin-bottom:16px">' + formatMarkdown(sc.feedback) + '</div>';
+      }
+
+      // Key teaching point
+      if (sc.keyTeachingPoint) {
+        html += '<div style="padding:12px 16px;background:rgba(46,125,50,0.08);border:1px solid #2e7d32;border-radius:10px;font-size:13px;color:var(--text);margin-bottom:' + (sc.callouts ? '12px' : '0') + '">';
+        html += '&#x1F393; <strong>Key Teaching Point:</strong> ' + escapeHtml(sc.keyTeachingPoint);
+        html += '</div>';
+      }
+
+      // Callouts (funny/unprofessional)
       if (sc.callouts) {
-        html += '<div style="margin-top:4px;padding:12px 16px;background:rgba(99,102,241,0.08);border:1px solid var(--accent);border-radius:10px;font-size:13px;color:var(--text)">';
+        html += '<div style="padding:12px 16px;background:rgba(99,102,241,0.08);border:1px solid var(--accent);border-radius:10px;font-size:13px;color:var(--text)">';
         html += '&#x1F4A1; ' + escapeHtml(sc.callouts);
         html += '</div>';
       }
