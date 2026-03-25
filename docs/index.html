@@ -2441,6 +2441,10 @@ body.kb-open #bottom-nav { display: none !important; }
       <li data-page="patientbot" onclick="navigateTo('patientbot')">&#x1F3E5; PatientBot</li>
       <li data-page="house" onclick="navigateTo('house')">&#x1F9E0; Dr. House</li>
 
+      <li class="nav-group-label">EXAM PREP</li>
+      <li data-page="mccqe-sim" onclick="navigateTo('mccqe-sim')">&#x1F4D6; MCCQE Part I</li>
+      <li data-page="nac-sim" onclick="navigateTo('nac-sim')">&#x1FA7A; NAC-OSCE</li>
+
       <li class="nav-group-label">TOOLS</li>
       <li data-page="search" onclick="navigateTo('search')">&#x1F50D; Search</li>
       <li data-page="drdata" onclick="navigateTo('drdata')">&#x1F916; Dr. Data</li>
@@ -2763,6 +2767,18 @@ body.kb-open #bottom-nav { display: none !important; }
           <a href="https://www.amboss.com/" target="_blank" class="btn btn-outline">Visit Site</a>
         </div>
       </div>
+    </div>
+
+    <!-- MCCQE PART I EXAM SIMULATOR -->
+    <div id="page-mccqe-sim" class="page">
+      <div class="page-header"><h2>&#x1F4D6; MCCQE Part I Simulator</h2></div>
+      <div id="mccqe-sim-content"></div>
+    </div>
+
+    <!-- NAC-OSCE SIMULATOR -->
+    <div id="page-nac-sim" class="page">
+      <div class="page-header"><h2>&#x1FA7A; NAC-OSCE Simulator</h2></div>
+      <div id="nac-sim-content"></div>
     </div>
 
     <!-- DEV PANEL (admin only) -->
@@ -3108,6 +3124,8 @@ function navigateTo(page) {
     case 'search': document.getElementById('search-input').focus(); break;
     case 'patientbot': if (!App.pbCaseId) showPatientBotSetup(); break;
     case 'house': showHouseSetup(); break;
+    case 'mccqe-sim': showMCCQESetup(); break;
+    case 'nac-sim': showNACSetup(); break;
 
     case 'leaderboard': loadLeaderboard(); break;
     case 'achievements': loadAchievements(); break;
@@ -5053,7 +5071,7 @@ function loadDevPanel() {
   if (DEV_USERS.indexOf(profile.toLowerCase()) === -1) { el.innerHTML = '<p class="empty-state">Access denied.</p>'; return; }
   el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
 
-  serverCall('getDevStats').then(function(stats) {
+  serverCall('getDevStats', profile).then(function(stats) {
     if (stats.error) { el.innerHTML = '<p class="empty-state">' + escapeHtml(stats.error) + '</p>'; return; }
     renderDevPanel(stats);
   }).catch(function(e) { el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p></div>'; });

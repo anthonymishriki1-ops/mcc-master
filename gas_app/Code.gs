@@ -221,10 +221,13 @@ function getUserId_(guestId) {
 }
 
 // --- Dev Panel: get all user activity ---
-function getDevStats(devSecretArg) {
+function getDevStats(devSecretOrProfile) {
   var email = Session.getActiveUser().getEmail() || '';
-  var hasDevSecret = DEV_SECRET && devSecretArg && devSecretArg === DEV_SECRET;
-  if (email.toLowerCase() !== ADMIN_EMAIL && !hasDevSecret) return { error: 'Not authorized' };
+  var hasDevSecret = DEV_SECRET && devSecretOrProfile && devSecretOrProfile === DEV_SECRET;
+  // Allow profile-based auth for GitHub Pages (where Session.getActiveUser() is empty)
+  var DEV_PROFILES = ['profile_tony', 'tony', 'profile_admin', 'admin'];
+  var isDevProfile = devSecretOrProfile && DEV_PROFILES.indexOf(devSecretOrProfile.toLowerCase()) !== -1;
+  if (email.toLowerCase() !== ADMIN_EMAIL && !hasDevSecret && !isDevProfile) return { error: 'Not authorized' };
 
   var sheet = ensureUserDataSheet_();
   var data = sheet.getDataRange().getValues();
