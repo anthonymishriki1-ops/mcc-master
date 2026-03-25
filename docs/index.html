@@ -4044,6 +4044,7 @@ var VitalsEngine = {
       App.pbCaseScores = App.pbCaseScores || [];
       App.pbCaseScores.push({ specialty: App.pbSpecialty, caseNum: App.pbCurrentCase, correct: false, diagnosis: App.pbDiagnosis, fatal: true, causeOfDeath: deathMsg, points: 0 });
       if (typeof serverCall === 'function') serverCall('saveProgress', 'pb_result', { correct: false, specialty: App.pbSpecialty, diagnosis: App.pbDiagnosis, fatal: true, causeOfDeath: deathMsg, points: 0 });
+      if (typeof logPBConversation === 'function') logPBConversation('fatal', { fatal: true, causeOfDeath: deathMsg });
       var inputEl = document.getElementById('pb-input');
       if (inputEl) inputEl.disabled = true;
     }
@@ -7215,6 +7216,7 @@ function sendPBMessage() {
       App.pbCaseScores.push({ specialty: App.pbSpecialty, caseNum: App.pbCurrentCase, correct: false, diagnosis: App.pbDiagnosis, fatal: true, causeOfDeath: result.causeOfDeath, points: 0 });
       serverCall('saveProgress', 'pb_result', { correct: false, specialty: App.pbSpecialty, diagnosis: App.pbDiagnosis, fatal: true, causeOfDeath: result.causeOfDeath, points: 0 });
       App.pbHistory.push({ role: 'death', content: result.causeOfDeath || 'The patient has died.' });
+      logPBConversation('fatal', { fatal: true, causeOfDeath: result.causeOfDeath });
       target(); return;
     }
 
@@ -8162,10 +8164,12 @@ function submitPBDiagnosis() {
       App.pbHistory.push({ role: 'diagnosis_result', content: { correct: true, score: result.score, feedback: result.feedback, points: pts, answer: App.pbDiagnosis } });
       App.pbCaseScores.push({ specialty: App.pbSpecialty, caseNum: App.pbCurrentCase, correct: true, diagnosis: App.pbDiagnosis, attempts: App.pbDiagAttempts, feedback: result.feedback, points: pts, score: result.score });
       serverCall('saveProgress', 'pb_result', { correct: true, specialty: App.pbSpecialty, diagnosis: App.pbDiagnosis, attempts: App.pbDiagAttempts, points: pts, feedback: result.feedback, score: result.score, transcript: getPBTranscript() });
+      logPBConversation('diagnosed', { correct: true, score: result.score });
     } else {
       App.pbHistory.push({ role: 'diagnosis_result', content: { correct: false, score: result.score, feedback: result.feedback, points: 0, answer: App.pbDiagnosis } });
       App.pbCaseScores.push({ specialty: App.pbSpecialty, caseNum: App.pbCurrentCase, correct: false, diagnosis: App.pbDiagnosis, attempts: App.pbDiagAttempts, feedback: result.feedback, points: 0, score: result.score });
       serverCall('saveProgress', 'pb_result', { correct: false, specialty: App.pbSpecialty, diagnosis: App.pbDiagnosis, attempts: App.pbDiagAttempts, points: 0, feedback: result.feedback, score: result.score, transcript: getPBTranscript() });
+      logPBConversation('wrong', { correct: false, score: result.score });
     }
     renderFn();
   }).catch(function(e) {
@@ -8177,6 +8181,7 @@ function submitPBDiagnosis() {
 function finishCurrentPBCase() {
   if (!App.pbDiagResolved) {
     App.pbCaseScores.push({ specialty: App.pbSpecialty, caseNum: App.pbCurrentCase, correct: false, diagnosis: App.pbDiagnosis, attempts: 0, skipped: true, points: 0 });
+    logPBConversation('skipped', {});
   }
   if (App.dailyPhase === 'pb') { finishDailyPBCase(); return; }
   if (App.pbCurrentCase >= App.pbTotalCases) { showPBSummary(); } else { App.pbCaseId = null; App.pbHistory = []; startNextPBCase(); }
@@ -8221,6 +8226,31 @@ function getPBTranscript() {
     var str = typeof c === 'string' ? c : JSON.stringify(c);
     return { role: m.role, content: str.substring(0, 400) };
   });
+}
+
+function logPBConversation(outcome, extraData) {
+  var data = {
+    caseId: App.pbCaseId || '',
+    specialty: App.pbSpecialty || '',
+    presentation: App.pbPresentation || '',
+    diagnosis: App.pbDiagnosis || '',
+    difficulty: App.pbDifficulty || 'medium',
+    outcome: outcome,
+    correct: (extraData && extraData.correct) || false,
+    attempts: App.pbDiagAttempts || 0,
+    score: (extraData && extraData.score) || '',
+    fatal: (extraData && extraData.fatal) || false,
+    causeOfDeath: (extraData && extraData.causeOfDeath) || '',
+    cheatMode: App.pbCheatMode || false,
+    patientAge: (App.pbPatientInfo && App.pbPatientInfo.age) || '',
+    custom: App.pbCustom || {},
+    conversation: App.pbHistory.map(function(m) {
+      var c = m.content;
+      var str = typeof c === 'string' ? c : JSON.stringify(c);
+      return { role: m.role, content: str };
+    })
+  };
+  serverCall('savePBConversation', data).catch(function(e) { console.error('Failed to log PB conversation:', e); });
 }
 
 function loadOSCEScorecard() {

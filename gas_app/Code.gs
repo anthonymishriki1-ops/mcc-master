@@ -27,7 +27,7 @@ function doGet(e) {
       var args = payload.args || [];
       var profile = payload.profile || '';
       // Functions that accept guestId as their last parameter
-      var needsGuestId = ['saveQuizResult','saveProgress','analyzeQuizResults','saveCardRating','getUserStats','getUserQuizHistory','getLeaderboard','getDailyChallenge','getWeakCards_','getPBCaseLibrary'];
+      var needsGuestId = ['saveQuizResult','saveProgress','analyzeQuizResults','saveCardRating','getUserStats','getUserQuizHistory','getLeaderboard','getDailyChallenge','getWeakCards_','getPBCaseLibrary','savePBConversation'];
       if (profile && needsGuestId.indexOf(fn) !== -1) {
         args.push(profile);
       }
@@ -63,7 +63,8 @@ function doGet(e) {
         'updateIssueStatus': updateIssueStatus,
         'getDevStats': getDevStats,
         'generateCaseDebrief': generateCaseDebrief,
-        'getPBCaseLibrary': getPBCaseLibrary
+        'getPBCaseLibrary': getPBCaseLibrary,
+        'savePBConversation': savePBConversation
       };
       if (!allowed[fn]) {
         return ContentService.createTextOutput(JSON.stringify({ error: 'Function not allowed: ' + fn }))
@@ -179,7 +180,8 @@ function doPost(e) {
       'updateIssueStatus': updateIssueStatus,
       'getDevStats': getDevStats,
       'generateCaseDebrief': generateCaseDebrief,
-      'getPBCaseLibrary': getPBCaseLibrary
+      'getPBCaseLibrary': getPBCaseLibrary,
+      'savePBConversation': savePBConversation
     };
 
     if (!allowed[fn]) {
@@ -1165,6 +1167,53 @@ function saveProgress(type, data, guestId) {
   var sheet = ensureUserDataSheet_();
   var userId = getUserId_(guestId);
   sheet.appendRow([userId, type, JSON.stringify(data), new Date().toISOString()]);
+  return { success: true };
+}
+
+// --- Save full PatientBot conversation with all case variables ---
+function savePBConversation(caseData, guestId) {
+  var ss = SpreadsheetApp.openById(getConfig_().SHEET_ID);
+  var sheet = ss.getSheetByName('PB_Conversations');
+  if (!sheet) {
+    sheet = ss.insertSheet('PB_Conversations');
+    sheet.appendRow([
+      'Timestamp', 'User', 'Case_ID', 'Specialty', 'Presentation', 'Diagnosis',
+      'Difficulty', 'Outcome', 'Correct', 'Attempts', 'Score', 'Fatal', 'Cause_of_Death',
+      'Sex', 'Age', 'Age_Min', 'Age_Max', 'Historian', 'Cooperativeness', 'Aggression',
+      'Archetype', 'Circumstances', 'Cheat_Mode', 'Msg_Count', 'Conversation'
+    ]);
+    sheet.setFrozenRows(1);
+  }
+  var userId = getUserId_(guestId);
+  var d = caseData || {};
+  var custom = d.custom || {};
+  sheet.appendRow([
+    new Date().toISOString(),
+    userId,
+    d.caseId || '',
+    d.specialty || '',
+    d.presentation || '',
+    d.diagnosis || '',
+    d.difficulty || '',
+    d.outcome || '',           // 'diagnosed', 'wrong', 'fatal', 'skipped'
+    d.correct ? 'YES' : 'NO',
+    d.attempts || 0,
+    d.score || '',
+    d.fatal ? 'YES' : 'NO',
+    d.causeOfDeath || '',
+    custom.sex || 'random',
+    d.patientAge || '',
+    custom.ageMin || '',
+    custom.ageMax || '',
+    custom.historian || 'random',
+    custom.coop || 'random',
+    custom.aggression || 'random',
+    custom.archetype || 'random',
+    (custom.circumstances || []).join(', '),
+    d.cheatMode ? 'YES' : 'NO',
+    (d.conversation || []).length,
+    JSON.stringify(d.conversation || [])
+  ]);
   return { success: true };
 }
 
