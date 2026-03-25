@@ -7463,7 +7463,7 @@ function startNextPBCase() {
   serverCall('startPatientBotCase', App.pbSetupSpecialty, App.pbCheatMode, App.pbDifficulty, App.pbCustom || {}).then(function(result) {
     App.pbCaseId = result.caseId; App.pbSpecialty = result.specialty; App.pbPresentation = result.presentation || '';
     App.pbDiagnosis = null; App.pbPatientInfo = null; App.pbDiagnosing = false; App.pbDiagAttempts = 0; App.pbDiagResolved = false;
-    App.pbPartialUsed = false; App.pbScorecard = null; App.pbScorecardLoading = false; App.pbScorecardError = false;
+    App.pbPartialUsed = false; App.pbScorecard = null; App.pbScorecardLoading = false; App.pbScorecardError = false; App.pbScorecardShown = false;
     App.pbDrDataEval = null; App.pbDrDataEvalLoading = false; App.pbDrDataEvalError = false; App.pbDrDataConvHistory = [];
     App.pbMonitorAttached = false;
     VitalsEngine.init(result.vitals || result.patient || {});
@@ -8998,6 +8998,7 @@ function loadOSCEScorecard() {
   serverCall('debriefPatientBot', App.pbCaseId, App.pbHistory.slice(-40)).then(function(result) {
     App.pbScorecard = result;
     App.pbScorecardLoading = false;
+    App.pbScorecardShown = false;
     var renderFn = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
     renderFn();
   }).catch(function(e) {
@@ -9009,7 +9010,109 @@ function loadOSCEScorecard() {
   });
 }
 
-function endPBCase() { VitalsEngine.stop(); stopNACTimer(); App.pbMonitorAttached = false; App.pbCodeBlue = false; App.pbCaseId = null; App.pbHistory = []; App.pbSpecialty = null; App.pbPartialUsed = false; App.pbScorecard = null; App.pbScorecardLoading = false; App.pbScorecardError = false; App.pbDrDataEval = null; App.pbDrDataEvalLoading = false; App.pbDrDataEvalError = false; App.pbDrDataConvHistory = []; App.nacActive = false; App.nacCurrentStation = 0; App.nacTotalStations = 0; showPatientBotSetup(); }
+function showScorecardModal_() {
+  var sc = App.pbScorecard;
+  if (!sc) return;
+  // Remove existing modal if any
+  var existing = document.getElementById('scorecard-modal');
+  if (existing) existing.remove();
+
+  var scScore = sc.score || 0;
+  var scPass = sc.pass !== undefined ? sc.pass : (scScore >= 7);
+  var scGrade = scScore >= 9 ? 'A+' : scScore >= 8 ? 'A' : scScore >= 7 ? 'B' : scScore >= 6 ? 'C' : scScore >= 5 ? 'D' : 'F';
+  var scGradeColor = scScore >= 8 ? '#2e7d32' : scScore >= 6 ? '#f9a825' : scScore >= 5 ? '#e65100' : '#c62828';
+  var scBarColor = scScore >= 8 ? '#2e7d32' : scScore >= 6 ? '#f9a825' : '#c62828';
+
+  var h = '';
+  h += '<div id="scorecard-modal" style="position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);padding:16px;animation:fadeIn 0.3s ease" onclick="if(event.target===this)this.remove()">';
+  h += '<div style="background:var(--card);border-radius:20px;padding:28px;max-width:520px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);position:relative">';
+
+  // Close button
+  h += '<button onclick="document.getElementById(\'scorecard-modal\').remove()" style="position:absolute;top:12px;right:16px;background:none;border:none;font-size:22px;cursor:pointer;color:var(--text-light);padding:4px 8px">&times;</button>';
+
+  // Header with grade badge
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">';
+  h += '<div><h3 style="margin:0 0 4px;font-size:20px;font-weight:800">OSCE Scorecard</h3>';
+  h += '<div style="font-size:13px;color:var(--text-light)">Diagnosis: <strong>' + escapeHtml(sc.diagnosis || App.pbDiagnosis || '?') + '</strong></div></div>';
+  h += '<div style="text-align:center"><div style="width:60px;height:60px;border-radius:50%;background:' + scGradeColor + ';color:white;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:900;flex-shrink:0">' + scGrade + '</div>';
+  h += '<div style="font-size:11px;font-weight:700;margin-top:4px;color:' + (scPass ? '#2e7d32' : '#c62828') + '">' + (scPass ? 'PASS' : 'BELOW STANDARD') + '</div></div>';
+  h += '</div>';
+
+  // Overall score bar
+  h += '<div style="margin-bottom:20px">';
+  h += '<div style="display:flex;justify-content:space-between;margin-bottom:6px">';
+  h += '<span style="font-size:13px;font-weight:600;color:var(--text-light)">Overall Score</span>';
+  h += '<span style="font-size:14px;font-weight:700;color:' + scBarColor + '">' + scScore + '/10</span>';
+  h += '</div>';
+  h += '<div style="background:var(--bg);border-radius:6px;height:12px;overflow:hidden">';
+  h += '<div style="background:' + scBarColor + ';width:' + (scScore * 10) + '%;height:100%;border-radius:6px;transition:width 0.6s ease"></div>';
+  h += '</div></div>';
+
+  // Domain breakdown
+  if (sc.domains) {
+    var domainLabels = {
+      'history': { icon: '&#x1F4DD;', name: 'History Taking' },
+      'physical_exam': { icon: '&#x1FA7A;', name: 'Physical Examination' },
+      'investigations': { icon: '&#x1F52C;', name: 'Investigations' },
+      'communication': { icon: '&#x1F4AC;', name: 'Communication & Rapport' },
+      'clinical_mgmt': { icon: '&#x1F3AF;', name: 'Clinical Reasoning & Mgmt' },
+      'professionalism': { icon: '&#x2696;&#xFE0F;', name: 'Professionalism & Safety' }
+    };
+    var domainOrder = ['history', 'physical_exam', 'investigations', 'communication', 'clinical_mgmt', 'professionalism'];
+
+    h += '<div style="margin-bottom:20px">';
+    h += '<div style="font-size:13px;font-weight:700;color:var(--text-light);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px">Domain Breakdown</div>';
+
+    for (var di = 0; di < domainOrder.length; di++) {
+      var dk = domainOrder[di];
+      var dd = sc.domains[dk];
+      if (!dd) continue;
+      var dl = domainLabels[dk] || { icon: '', name: dk };
+      var ds = dd.score || 0;
+      var dColor = ds >= 3 ? '#2e7d32' : ds >= 2 ? '#f9a825' : ds >= 1 ? '#e65100' : '#c62828';
+      var dLabel = ds >= 3 ? 'Excellent' : ds >= 2 ? 'Adequate' : ds >= 1 ? 'Poor' : 'Not Done';
+      var dPct = Math.round(ds / 3 * 100);
+
+      h += '<div style="margin-bottom:12px">';
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
+      h += '<span style="font-size:13px;color:var(--text)">' + dl.icon + ' ' + dl.name + '</span>';
+      h += '<span style="font-size:12px;font-weight:700;color:' + dColor + '">' + ds + '/3 · ' + dLabel + '</span>';
+      h += '</div>';
+      h += '<div style="background:var(--bg);border-radius:4px;height:8px;overflow:hidden">';
+      h += '<div style="background:' + dColor + ';width:' + dPct + '%;height:100%;border-radius:4px;transition:width 0.5s ease"></div>';
+      h += '</div>';
+      if (dd.comment) {
+        h += '<div style="font-size:12px;color:var(--text-light);margin-top:3px;line-height:1.4">' + escapeHtml(dd.comment) + '</div>';
+      }
+      h += '</div>';
+    }
+    h += '</div>';
+  }
+
+  // Feedback
+  if (sc.feedback) {
+    h += '<div style="font-size:14px;line-height:1.7;color:var(--text);margin-bottom:16px">' + formatMarkdown(sc.feedback) + '</div>';
+  }
+
+  // Key teaching point
+  if (sc.keyTeachingPoint) {
+    h += '<div style="padding:12px 16px;background:rgba(46,125,50,0.08);border:1px solid #2e7d32;border-radius:10px;font-size:13px;color:var(--text);margin-bottom:' + (sc.callouts ? '12px' : '0') + '">';
+    h += '&#x1F393; <strong>Key Teaching Point:</strong> ' + escapeHtml(sc.keyTeachingPoint);
+    h += '</div>';
+  }
+
+  // Callouts
+  if (sc.callouts) {
+    h += '<div style="padding:12px 16px;background:rgba(99,102,241,0.08);border:1px solid var(--accent);border-radius:10px;font-size:13px;color:var(--text)">';
+    h += '&#x1F4A1; ' + escapeHtml(sc.callouts);
+    h += '</div>';
+  }
+
+  h += '</div></div>';
+  document.body.insertAdjacentHTML('beforeend', h);
+}
+
+function endPBCase() { VitalsEngine.stop(); stopNACTimer(); App.pbMonitorAttached = false; App.pbCodeBlue = false; App.pbCaseId = null; App.pbHistory = []; App.pbSpecialty = null; App.pbPartialUsed = false; App.pbScorecard = null; App.pbScorecardLoading = false; App.pbScorecardError = false; App.pbScorecardShown = false; App.pbDrDataEval = null; App.pbDrDataEvalLoading = false; App.pbDrDataEvalError = false; App.pbDrDataConvHistory = []; App.nacActive = false; App.nacCurrentStation = 0; App.nacTotalStations = 0; showPatientBotSetup(); }
 
 function attachPBMonitor_() {
   App.pbMonitorAttached = true;
@@ -9688,7 +9791,7 @@ function renderPBChatInner() {
       setTimeout(function() { loadOSCEScorecard(); }, 500);
     }
 
-    // OSCE Scorecard display
+    // Inline status indicators
     if (App.pbScorecardLoading && !App.pbScorecard) {
       html += '<div style="text-align:center;padding:24px;color:var(--text-light)"><div class="spinner" style="margin:0 auto 12px"></div>Generating OSCE Scorecard...</div>';
     }
@@ -9699,95 +9802,13 @@ function renderPBChatInner() {
       html += '</div>';
     }
 
+    // Show scorecard popup when ready
+    if (App.pbScorecard && !App.pbScorecardShown) {
+      App.pbScorecardShown = true;
+      setTimeout(function() { showScorecardModal_(); }, 300);
+    }
     if (App.pbScorecard) {
-      var sc = App.pbScorecard;
-      var scScore = sc.score || 0;
-      var scPass = sc.pass !== undefined ? sc.pass : (scScore >= 7);
-      var scGrade = scScore >= 9 ? 'A+' : scScore >= 8 ? 'A' : scScore >= 7 ? 'B' : scScore >= 6 ? 'C' : scScore >= 5 ? 'D' : 'F';
-      var scGradeColor = scScore >= 8 ? '#2e7d32' : scScore >= 6 ? '#f9a825' : scScore >= 5 ? '#e65100' : '#c62828';
-      var scBarColor = scScore >= 8 ? '#2e7d32' : scScore >= 6 ? '#f9a825' : '#c62828';
-
-      html += '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:16px;margin:16px;padding:24px;box-shadow:0 2px 12px rgba(0,0,0,0.08)">';
-
-      // Header with grade badge
-      html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">';
-      html += '<div><h3 style="margin:0 0 4px;font-size:20px;font-weight:800">OSCE Scorecard</h3>';
-      html += '<div style="font-size:13px;color:var(--text-light)">Diagnosis: <strong>' + escapeHtml(sc.diagnosis || App.pbDiagnosis || '?') + '</strong></div></div>';
-      html += '<div style="text-align:center"><div style="width:60px;height:60px;border-radius:50%;background:' + scGradeColor + ';color:white;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:900;flex-shrink:0">' + scGrade + '</div>';
-      html += '<div style="font-size:11px;font-weight:700;margin-top:4px;color:' + (scPass ? '#2e7d32' : '#c62828') + '">' + (scPass ? 'PASS' : 'BELOW STANDARD') + '</div></div>';
-      html += '</div>';
-
-      // Overall score bar
-      html += '<div style="margin-bottom:20px">';
-      html += '<div style="display:flex;justify-content:space-between;margin-bottom:6px">';
-      html += '<span style="font-size:13px;font-weight:600;color:var(--text-light)">Overall Score</span>';
-      html += '<span style="font-size:14px;font-weight:700;color:' + scBarColor + '">' + scScore + '/10</span>';
-      html += '</div>';
-      html += '<div style="background:var(--bg);border-radius:6px;height:12px;overflow:hidden">';
-      html += '<div style="background:' + scBarColor + ';width:' + (scScore * 10) + '%;height:100%;border-radius:6px;transition:width 0.6s ease"></div>';
-      html += '</div></div>';
-
-      // Domain breakdown (6 OSCE domains)
-      if (sc.domains) {
-        var domainLabels = {
-          'history': { icon: '&#x1F4DD;', name: 'History Taking' },
-          'physical_exam': { icon: '&#x1FA7A;', name: 'Physical Examination' },
-          'investigations': { icon: '&#x1F52C;', name: 'Investigations' },
-          'communication': { icon: '&#x1F4AC;', name: 'Communication & Rapport' },
-          'clinical_mgmt': { icon: '&#x1F3AF;', name: 'Clinical Reasoning & Mgmt' },
-          'professionalism': { icon: '&#x2696;&#xFE0F;', name: 'Professionalism & Safety' }
-        };
-        var domainOrder = ['history', 'physical_exam', 'investigations', 'communication', 'clinical_mgmt', 'professionalism'];
-
-        html += '<div style="margin-bottom:20px">';
-        html += '<div style="font-size:13px;font-weight:700;color:var(--text-light);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px">Domain Breakdown</div>';
-
-        for (var di = 0; di < domainOrder.length; di++) {
-          var dk = domainOrder[di];
-          var dd = sc.domains[dk];
-          if (!dd) continue;
-          var dl = domainLabels[dk] || { icon: '', name: dk };
-          var ds = dd.score || 0;
-          var dColor = ds >= 3 ? '#2e7d32' : ds >= 2 ? '#f9a825' : ds >= 1 ? '#e65100' : '#c62828';
-          var dLabel = ds >= 3 ? 'Excellent' : ds >= 2 ? 'Adequate' : ds >= 1 ? 'Poor' : 'Not Done';
-          var dPct = Math.round(ds / 3 * 100);
-
-          html += '<div style="margin-bottom:12px">';
-          html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
-          html += '<span style="font-size:13px;color:var(--text)">' + dl.icon + ' ' + dl.name + '</span>';
-          html += '<span style="font-size:12px;font-weight:700;color:' + dColor + '">' + ds + '/3 · ' + dLabel + '</span>';
-          html += '</div>';
-          html += '<div style="background:var(--bg);border-radius:4px;height:8px;overflow:hidden">';
-          html += '<div style="background:' + dColor + ';width:' + dPct + '%;height:100%;border-radius:4px;transition:width 0.5s ease"></div>';
-          html += '</div>';
-          if (dd.comment) {
-            html += '<div style="font-size:12px;color:var(--text-light);margin-top:3px;line-height:1.4">' + escapeHtml(dd.comment) + '</div>';
-          }
-          html += '</div>';
-        }
-        html += '</div>';
-      }
-
-      // Feedback
-      if (sc.feedback) {
-        html += '<div style="font-size:14px;line-height:1.7;color:var(--text);margin-bottom:16px">' + formatMarkdown(sc.feedback) + '</div>';
-      }
-
-      // Key teaching point
-      if (sc.keyTeachingPoint) {
-        html += '<div style="padding:12px 16px;background:rgba(46,125,50,0.08);border:1px solid #2e7d32;border-radius:10px;font-size:13px;color:var(--text);margin-bottom:' + (sc.callouts ? '12px' : '0') + '">';
-        html += '&#x1F393; <strong>Key Teaching Point:</strong> ' + escapeHtml(sc.keyTeachingPoint);
-        html += '</div>';
-      }
-
-      // Callouts (funny/unprofessional)
-      if (sc.callouts) {
-        html += '<div style="padding:12px 16px;background:rgba(99,102,241,0.08);border:1px solid var(--accent);border-radius:10px;font-size:13px;color:var(--text)">';
-        html += '&#x1F4A1; ' + escapeHtml(sc.callouts);
-        html += '</div>';
-      }
-
-      html += '</div>';
+      html += '<div style="text-align:center;padding:12px"><button class="btn btn-primary" onclick="showScorecardModal_()">View OSCE Scorecard</button></div>';
     }
 
     // Dr. Data Post-Case Evaluation
