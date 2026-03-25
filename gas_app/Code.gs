@@ -1180,7 +1180,8 @@ function savePBConversation(caseData, guestId) {
       'Timestamp', 'User', 'Case_ID', 'Specialty', 'Presentation', 'Diagnosis',
       'Difficulty', 'Outcome', 'Correct', 'Attempts', 'Score', 'Fatal', 'Cause_of_Death',
       'Sex', 'Age', 'Age_Min', 'Age_Max', 'Historian', 'Cooperativeness', 'Aggression',
-      'Archetype', 'Circumstances', 'Cheat_Mode', 'Msg_Count', 'Conversation'
+      'Archetype', 'Circumstances', 'Cheat_Mode', 'NAC_Mode', 'NAC_Station', 'NAC_Total',
+      'Msg_Count', 'Conversation'
     ]);
     sheet.setFrozenRows(1);
   }
@@ -1211,6 +1212,9 @@ function savePBConversation(caseData, guestId) {
     custom.archetype || 'random',
     (custom.circumstances || []).join(', '),
     d.cheatMode ? 'YES' : 'NO',
+    d.nacMode ? 'YES' : 'NO',
+    d.nacStation || '',
+    d.nacTotalStations || '',
     (d.conversation || []).length,
     JSON.stringify(d.conversation || [])
   ]);

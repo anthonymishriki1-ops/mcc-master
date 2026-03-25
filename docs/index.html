@@ -2908,7 +2908,18 @@ var App = {
   dailyCardRatings: [],
   dailyQuizIndex: 0,
   dailyQuizAnswers: {},
-  dailyPBIndex: 0
+  dailyPBIndex: 0,
+
+  // NAC-OSCE Simulator
+  nacActive: false,
+  nacStations: [],
+  nacCurrentStation: 0,
+  nacTotalStations: 0,
+  nacScores: [],
+  nacTimerMinutes: 11,
+  nacTimerSeconds: 0,
+  nacTimerInterval: null,
+  nacDifficulty: 'medium'
 };
 
 // Point values
@@ -7177,15 +7188,19 @@ function sendPBMessage() {
   }
 
   // Intercept anatomically impossible exams typed manually
-  var ptSexCheck_ = (App.pbPatientInfo && App.pbPatientInfo.sex) ? App.pbPatientInfo.sex.toLowerCase() : '';
-  if (ptSexCheck_) {
+  // Normalize sex: backend returns M/F/NB; use assigned_sex for anatomy when available
+  var ptSexRaw2_ = (App.pbPatientInfo && App.pbPatientInfo.sex) ? App.pbPatientInfo.sex.toLowerCase() : '';
+  var ptAssigned2_ = (App.pbPatientInfo && App.pbPatientInfo.assigned_sex) ? App.pbPatientInfo.assigned_sex.toLowerCase() : '';
+  var normSex2_ = ptSexRaw2_ === 'male' ? 'm' : ptSexRaw2_ === 'female' ? 'f' : ptSexRaw2_ === 'trans_m' ? 'm' : ptSexRaw2_ === 'trans_f' ? 'f' : ptSexRaw2_;
+  var anatomySex2_ = ptAssigned2_ ? (ptAssigned2_ === 'male' ? 'm' : ptAssigned2_ === 'female' ? 'f' : ptAssigned2_) : normSex2_;
+  if (anatomySex2_) {
     var msgLc_ = message.toLowerCase();
     var maleOnly_   = ['testicular','prostate exam','penile','*testicular','*prostate'];
     var femaleOnly_ = ['pelvic exam','speculum exam','bimanual','pap smear','*pelvic','*speculum'];
     var blocked_ = false;
-    if ((ptSexCheck_ === 'female' || ptSexCheck_ === 'trans_f') &&
+    if ((anatomySex2_ === 'f') &&
         maleOnly_.some(function(t){ return msgLc_.indexOf(t) !== -1; })) blocked_ = true;
-    if ((ptSexCheck_ === 'male' || ptSexCheck_ === 'trans_m') &&
+    if ((anatomySex2_ === 'm') &&
         femaleOnly_.some(function(t){ return msgLc_.indexOf(t) !== -1; })) blocked_ = true;
     if (blocked_) {
       input.value = '';
@@ -8193,6 +8208,8 @@ function finishCurrentPBCase() {
     logPBConversation('skipped', {});
   }
   if (App.dailyPhase === 'pb') { finishDailyPBCase(); return; }
+  // NAC mode: flow to next NAC station
+  if (App.nacActive) { finishNACStation(); return; }
   if (App.pbCurrentCase >= App.pbTotalCases) { showPBSummary(); } else { App.pbCaseId = null; App.pbHistory = []; startNextPBCase(); }
 }
 
@@ -8253,6 +8270,9 @@ function logPBConversation(outcome, extraData) {
     causeOfDeath: (extraData && extraData.causeOfDeath) || '',
     cheatMode: App.pbCheatMode || false,
     patientAge: (App.pbPatientInfo && App.pbPatientInfo.age) || '',
+    nacMode: App.nacActive || false,
+    nacStation: App.nacCurrentStation || 0,
+    nacTotalStations: App.nacTotalStations || 0,
     custom: App.pbCustom || {},
     conversation: App.pbHistory.map(function(m) {
       var c = m.content;
@@ -8261,6 +8281,357 @@ function logPBConversation(outcome, extraData) {
     })
   };
   serverCall('savePBConversation', data).catch(function(e) { console.error('Failed to log PB conversation:', e); });
+}
+
+// =============================================
+// NAC-OSCE SIMULATOR
+// =============================================
+
+// 48 NAC-OSCE stations following the real NAC blueprint distribution
+// Each station: { presentation, specialty, focus }
+var NAC_STATION_POOL = [
+  // MEDICINE (Internal) — 12 stations
+  { presentation: 'Chest Pain', specialty: 'Cardiology', focus: 'ACS workup' },
+  { presentation: 'Dyspnea', specialty: 'Respirology', focus: 'PE vs CHF vs pneumonia' },
+  { presentation: 'Abdominal Pain', specialty: 'GI / Hepatology', focus: 'Acute abdomen DDx' },
+  { presentation: 'Headache', specialty: 'Neurology', focus: 'Red flags, SAH rule-out' },
+  { presentation: 'Polyuria/Polydipsia', specialty: 'Endocrinology', focus: 'New-onset DM or DKA' },
+  { presentation: 'Joint Pain', specialty: 'MSK / Rheumatology', focus: 'Septic vs crystal arthropathy' },
+  { presentation: 'Hematuria', specialty: 'Nephrology / Urology', focus: 'Glomerular vs urologic' },
+  { presentation: 'Fever', specialty: 'Infectious Disease', focus: 'Fever workup, sepsis screen' },
+  { presentation: 'Peripheral Edema', specialty: 'Cardiology', focus: 'CHF assessment' },
+  { presentation: 'Jaundice', specialty: 'GI / Hepatology', focus: 'Obstructive vs hepatic' },
+  { presentation: 'Anemia', specialty: 'Hematology / Oncology', focus: 'Iron deficiency vs chronic disease' },
+  { presentation: 'Dizziness/Vertigo', specialty: 'Neurology', focus: 'Central vs peripheral' },
+
+  // SURGERY — 6 stations
+  { presentation: 'Abdominal Pain', specialty: 'Surgery', focus: 'Surgical abdomen assessment' },
+  { presentation: 'GI Bleeding', specialty: 'Surgery', focus: 'Upper vs lower GI bleed' },
+  { presentation: 'Palpable Mass', specialty: 'Surgery', focus: 'Breast or thyroid mass workup' },
+  { presentation: 'Trauma/Injury', specialty: 'Emergency Medicine', focus: 'ATLS primary survey' },
+  { presentation: 'Fracture/Trauma', specialty: 'Surgery', focus: 'MSK injury management' },
+  { presentation: 'Wound/Ulcer', specialty: 'Surgery', focus: 'Wound assessment, I&D' },
+
+  // OB/GYN — 6 stations
+  { presentation: 'Vaginal Bleeding', specialty: 'OB/GYN', focus: 'Early pregnancy bleeding' },
+  { presentation: 'Pelvic Pain', specialty: 'OB/GYN', focus: 'Ectopic vs PID vs torsion' },
+  { presentation: 'Amenorrhea', specialty: 'OB/GYN', focus: 'Primary vs secondary' },
+  { presentation: 'Pregnancy Concern', specialty: 'OB/GYN', focus: 'Prenatal visit or complication' },
+  { presentation: 'Breast Lump', specialty: 'OB/GYN', focus: 'Triple assessment' },
+  { presentation: 'Vaginal Bleeding', specialty: 'OB/GYN', focus: 'Postmenopausal bleeding' },
+
+  // PEDIATRICS — 6 stations
+  { presentation: 'Pediatric Fever', specialty: 'Pediatrics', focus: 'Febrile child workup' },
+  { presentation: 'Crying/Irritable Child', specialty: 'Pediatrics', focus: 'Infant assessment' },
+  { presentation: 'Rash in a Child', specialty: 'Pediatrics', focus: 'Viral exanthem vs serious' },
+  { presentation: 'Developmental Delay', specialty: 'Pediatrics', focus: 'Milestone assessment' },
+  { presentation: 'Failure to Thrive', specialty: 'Pediatrics', focus: 'Growth faltering workup' },
+  { presentation: 'Wheezing', specialty: 'Pediatrics', focus: 'Asthma vs bronchiolitis' },
+
+  // PSYCHIATRY — 6 stations
+  { presentation: 'Depressed Mood', specialty: 'Psychiatry', focus: 'MDD + safety assessment' },
+  { presentation: 'Anxiety', specialty: 'Psychiatry', focus: 'GAD vs panic vs medical cause' },
+  { presentation: 'Psychosis', specialty: 'Psychiatry', focus: 'First-episode psychosis' },
+  { presentation: 'Suicidal Ideation', specialty: 'Psychiatry', focus: 'Risk assessment + safety plan' },
+  { presentation: 'Substance Abuse', specialty: 'Psychiatry', focus: 'Alcohol use disorder' },
+  { presentation: 'Insomnia', specialty: 'Psychiatry', focus: 'Sleep hygiene + DDx' },
+
+  // EMERGENCY MEDICINE — 6 stations
+  { presentation: 'Poisoning/Overdose', specialty: 'Emergency Medicine', focus: 'Toxidrome recognition' },
+  { presentation: 'Allergic Reaction', specialty: 'Emergency Medicine', focus: 'Anaphylaxis management' },
+  { presentation: 'Altered Mental Status', specialty: 'Emergency Medicine', focus: 'AMS workup' },
+  { presentation: 'Burns', specialty: 'Emergency Medicine', focus: 'Burn assessment + fluid resuscitation' },
+  { presentation: 'Syncope', specialty: 'Emergency Medicine', focus: 'Cardiac vs vasovagal vs neuro' },
+  { presentation: 'Cardiac Arrest', specialty: 'Emergency Medicine', focus: 'ACLS algorithm' },
+
+  // FAMILY MEDICINE / PREVENTIVE — 6 stations
+  { presentation: 'Hypertension', specialty: 'Family Medicine', focus: 'New HTN workup + counseling' },
+  { presentation: 'Back Pain', specialty: 'Family Medicine', focus: 'Red flags + conservative management' },
+  { presentation: 'Skin Rash', specialty: 'Family Medicine', focus: 'Dermatology DDx' },
+  { presentation: 'Weight Loss', specialty: 'Family Medicine', focus: 'Unintentional weight loss' },
+  { presentation: 'Fatigue', specialty: 'Family Medicine', focus: 'Broad DDx + screening' },
+  { presentation: 'Cough', specialty: 'Family Medicine', focus: 'Chronic cough workup' }
+];
+
+function showNACSetup() {
+  App.nacActive = false;
+  var el = document.getElementById('nac-sim-content');
+  var html = '<div class="pb-setup card">';
+  html += '<div style="font-size:48px;margin-bottom:16px">&#x1FA7A;</div>';
+  html += '<h2>NAC-OSCE Simulator</h2>';
+  html += '<p style="color:var(--text-light);margin:12px 0 20px">Practice the National Assessment Collaboration OSCE. Each station is a timed patient encounter with structured scoring.</p>';
+
+  html += '<div class="form-group" style="text-align:left"><label>Exam Length</label>';
+  html += '<div class="quiz-count-btns">';
+  html += '<button class="quiz-count-btn" onclick="setNACCount(12,this)">12 Stations (1x NAC)</button>';
+  html += '<button class="quiz-count-btn" onclick="setNACCount(24,this)">24 Stations (2x NAC)</button>';
+  html += '<button class="quiz-count-btn active" onclick="setNACCount(48,this)">48 Stations (Full Pool)</button>';
+  html += '</div>';
+  html += '<input type="number" id="nac-count" value="48" min="1" max="48" placeholder="Custom...">';
+  html += '</div>';
+
+  html += '<div class="form-group" style="text-align:left"><label>Station Timer</label>';
+  html += '<div class="quiz-count-btns">';
+  html += '<button class="quiz-count-btn" onclick="setNACTimer(0,this)">No Timer</button>';
+  html += '<button class="quiz-count-btn" onclick="setNACTimer(7,this)">7 min (Short)</button>';
+  html += '<button class="quiz-count-btn active" onclick="setNACTimer(11,this)">11 min (NAC Standard)</button>';
+  html += '<button class="quiz-count-btn" onclick="setNACTimer(15,this)">15 min (Extended)</button>';
+  html += '</div></div>';
+
+  html += '<div class="form-group" style="text-align:left"><label>Difficulty</label>';
+  html += '<div class="quiz-count-btns">';
+  html += '<button class="quiz-count-btn" onclick="setNACDiff(\'easy\',this)">Easy</button>';
+  html += '<button class="quiz-count-btn active" onclick="setNACDiff(\'medium\',this)">NAC Standard</button>';
+  html += '<button class="quiz-count-btn" onclick="setNACDiff(\'hard\',this)">Hard</button>';
+  html += '</div></div>';
+
+  html += '<div class="pb-how-to">';
+  html += '<strong>How It Works:</strong><br>';
+  html += '&#x1F3E5; Each station is a PatientBot encounter with a specific clinical presentation<br>';
+  html += '&#x23F1; Timer counts down (if enabled) — manage your time like the real NAC<br>';
+  html += '&#x1F4CB; Full OSCE scorecard after each station<br>';
+  html += '&#x1F4CA; Blueprint follows real NAC distribution: Medicine, Surgery, OB/GYN, Peds, Psych, EM, FM<br>';
+  html += '&#x1FA7A; All 48 stations logged for your review<br>';
+  html += '</div>';
+
+  html += '<button class="btn btn-success" style="width:100%;padding:14px;font-size:16px" onclick="startNACExam()">&#x1FA7A; Start NAC-OSCE Exam</button>';
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function setNACCount(n, btn) {
+  document.getElementById('nac-count').value = n;
+  var btns = btn.parentElement.querySelectorAll('.quiz-count-btn');
+  for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+  btn.classList.add('active');
+}
+
+function setNACTimer(min, btn) {
+  App.nacTimerMinutes = min;
+  var btns = btn.parentElement.querySelectorAll('.quiz-count-btn');
+  for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+  btn.classList.add('active');
+}
+
+function setNACDiff(diff, btn) {
+  App.nacDifficulty = diff;
+  var btns = btn.parentElement.querySelectorAll('.quiz-count-btn');
+  for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+  btn.classList.add('active');
+}
+
+function startNACExam() {
+  var count = parseInt(document.getElementById('nac-count').value) || 48;
+  count = Math.min(count, NAC_STATION_POOL.length);
+
+  // Shuffle and pick stations
+  var pool = NAC_STATION_POOL.slice();
+  for (var i = pool.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+  }
+  App.nacStations = pool.slice(0, count);
+  App.nacCurrentStation = 0;
+  App.nacTotalStations = count;
+  App.nacActive = true;
+  App.nacScores = [];
+  App.nacTimerMinutes = App.nacTimerMinutes || 11;
+  App.nacDifficulty = App.nacDifficulty || 'medium';
+
+  // Wire into PB infrastructure
+  App.pbCheatMode = false;
+  App.pbDifficulty = App.nacDifficulty;
+  App.pbCustom = {};
+  App.pbCaseScores = [];
+  App.pbTotalCases = count;
+  App.pbCurrentCase = 0;
+
+  startNextNACStation();
+}
+
+function startNextNACStation() {
+  App.nacCurrentStation++;
+  App.pbCurrentCase = App.nacCurrentStation;
+  var station = App.nacStations[App.nacCurrentStation - 1];
+
+  // Set PB specialty to the station's specialty
+  App.pbSetupSpecialty = station.specialty;
+
+  // Enforce pediatric age for peds stations
+  App.pbCustom = {};
+  if (station.specialty === 'Pediatrics') {
+    App.pbCustom.ageMin = 0;
+    App.pbCustom.ageMax = 17;
+  }
+  // OB/GYN: ensure female patient
+  if (station.specialty === 'OB/GYN') {
+    App.pbCustom.sex = 'female';
+  }
+
+  // Show loading in NAC page but use PB content area
+  navigateTo('patientbot');
+  var el = document.getElementById('patientbot-content');
+  el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div>' +
+    '<p style="margin-top:16px;color:var(--text-light)">NAC Station ' + App.nacCurrentStation + ' of ' + App.nacTotalStations + '</p>' +
+    '<p style="margin-top:4px;color:var(--accent);font-weight:700">' + escapeHtml(station.specialty) + ' — ' + escapeHtml(station.presentation) + '</p>' +
+    '<p style="margin-top:4px;font-size:12px;color:var(--text-light)">' + escapeHtml(station.focus) + '</p></div>';
+
+  serverCall('startPatientBotCase', station.specialty, false, App.nacDifficulty, App.pbCustom).then(function(result) {
+    App.pbCaseId = result.caseId;
+    App.pbSpecialty = result.specialty;
+    App.pbPresentation = station.presentation;
+    App.pbDiagnosis = null;
+    App.pbPatientInfo = null;
+    App.pbDiagnosing = false;
+    App.pbDiagAttempts = 0;
+    App.pbDiagResolved = false;
+    App.pbPartialUsed = false;
+    App.pbScorecard = null;
+    App.pbScorecardLoading = false;
+    App.pbScorecardError = false;
+    App.pbDrDataEval = null;
+    App.pbDrDataEvalLoading = false;
+    App.pbDrDataEvalError = false;
+    App.pbDrDataConvHistory = [];
+    App.pbMonitorAttached = false;
+    VitalsEngine.init(result.vitals || result.patient || {});
+
+    var msg = stripPatientJSON(result.initialMessage);
+    if (result.patientInfo) {
+      App.pbPatientInfo = result.patientInfo;
+      App.pbDiagnosis = result.patientInfo.diagnosis;
+    } else {
+      var jsonStr = extractPatientJSON(result.initialMessage);
+      if (jsonStr) { try { App.pbPatientInfo = JSON.parse(jsonStr); App.pbDiagnosis = App.pbPatientInfo.diagnosis; } catch(e) {} }
+    }
+
+    App.pbHistory = [{ role: 'assistant', content: msg }];
+
+    // Start timer if configured
+    if (App.nacTimerMinutes > 0) {
+      startNACTimer(App.nacTimerMinutes * 60);
+    }
+
+    renderPBChat();
+  }).catch(function(e) {
+    el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p>' +
+      '<button class="btn btn-primary" onclick="startNextNACStation()" style="margin-top:12px">Retry Station</button></div>';
+  });
+}
+
+function startNACTimer(seconds) {
+  App.nacTimerSeconds = seconds;
+  App.nacTimerInterval = setInterval(function() {
+    App.nacTimerSeconds--;
+    var timerEl = document.getElementById('nac-timer-display');
+    if (timerEl) {
+      var m = Math.floor(App.nacTimerSeconds / 60);
+      var s = App.nacTimerSeconds % 60;
+      timerEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+      if (App.nacTimerSeconds <= 60) timerEl.style.color = '#c62828';
+      else if (App.nacTimerSeconds <= 120) timerEl.style.color = '#e65100';
+    }
+    if (App.nacTimerSeconds <= 0) {
+      clearInterval(App.nacTimerInterval);
+      App.nacTimerInterval = null;
+      // Time's up — auto-end station
+      showToast_('Time\'s up! Station ending...');
+      finishNACStation();
+    }
+  }, 1000);
+}
+
+function stopNACTimer() {
+  if (App.nacTimerInterval) {
+    clearInterval(App.nacTimerInterval);
+    App.nacTimerInterval = null;
+  }
+}
+
+function finishNACStation() {
+  stopNACTimer();
+  // Record score
+  var score = {
+    station: App.nacCurrentStation,
+    specialty: App.pbSpecialty || '',
+    presentation: App.pbPresentation || '',
+    diagnosis: App.pbDiagnosis || '',
+    correct: App.pbDiagResolved && App.pbCaseScores.length > 0 && App.pbCaseScores[App.pbCaseScores.length - 1].correct,
+    attempts: App.pbDiagAttempts || 0,
+    skipped: !App.pbDiagResolved
+  };
+  App.nacScores.push(score);
+
+  // Log the conversation
+  if (!App.pbDiagResolved) {
+    logPBConversation('nac_timeout', {});
+  }
+
+  if (App.nacCurrentStation >= App.nacTotalStations) {
+    showNACSummary();
+  } else {
+    App.pbCaseId = null;
+    App.pbHistory = [];
+    VitalsEngine.stop();
+    startNextNACStation();
+  }
+}
+
+function showNACSummary() {
+  App.nacActive = false;
+  VitalsEngine.stop();
+
+  var el = document.getElementById('patientbot-content');
+  var scores = App.nacScores;
+  var correct = scores.filter(function(s) { return s.correct; }).length;
+  var total = scores.length;
+  var pct = total > 0 ? Math.round((correct / total) * 100) : 0;
+
+  // Breakdown by specialty
+  var specBreakdown = {};
+  for (var i = 0; i < scores.length; i++) {
+    var spec = scores[i].specialty || 'Unknown';
+    if (!specBreakdown[spec]) specBreakdown[spec] = { correct: 0, total: 0 };
+    specBreakdown[spec].total++;
+    if (scores[i].correct) specBreakdown[spec].correct++;
+  }
+
+  var html = '<div class="card" style="text-align:center;padding:40px">';
+  html += '<div style="font-size:48px;margin-bottom:8px">&#x1FA7A;</div>';
+  html += '<h2>NAC-OSCE Complete</h2>';
+  html += '<div class="daily-card-score-ring" style="margin:20px auto"><div class="daily-card-score-number">' + correct + '/' + total + '</div><div class="daily-card-score-label">' + pct + '% Diagnosed</div></div>';
+  html += '</div>';
+
+  // Specialty breakdown
+  html += '<div class="card"><h3 class="section-title">Breakdown by Specialty</h3>';
+  var specKeys = Object.keys(specBreakdown).sort();
+  for (var si = 0; si < specKeys.length; si++) {
+    var sb = specBreakdown[specKeys[si]];
+    var spPct = sb.total > 0 ? Math.round((sb.correct / sb.total) * 100) : 0;
+    var barColor = spPct >= 80 ? '#2e7d32' : spPct >= 60 ? '#f9a825' : '#c62828';
+    html += '<div style="margin:8px 0">';
+    html += '<div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:4px"><span>' + escapeHtml(specKeys[si]) + '</span><span style="font-weight:700;color:' + barColor + '">' + sb.correct + '/' + sb.total + '</span></div>';
+    html += '<div style="background:var(--bg);border-radius:4px;height:8px;overflow:hidden"><div style="background:' + barColor + ';width:' + spPct + '%;height:100%;border-radius:4px"></div></div>';
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // Station results
+  html += '<div class="card"><h3 class="section-title">All Stations</h3>';
+  for (var j = 0; j < scores.length; j++) {
+    var c = scores[j];
+    var icon = c.correct ? '<span style="color:var(--success)">&#x2705;</span>' : (c.skipped ? '<span style="color:var(--text-light)">&#x23F1;</span>' : '<span style="color:var(--error)">&#x274C;</span>');
+    html += '<div class="weak-area-row"><span>' + icon + ' Station ' + c.station + ' &mdash; ' + escapeHtml(c.specialty) + '</span>';
+    html += '<span style="font-size:13px;color:var(--text-light)">' + escapeHtml(c.presentation) + (c.skipped ? ' (timed out)' : c.correct ? '' : ' (' + c.attempts + ' try)') + '</span></div>';
+  }
+  html += '</div>';
+
+  html += '<div style="display:flex;gap:12px;margin-top:20px">';
+  html += '<button class="btn btn-primary" onclick="navigateTo(\'nac-sim\')">New Exam</button>';
+  html += '<button class="btn btn-accent" onclick="navigateTo(\'dashboard\')">Dashboard</button>';
+  html += '</div>';
+
+  el.innerHTML = html;
 }
 
 function loadOSCEScorecard() {
@@ -8280,7 +8651,7 @@ function loadOSCEScorecard() {
   });
 }
 
-function endPBCase() { VitalsEngine.stop(); App.pbMonitorAttached = false; App.pbCodeBlue = false; App.pbCaseId = null; App.pbHistory = []; App.pbSpecialty = null; App.pbPartialUsed = false; App.pbScorecard = null; App.pbScorecardLoading = false; App.pbScorecardError = false; App.pbDrDataEval = null; App.pbDrDataEvalLoading = false; App.pbDrDataEvalError = false; App.pbDrDataConvHistory = []; showPatientBotSetup(); }
+function endPBCase() { VitalsEngine.stop(); stopNACTimer(); App.pbMonitorAttached = false; App.pbCodeBlue = false; App.pbCaseId = null; App.pbHistory = []; App.pbSpecialty = null; App.pbPartialUsed = false; App.pbScorecard = null; App.pbScorecardLoading = false; App.pbScorecardError = false; App.pbDrDataEval = null; App.pbDrDataEvalLoading = false; App.pbDrDataEvalError = false; App.pbDrDataConvHistory = []; App.nacActive = false; App.nacCurrentStation = 0; App.nacTotalStations = 0; showPatientBotSetup(); }
 
 function attachPBMonitor_() {
   App.pbMonitorAttached = true;
@@ -8542,18 +8913,30 @@ function startPBMonitorAnimation() {
 
 function renderPBChatInner() {
   var caseLabel = App.pbTotalCases > 1 ? ' (Case ' + App.pbCurrentCase + '/' + App.pbTotalCases + ')' : '';
+  var nacLabel = App.nacActive ? ' (Station ' + App.nacCurrentStation + '/' + App.nacTotalStations + ')' : '';
   var p = App.pbPatientInfo;
 
-  var html = '<div class="pb-top-bar"><div class="pb-top-left"><h3>PatientBot &mdash; ' + escapeHtml(App.pbSpecialty) + caseLabel + '</h3></div>';
+  var html = '<div class="pb-top-bar"><div class="pb-top-left"><h3>' + (App.nacActive ? 'NAC-OSCE' : 'PatientBot') + ' &mdash; ' + escapeHtml(App.pbSpecialty) + (App.nacActive ? nacLabel : caseLabel) + '</h3></div>';
   html += '<div class="pb-top-right">';
+  // NAC timer display
+  if (App.nacActive && App.nacTimerMinutes > 0 && !App.pbDiagResolved) {
+    var timerSec = App.nacTimerSeconds || 0;
+    var tm = Math.floor(timerSec / 60);
+    var ts = timerSec % 60;
+    var timerColor = timerSec <= 60 ? '#c62828' : timerSec <= 120 ? '#e65100' : 'var(--accent)';
+    html += '<span id="nac-timer-display" style="font-size:18px;font-weight:900;font-family:monospace;color:' + timerColor + ';margin-right:8px">' + tm + ':' + (ts < 10 ? '0' : '') + ts + '</span>';
+  }
   if (App.pbDiagResolved) {
     if (App.dailyPhase === 'pb') {
       html += '<button class="btn btn-sm btn-success" onclick="finishCurrentPBCase()">Next</button>';
+    } else if (App.nacActive) {
+      html += '<button class="btn btn-sm btn-success" onclick="finishNACStation()">Next Station</button>';
     } else if (App.pbTotalCases > 1) {
       html += '<button class="btn btn-sm btn-success" onclick="finishCurrentPBCase()">Next Case</button>';
     }
   }
-  html += '<button class="btn btn-sm btn-outline" onclick="' + (App.dailyPhase === 'pb' ? 'finishCurrentPBCase()' : 'endPBCase()') + '">End</button>';
+  var endAction = App.dailyPhase === 'pb' ? 'finishCurrentPBCase()' : App.nacActive ? 'finishNACStation()' : 'endPBCase()';
+  html += '<button class="btn btn-sm btn-outline" onclick="' + endAction + '">End</button>';
   html += '</div></div>';
 
   // Patient info bar (sticky) — uses live vitals if available
@@ -8848,14 +9231,21 @@ function renderPBChatInner() {
       '*testicular exam*', '*prostate exam*', '*external genital exam*',
       'order testicular ultrasound'
     ];
-    var ptSex_ = (App.pbPatientInfo && App.pbPatientInfo.sex) ? App.pbPatientInfo.sex.toLowerCase() : '';
-    if (ptSex_) {
-      var ptIsFemale_ = (ptSex_ === 'female' || ptSex_ === 'trans_f');
-      var ptIsMale_   = (ptSex_ === 'male'   || ptSex_ === 'trans_m');
+    // Determine anatomical sex: use assigned_sex for trans/NB, otherwise use sex field
+    // Backend returns M/F/NB; customOpts may use male/female/trans_m/trans_f
+    var ptSexRaw_ = (App.pbPatientInfo && App.pbPatientInfo.sex) ? App.pbPatientInfo.sex.toLowerCase() : '';
+    var ptAssigned_ = (App.pbPatientInfo && App.pbPatientInfo.assigned_sex) ? App.pbPatientInfo.assigned_sex.toLowerCase() : '';
+    // Normalize: M/male -> m, F/female -> f, NB/nonbinary -> nb, trans_m -> m (identity), trans_f -> f (identity)
+    var normSex_ = ptSexRaw_ === 'male' ? 'm' : ptSexRaw_ === 'female' ? 'f' : ptSexRaw_ === 'nonbinary' ? 'nb' : ptSexRaw_ === 'trans_m' ? 'm' : ptSexRaw_ === 'trans_f' ? 'f' : ptSexRaw_;
+    // For anatomy filtering, use assigned_sex if available (trans/NB), else use sex
+    var anatomySex_ = ptAssigned_ ? (ptAssigned_ === 'male' ? 'm' : ptAssigned_ === 'female' ? 'f' : ptAssigned_) : normSex_;
+    if (anatomySex_) {
+      var ptHasFemaleAnatomy_ = (anatomySex_ === 'f');
+      var ptHasMaleAnatomy_   = (anatomySex_ === 'm');
       for (var cfi = 0; cfi < categories.length; cfi++) {
         categories[cfi].items = categories[cfi].items.filter(function(item) {
-          if (ptIsMale_   && FEMALE_ONLY_ITEMS_.indexOf(item) !== -1) return false;
-          if (ptIsFemale_ && MALE_ONLY_ITEMS_.indexOf(item)   !== -1) return false;
+          if (ptHasMaleAnatomy_   && FEMALE_ONLY_ITEMS_.indexOf(item) !== -1) return false;
+          if (ptHasFemaleAnatomy_ && MALE_ONLY_ITEMS_.indexOf(item)   !== -1) return false;
           return true;
         });
       }
@@ -8914,6 +9304,9 @@ function renderPBChatInner() {
     html += '<span style="color:var(--text-light);font-size:15px">Case resolved.</span>';
     if (App.dailyPhase === 'pb') {
       html += '<button class="btn btn-success" onclick="finishCurrentPBCase()">Next Case</button>';
+    } else if (App.nacActive) {
+      html += '<button class="btn btn-success" onclick="finishNACStation()">' + (App.nacCurrentStation >= App.nacTotalStations ? 'View Results' : 'Next Station (' + App.nacCurrentStation + '/' + App.nacTotalStations + ')') + '</button>';
+      html += '<button class="btn btn-outline" onclick="if(confirm(\'End entire NAC exam? Progress will be saved.\')){showNACSummary();}">End Exam</button>';
     } else {
       html += '<button class="btn btn-primary" onclick="quickNewPBCase()">New Case</button>';
       html += '<button class="btn btn-outline" onclick="showPatientBotSetup()">Change Settings</button>';
