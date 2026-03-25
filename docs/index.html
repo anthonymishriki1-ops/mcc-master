@@ -5907,7 +5907,7 @@ function getOpenAISpeed_() {
   return 1.0;
 }
 
-// OpenAI TTS — calls API directly, key stored in localStorage per user
+// OpenAI TTS via GAS backend (API key in Script Properties)
 function speakOpenAI_(text, onDone) {
   if (!text) { if (onDone) onDone(); return; }
   var clean = text.replace(/\*+/g, '').replace(/\[.*?\]/g, '').replace(/[*_~`#]/g, '')
@@ -5915,45 +5915,19 @@ function speakOpenAI_(text, onDone) {
   if (!clean || clean.length < 2) { if (onDone) onDone(); return; }
   if (clean.length > 4000) clean = clean.substring(0, 4000);
 
-  var apiKey = localStorage.getItem('mcc_openai_key');
-  if (!apiKey) {
-    // Try backend first (if deployed with key)
-    serverCall('textToSpeech', clean, getOpenAIVoice_(), getOpenAISpeed_()).then(function(result) {
-      if (result && result.audio) {
-        playBase64Audio_(result.audio, result.format || 'mp3', onDone);
-      } else {
-        // Backend doesn't have it — fall back to browser TTS
-        speakText_(text, getPBVoiceParams_());
-        if (onDone) onDone();
-      }
-    }).catch(function() {
-      speakText_(text, getPBVoiceParams_());
-      if (onDone) onDone();
-    });
-    return;
-  }
-
   var voice = getOpenAIVoice_();
   var speed = getOpenAISpeed_();
 
-  fetch('https://api.openai.com/v1/audio/speech', {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'tts-1', input: clean, voice: voice, speed: speed, response_format: 'mp3' })
-  }).then(function(resp) {
-    if (!resp.ok) {
-      if (resp.status === 401) { localStorage.removeItem('mcc_openai_key'); showToast_('Invalid OpenAI key — removed.'); }
-      throw new Error('TTS ' + resp.status);
+  serverCall('textToSpeech', clean, voice, speed).then(function(result) {
+    if (result && result.audio) {
+      playBase64Audio_(result.audio, result.format || 'mp3', onDone);
+    } else {
+      console.warn('TTS error:', result && result.error);
+      speakText_(text, getPBVoiceParams_());
+      if (onDone) onDone();
     }
-    return resp.blob();
-  }).then(function(blob) {
-    var url = URL.createObjectURL(blob);
-    var audio = new Audio(url);
-    audio.onended = function() { URL.revokeObjectURL(url); if (onDone) onDone(); };
-    audio.onerror = function() { URL.revokeObjectURL(url); if (onDone) onDone(); };
-    audio.play().catch(function() { if (onDone) onDone(); });
   }).catch(function(e) {
-    console.warn('OpenAI TTS error:', e);
+    console.warn('TTS fetch error:', e);
     speakText_(text, getPBVoiceParams_());
     if (onDone) onDone();
   });
