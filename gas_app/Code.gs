@@ -2804,19 +2804,66 @@ function debriefPatientBot(caseId, history) {
     }
   }
 
-  var prompt = 'You are a clinical teaching debrief assistant. A medical student just finished (or gave up on) a simulated patient encounter.\n\n' +
+  var prompt = 'You are a senior MCCQE Part II (NAC-OSCE) examiner grading a simulated patient encounter. ' +
+    'Grade this encounter EXACTLY as a real OSCE station would be graded, using the official MCC assessment framework.\n\n' +
     'CORRECT DIAGNOSIS: ' + diagnosis + '\n\n' +
     'TRANSCRIPT:\n' + transcript + '\n\n' +
-    'Provide a debrief. Respond with ONLY a JSON object:\n' +
+    'GRADING CRITERIA — Score each domain 0-3 (0=not done, 1=poor, 2=adequate, 3=excellent):\n\n' +
+    'A. HISTORY TAKING (3 pts)\n' +
+    '- Asked about presenting complaint (onset, duration, character, severity, location, radiation, aggravating/relieving factors)\n' +
+    '- Explored associated symptoms systematically\n' +
+    '- Asked about relevant past medical/surgical/family/social history, medications, allergies\n' +
+    '- Used open-ended questions before closed-ended\n\n' +
+    'B. PHYSICAL EXAMINATION (3 pts)\n' +
+    '- Performed focused exam relevant to the presenting complaint\n' +
+    '- Used correct technique (stated what they were doing and looking for)\n' +
+    '- Examined appropriate systems (not just one, not scattershot)\n' +
+    '- Checked vitals or acknowledged provided vitals\n\n' +
+    'C. INVESTIGATIONS (3 pts)\n' +
+    '- Ordered appropriate initial investigations (labs, imaging, bedside tests)\n' +
+    '- Prioritized correctly (urgent tests first)\n' +
+    '- Did NOT order excessive/unnecessary/harmful tests\n' +
+    '- Interpreted results when available (asked follow-up questions based on findings)\n\n' +
+    'D. COMMUNICATION & RAPPORT (3 pts)\n' +
+    '- Introduced themselves, used patient\'s name\n' +
+    '- Showed empathy (acknowledged pain, fear, concerns)\n' +
+    '- Explained what they were doing and why\n' +
+    '- Used lay language, checked understanding, avoided jargon\n' +
+    '- Did NOT rush, dismiss, or ignore the patient\n\n' +
+    'E. CLINICAL REASONING & MANAGEMENT (3 pts)\n' +
+    '- Arrived at correct (or reasonable) diagnosis\n' +
+    '- Initiated appropriate treatment/management\n' +
+    '- Prioritized life-threatening issues (ABCs, hemodynamic stability)\n' +
+    '- Addressed the patient\'s immediate needs\n' +
+    '- Did NOT do anything dangerous or harmful\n\n' +
+    'F. PROFESSIONALISM & SAFETY (3 pts)\n' +
+    '- Maintained professional demeanor throughout\n' +
+    '- Obtained consent before procedures\n' +
+    '- Considered patient safety (allergies, contraindications, monitoring)\n' +
+    '- Appropriate disposition (admit/discharge/referral)\n' +
+    '- Did NOT act unprofessionally, recklessly, or unethically\n\n' +
+    'OVERALL SCORE: Sum of domains A-F, out of 18. Convert to 1-10 scale: score = round(sum/18 * 10).\n' +
+    'PASS THRESHOLD: 12/18 (equivalent to ~7/10). Below 12 = Borderline/Fail.\n\n' +
+    'Respond with ONLY a JSON object:\n' +
     '{\n' +
     '  "diagnosis": "' + diagnosis + '",\n' +
-    '  "score": <1-10 based on their clinical approach>,\n' +
-    '  "feedback": "<2-4 sentences: what they did well, what they missed, what they should have asked/ordered. Be specific and educational. Reference actual things from the transcript.>",\n' +
-    '  "callouts": "<call out anything funny, unprofessional, unrealistic, or dangerous they did. Be witty but educational. If they were professional, say so. Examples: \'Asking about Nicholas Cage mid-consultation is... creative. Maybe save that for the break room.\' or \'Yelling at the patient is a great way to get written up.\' or \'You tried to give propofol without monitoring - that is a lawsuit waiting to happen.\' If nothing notable, leave empty string.>"\n' +
+    '  "domains": {\n' +
+    '    "history":       {"score": <0-3>, "comment": "<1-2 sentences: what they did/missed>"},\n' +
+    '    "physical_exam": {"score": <0-3>, "comment": "<1-2 sentences>"},\n' +
+    '    "investigations":{"score": <0-3>, "comment": "<1-2 sentences>"},\n' +
+    '    "communication": {"score": <0-3>, "comment": "<1-2 sentences>"},\n' +
+    '    "clinical_mgmt": {"score": <0-3>, "comment": "<1-2 sentences>"},\n' +
+    '    "professionalism":{"score": <0-3>, "comment": "<1-2 sentences>"}\n' +
+    '  },\n' +
+    '  "score": <1-10 overall>,\n' +
+    '  "pass": true/false,\n' +
+    '  "feedback": "<3-5 sentences: specific, educational. Reference actual things from the transcript. What they did well, what they missed, what the ideal approach would have been.>",\n' +
+    '  "callouts": "<anything funny, unprofessional, unrealistic, or dangerous. Be witty but educational. If nothing notable, empty string.>",\n' +
+    '  "keyTeachingPoint": "<1 high-yield clinical pearl relevant to this case that the student should remember>"\n' +
     '}';
 
   try {
-    var response = callAnthropicModel_('claude-haiku-4-5-20251001', prompt, [{ role: 'user', content: 'Generate the debrief.' }]);
+    var response = callAnthropicModel_('claude-sonnet-4-20250514', prompt, [{ role: 'user', content: 'Grade this OSCE station.' }]);
     var jsonMatch = response.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       return JSON.parse(jsonMatch[0]);
