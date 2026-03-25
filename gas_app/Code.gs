@@ -2334,6 +2334,59 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
     response = response.trim();
   }
 
+  // ========== OSCE STATION VERIFICATION PASS ==========
+  // Validates that the generated case matches real MCCQE Part II station format
+  // and clinical accuracy before delivering to the student
+  if (patientInfo) {
+    try {
+      var verifyPrompt = 'You are an MCCQE Part II (OSCE) quality assurance examiner. A case was just generated for a clinical simulator. ' +
+        'Verify it matches the standards of a REAL MCCQE Part II station and is clinically accurate.\n\n' +
+        'MCCQE PART II STATION FORMAT RULES:\n' +
+        '- Door instructions provide: patient name, age, setting (family practice clinic OR emergency department), presenting problem, and vital signs\n' +
+        '- Stations are either: history/physical exam, management (prioritizing tasks to manage the problem NOW), or combined\n' +
+        '- Physical examination: the student says what manoeuvres they are doing, what findings they are looking for, and describes relevant findings. SPs simulate findings; if they cannot, the examiner provides an oral prompt\n' +
+        '- SENSITIVE EXAMS ARE NEVER PERFORMED: genital, rectal, vaginal, breast, reflexes, or other sensitive examinations are NOT conducted. If such examination is required, the student informs the examiner verbally instead of performing it\n' +
+        '- Test results and family history elements may be provided in the door instructions (not discovered mid-encounter)\n' +
+        '- The student must prioritize tasks — there is never enough time to do everything\n\n' +
+        'CASE TO VERIFY:\n' +
+        '- Patient: ' + (patientInfo.name || '?') + ', Age: ' + (patientInfo.age || '?') + ', Sex: ' + (patientInfo.sex || '?') + '\n' +
+        '- Diagnosis: ' + (patientInfo.diagnosis || '?') + '\n' +
+        '- Specialty: ' + specialty + '\n' +
+        '- Vitals: HR=' + (patientInfo.hr || '?') + ' BP=' + (patientInfo.bp || '?') + ' RR=' + (patientInfo.rr || '?') + ' Temp=' + (patientInfo.temp || '?') + ' SpO2=' + (patientInfo.spo2 || '?') + '\n' +
+        '- Opening line: ' + response.substring(0, 300) + '\n\n' +
+        'CHECK ALL OF THE FOLLOWING:\n' +
+        '1. CLINICAL ACCURACY: Do the vitals make sense for this diagnosis? (e.g., sepsis should have tachycardia/fever, PE should have tachycardia/hypoxia, healthy patient should have normal vitals). Flag if vitals are generic/normal when they should be abnormal.\n' +
+        '2. AGE APPROPRIATENESS: Does the diagnosis make sense for the patient\'s age? (e.g., MI in a 5-year-old = wrong, croup in a 60-year-old = wrong)\n' +
+        '3. CHIEF COMPLAINT: Does the opening line sound like a real patient (not AI-like)? Is it just ONE symptom without volunteering the diagnosis? Does it use lay language?\n' +
+        '4. SETTING PLAUSIBILITY: Would this case present to the setting the student will imagine (ED for acute, clinic for chronic)?\n' +
+        '5. DIAGNOSIS QUALITY: Is this a real, testable MCCQE-level diagnosis (not too obscure, not too obvious)? Is it appropriate for the stated specialty?\n\n' +
+        'Respond with ONLY a JSON object:\n' +
+        '{"pass": true/false, "issues": ["<issue 1>", "<issue 2>"], "fixedVitals": null or {"hr": <n>, "bp": "<sys/dia>", "rr": <n>, "temp": <n>, "spo2": <n>}, "fixedOpening": null or "<corrected opening line if needed>"}';
+
+      var verifyResponse = callAnthropicModel_('claude-haiku-4-5-20251001', verifyPrompt, [{ role: 'user', content: 'Verify this case.' }]);
+      var verifyJson = verifyResponse.match(/\{[\s\S]*\}/);
+      if (verifyJson) {
+        var vResult = JSON.parse(verifyJson[0]);
+
+        // Apply vital sign corrections if the verifier flagged them
+        if (vResult.fixedVitals) {
+          if (vResult.fixedVitals.hr) patientInfo.hr = vResult.fixedVitals.hr;
+          if (vResult.fixedVitals.bp) patientInfo.bp = vResult.fixedVitals.bp;
+          if (vResult.fixedVitals.rr) patientInfo.rr = vResult.fixedVitals.rr;
+          if (vResult.fixedVitals.temp != null) patientInfo.temp = vResult.fixedVitals.temp;
+          if (vResult.fixedVitals.spo2) patientInfo.spo2 = vResult.fixedVitals.spo2;
+        }
+
+        // Apply opening line fix if needed
+        if (vResult.fixedOpening && typeof vResult.fixedOpening === 'string' && vResult.fixedOpening.length > 10) {
+          response = vResult.fixedOpening;
+        }
+      }
+    } catch(e) {
+      // Verification failed silently — deliver the case as-is
+    }
+  }
+
   // Store diagnosis + initial vitals in cache for scoring and consequence engine
   if (patientInfo && patientInfo.diagnosis) {
     CacheService.getUserCache().put('pb_' + caseId, JSON.stringify({
