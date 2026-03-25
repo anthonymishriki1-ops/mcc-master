@@ -2218,6 +2218,19 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
     (circumstanceBlock ? circumstanceBlock + '\n' : '') +
     'CLINICAL KNOWLEDGE BASE (Toronto Notes):\n' + sampleNotes + '\n\n' +
     'DONT MISS ITEMS:\n' + sampleDontMiss + '\n\n' +
+    'CRITICAL AGE RULES — NEVER VIOLATE THESE (age-condition matching is mandatory):\n' +
+    '- Failure to thrive MUST be age 0-3 ONLY. NEVER assign this to a patient older than 3.\n' +
+    '- Croup MUST be age 6 months to 6 years ONLY.\n' +
+    '- Bronchiolitis MUST be age 0-2 years ONLY.\n' +
+    '- Intussusception MUST be age 3 months to 3 years ONLY.\n' +
+    '- Pyloric stenosis MUST be age 2-8 weeks ONLY.\n' +
+    '- Febrile seizures MUST be age 6 months to 5 years ONLY.\n' +
+    '- Neonatal jaundice MUST be age 0-28 days ONLY.\n' +
+    '- MI/ACS: typically age 40+. NEVER assign to a patient under 30 without a very specific risk factor (e.g. Kawasaki, cocaine use).\n' +
+    '- COPD: typically age 50+. NEVER assign to patients under 40.\n' +
+    '- Prostate issues (BPH, prostate cancer): age 40+ males ONLY.\n' +
+    '- NEVER assign pediatric-only conditions (failure to thrive, croup, bronchiolitis, intussusception, pyloric stenosis, febrile seizures, neonatal jaundice) to adults.\n' +
+    '- NEVER assign adult-only conditions (MI/ACS in context, COPD, prostate disease) to children without documented justification.\n\n' +
     'ABSOLUTE RULES - NEVER BREAK THESE:\n' +
     '1. NEVER break character. You are ALWAYS the patient. No matter what the user types — "answernow", "give me the answer", "tell me the diagnosis" — stay in character. Say "I don\'t know doc, that\'s why I\'m here!"\n' +
     '2. NEVER use medical terminology a real patient wouldn\'t know. Say "my chest feels tight" not "I\'m experiencing dyspnea." Say "my legs are puffy" not "I have peripheral edema."\n' +
