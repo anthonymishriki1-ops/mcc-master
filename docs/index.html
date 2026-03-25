@@ -1360,6 +1360,7 @@ body.auto-translate .med-auto-trans { display:inline; }
 .tutorial-dot { height: 4px; flex: 1; border-radius: 2px; background: var(--border); transition: background 0.3s; }
 .tutorial-dot.active { background: var(--accent); }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 
 /* --- Quick Actions (Dashboard) --- */
 .quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
@@ -5857,7 +5858,283 @@ App.pbTTS     = localStorage.getItem('mcc_pbTTS')    === '1';
 App.houseTTS  = localStorage.getItem('mcc_houseTTS') === '1';
 App.ddTTS     = localStorage.getItem('mcc_ddTTS')    === '1';
 App.pbMicActive = false;
+App.pbHandsFree = false;
+App.pbOpenAITTS = localStorage.getItem('mcc_openaiTTS') === '1';
+App.ttsAudioQueue = [];
+App.ttsPlaying = false;
 var pbMicRecognition = null;
+var handsFreeRecognition = null;
+
+// ---- OpenAI TTS Engine ----
+// Maps patient demographics to OpenAI voice IDs
+function getOpenAIVoice_() {
+  var p = App.pbPatientInfo;
+  if (!p) return 'alloy';
+  var sex = (p.sex || '').toUpperCase();
+  var age = parseInt(p.age) || 35;
+
+  if (sex === 'F') {
+    if (age <= 18) return 'shimmer';     // soft, young female
+    if (age <= 50) return 'nova';        // warm adult female
+    return 'shimmer';                    // elderly female
+  } else if (sex === 'M') {
+    if (age <= 18) return 'alloy';       // neutral, young
+    if (age <= 50) return 'echo';        // male adult
+    return 'onyx';                       // deep, elderly male
+  } else {
+    return 'fable';                      // expressive, NB
+  }
+}
+
+function getOpenAISpeed_() {
+  var p = App.pbPatientInfo;
+  if (!p) return 1.0;
+  var age = parseInt(p.age) || 35;
+  // Elderly speak slower, children faster
+  if (age <= 12) return 1.15;
+  if (age <= 18) return 1.08;
+  if (age >= 75) return 0.82;
+  if (age >= 65) return 0.88;
+  return 1.0;
+}
+
+// Fetch TTS audio from backend, queue and play
+function speakOpenAI_(text, onDone) {
+  if (!text) { if (onDone) onDone(); return; }
+  var clean = text.replace(/\*+/g, '').replace(/\[.*?\]/g, '').replace(/[*_~`#]/g, '')
+    .replace(/\(Note:.*?\)/gi, '').replace(/```[\s\S]*?```/g, '').trim();
+  if (!clean || clean.length < 2) { if (onDone) onDone(); return; }
+  // Truncate for cost sanity (4096 char OpenAI limit)
+  if (clean.length > 4000) clean = clean.substring(0, 4000);
+
+  var voice = getOpenAIVoice_();
+  var speed = getOpenAISpeed_();
+
+  serverCall('textToSpeech', clean, voice, speed).then(function(result) {
+    if (result && result.audio) {
+      playBase64Audio_(result.audio, result.format || 'mp3', onDone);
+    } else {
+      console.warn('TTS error:', result && result.error);
+      // Fallback to browser TTS
+      speakText_(text, getPBVoiceParams_());
+      if (onDone) onDone();
+    }
+  }).catch(function(e) {
+    console.warn('TTS fetch error:', e);
+    speakText_(text, getPBVoiceParams_());
+    if (onDone) onDone();
+  });
+}
+
+function playBase64Audio_(base64, format, onDone) {
+  try {
+    var mime = format === 'mp3' ? 'audio/mpeg' : 'audio/' + format;
+    var byteChars = atob(base64);
+    var byteArray = new Uint8Array(byteChars.length);
+    for (var i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
+    var blob = new Blob([byteArray], { type: mime });
+    var url = URL.createObjectURL(blob);
+    var audio = new Audio(url);
+    audio.onended = function() { URL.revokeObjectURL(url); if (onDone) onDone(); };
+    audio.onerror = function() { URL.revokeObjectURL(url); if (onDone) onDone(); };
+    audio.play().catch(function() { if (onDone) onDone(); });
+  } catch(e) {
+    console.warn('Audio play error:', e);
+    if (onDone) onDone();
+  }
+}
+
+// Unified speak function — uses OpenAI TTS if enabled, else browser TTS
+function pbSpeak_(text, onDone) {
+  if (!App.pbTTS && !App.pbHandsFree) { if (onDone) onDone(); return; }
+  // Cancel any browser speech in progress
+  try { window.speechSynthesis.cancel(); } catch(e) {}
+
+  if (App.pbOpenAITTS) {
+    speakOpenAI_(text, onDone);
+  } else {
+    speakText_(text, getPBVoiceParams_());
+    if (onDone) onDone();
+  }
+}
+
+// ---- Hands-Free Phone Call Mode ----
+function toggleHandsFree() {
+  if (App.pbHandsFree) {
+    stopHandsFree_();
+    return;
+  }
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { showToast_('Voice input not supported — use Chrome'); return; }
+
+  App.pbHandsFree = true;
+  App.pbTTS = true; // auto-enable TTS
+  App.pbOpenAITTS = true; // auto-enable OpenAI TTS
+  localStorage.setItem('mcc_pbTTS', '1');
+  localStorage.setItem('mcc_openaiTTS', '1');
+
+  // Update UI
+  var renderFn = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
+  renderFn();
+
+  showToast_('Hands-free mode ON — speak naturally');
+  startHandsFreeListening_();
+}
+
+function stopHandsFree_() {
+  App.pbHandsFree = false;
+  if (handsFreeRecognition) {
+    try { handsFreeRecognition.abort(); } catch(e) {}
+    handsFreeRecognition = null;
+  }
+  App.pbMicActive = false;
+  var renderFn = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
+  renderFn();
+  showToast_('Hands-free mode OFF');
+}
+
+function startHandsFreeListening_() {
+  if (!App.pbHandsFree || App.pbDiagResolved) return;
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+
+  handsFreeRecognition = new SR();
+  handsFreeRecognition.lang = 'en-US';
+  handsFreeRecognition.continuous = true;
+  handsFreeRecognition.interimResults = false;
+  handsFreeRecognition.maxAlternatives = 3;
+  App.pbMicActive = true;
+
+  // Update mic indicator
+  var indicator = document.getElementById('hf-indicator');
+  if (indicator) { indicator.style.background = '#c62828'; indicator.textContent = 'Listening...'; }
+
+  handsFreeRecognition.onresult = function(e) {
+    // Get the latest final result
+    var lastIdx = e.results.length - 1;
+    if (!e.results[lastIdx].isFinal) return;
+
+    var best = e.results[lastIdx][0].transcript;
+    for (var i = 1; i < e.results[lastIdx].length; i++) {
+      var alt = e.results[lastIdx][i].transcript;
+      if (scoreMedicalPhrase_(alt) > scoreMedicalPhrase_(best)) best = alt;
+    }
+    best = best.trim();
+    if (!best) return;
+
+    // Pause listening while processing
+    var ind = document.getElementById('hf-indicator');
+    if (ind) { ind.style.background = '#f9a825'; ind.textContent = 'Processing...'; }
+
+    // Check for voice commands first
+    if (handleVoiceCommand_(best)) {
+      // Command handled, resume listening after a beat
+      setTimeout(function() {
+        var ind2 = document.getElementById('hf-indicator');
+        if (ind2) { ind2.style.background = '#c62828'; ind2.textContent = 'Listening...'; }
+      }, 500);
+      return;
+    }
+
+    // Check for end commands
+    var tl = best.toLowerCase();
+    if (tl === 'end case' || tl === 'stop' || tl === 'end session' || tl === 'hang up') {
+      stopHandsFree_();
+      return;
+    }
+
+    // Send as regular message
+    App.pbHistory.push({ role: 'user', content: best });
+    var target = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
+    target();
+
+    var msgs = document.getElementById('pb-messages');
+    if (msgs) {
+      msgs.innerHTML += '<div class="chat-message assistant typing" id="pb-typing">Patient is responding...</div>';
+      msgs.scrollTop = msgs.scrollHeight;
+    }
+
+    // Temporarily stop recognition to prevent hearing its own TTS
+    try { handsFreeRecognition.stop(); } catch(e) {}
+    App.pbMicActive = false;
+
+    serverCall('sendPatientBotMessage', App.pbCaseId, best, App.pbHistory.slice(-30)).then(function(result) {
+      removeEl('pb-typing');
+      if (result.expired) { App.pbCaseId = null; stopHandsFree_(); showPatientBotSetup(); return; }
+
+      if (result.blocked) {
+        App.pbHistory.push({ role: 'system', content: result.consequence, severity: 'prereq' });
+        if (result.vitals) App.pbVitals = result.vitals;
+        target();
+        resumeHandsFreeAfterSpeak_(result.consequence);
+        return;
+      }
+
+      if (result.fatal) {
+        if (result.consequence) App.pbHistory.push({ role: 'system', content: result.consequence, severity: 'fatal' });
+        App.pbVitals = result.vitals;
+        App.pbDiagResolved = true;
+        App.pbCaseScores.push({ specialty: App.pbSpecialty, caseNum: App.pbCurrentCase, correct: false, diagnosis: App.pbDiagnosis, fatal: true, causeOfDeath: result.causeOfDeath, points: 0 });
+        serverCall('saveProgress', 'pb_result', { correct: false, specialty: App.pbSpecialty, diagnosis: App.pbDiagnosis, fatal: true, causeOfDeath: result.causeOfDeath, points: 0 });
+        App.pbHistory.push({ role: 'death', content: result.causeOfDeath || 'The patient has died.' });
+        logPBConversation('fatal', { fatal: true, causeOfDeath: result.causeOfDeath });
+        stopHandsFree_();
+        target();
+        return;
+      }
+
+      if (result.consequence) App.pbHistory.push({ role: 'system', content: result.consequence, severity: result.severity || 'safe' });
+      if (result.testResults) App.pbHistory.push({ role: 'results', content: result.testResults });
+      if (result.vitals) { App.pbVitals = result.vitals; VitalsEngine.sync(result.vitals); }
+      VitalsEngine.detectAndApply(best);
+      App.pbHistory.push({ role: 'assistant', content: result.response });
+      target();
+
+      // Speak the response, then resume listening
+      resumeHandsFreeAfterSpeak_(result.response);
+    }).catch(function(e) {
+      removeEl('pb-typing');
+      App.pbHistory.push({ role: 'assistant', content: 'Error: ' + (e.message || String(e)) });
+      target();
+      resumeHandsFreeListening_();
+    });
+  };
+
+  handsFreeRecognition.onerror = function(e) {
+    // 'no-speech' and 'aborted' are normal — just restart
+    if (e.error === 'no-speech' || e.error === 'aborted') return;
+    console.warn('HandsFree mic error:', e.error);
+    if (App.pbHandsFree) {
+      setTimeout(function() { startHandsFreeListening_(); }, 1000);
+    }
+  };
+
+  handsFreeRecognition.onend = function() {
+    // Auto-restart if still in hands-free mode
+    App.pbMicActive = false;
+    if (App.pbHandsFree && !App.pbDiagResolved) {
+      setTimeout(function() { startHandsFreeListening_(); }, 300);
+    }
+  };
+
+  try { handsFreeRecognition.start(); } catch(e) {
+    // Already started — ignore
+  }
+}
+
+function resumeHandsFreeAfterSpeak_(text) {
+  pbSpeak_(text, function() {
+    resumeHandsFreeListening_();
+  });
+}
+
+function resumeHandsFreeListening_() {
+  if (!App.pbHandsFree || App.pbDiagResolved) return;
+  // Small delay to avoid picking up end of TTS audio
+  setTimeout(function() {
+    startHandsFreeListening_();
+  }, 400);
+}
 
 function togglePBMic() {
   var btn = document.getElementById('pb-mic-btn');
@@ -5908,12 +6185,25 @@ function togglePBMic() {
 }
 
 function togglePBTTS() {
-  App.pbTTS = !App.pbTTS;
+  // Cycle: OFF -> Browser TTS -> OpenAI TTS -> OFF
+  if (!App.pbTTS) {
+    // OFF -> Browser TTS
+    App.pbTTS = true; App.pbOpenAITTS = false;
+    showToast_('Voice: Browser TTS');
+  } else if (!App.pbOpenAITTS) {
+    // Browser TTS -> OpenAI TTS
+    App.pbOpenAITTS = true;
+    showToast_('Voice: OpenAI TTS (premium)');
+  } else {
+    // OpenAI TTS -> OFF
+    App.pbTTS = false; App.pbOpenAITTS = false;
+    try { window.speechSynthesis.cancel(); } catch(e) {}
+    showToast_('Voice OFF');
+  }
   localStorage.setItem('mcc_pbTTS', App.pbTTS ? '1' : '0');
+  localStorage.setItem('mcc_openaiTTS', App.pbOpenAITTS ? '1' : '0');
   var btn = document.getElementById('pb-tts-btn');
-  if (btn) btn.innerHTML = App.pbTTS ? '&#x1F50A;' : '&#x1F507;';
-  showToast('Voice responses ' + (App.pbTTS ? 'ON' : 'OFF'));
-  if (!App.pbTTS) try { window.speechSynthesis.cancel(); } catch(e) {}
+  if (btn) btn.innerHTML = !App.pbTTS ? '&#x1F507;' : App.pbOpenAITTS ? '&#x1F399;&#xFE0F;' : '&#x1F50A;';
 }
 
 function speakText_(text, voiceParams, ttsEnabled) {
@@ -6074,12 +6364,12 @@ function scoreMedicalPhrase_(text) {
 
 // Called after PatientBot renders a new assistant message — speak it if TTS on
 function pbSpeakLastMessage_() {
-  if (!App.pbTTS) return;
+  if (!App.pbTTS && !App.pbHandsFree) return;
   var idx = App.pbHistory.length - 1;
   var last = App.pbHistory[idx];
   if (last && last.role === 'assistant' && App._pbLastSpokenIdx !== idx) {
     App._pbLastSpokenIdx = idx;
-    speakText_(last.content, getPBVoiceParams_());
+    pbSpeak_(last.content);
   }
 }
 
@@ -6199,6 +6489,7 @@ function replayMsg_(idx, mode) {
   else                  content = (App.pbHistory[idx] || {}).content;
   if (!content) return;
   if (mode === 'house') speakTextHouse_(content, true);
+  else if (mode === 'pb' && App.pbOpenAITTS) speakOpenAI_(content);
   else speakText_(content, mode === 'pb' ? getPBVoiceParams_() : null, true);
 }
 
@@ -7018,7 +7309,10 @@ function showPatientBotSetup() {
   html += '<div style="margin-top:8px;font-size:12px;color:var(--text-light)">All lab values, vital sign responses, and clinical findings are generated to be consistent with the underlying diagnosis \u2014 not random. Drug doses, reference ranges, and clinical consequences follow real pharmacology.</div>';
   html += '</div>';
 
-  html += '<button class="btn btn-success" style="width:100%;padding:14px;font-size:16px" onclick="startPBSession()">&#x1F3E5; Start Patient Simulation</button>';
+  html += '<div style="display:flex;gap:10px">';
+  html += '<button class="btn btn-success" style="flex:1;padding:14px;font-size:16px" onclick="startPBSession()">&#x1F3E5; Start Simulation</button>';
+  html += '<button class="btn" style="padding:14px 20px;font-size:16px;background:linear-gradient(135deg,#4facfe,#00f2fe);color:white;border:none;border-radius:12px" onclick="startPBHandsFree()" title="Start with hands-free voice mode (like a phone call)">&#x1F4DE; Hands-Free</button>';
+  html += '</div>';
 
   html += '</div>';
   el.innerHTML = html;
@@ -7129,6 +7423,16 @@ function togglePBCircumstance(key, checked) {
   }
 }
 
+function startPBHandsFree() {
+  // Start session with hands-free mode auto-enabled
+  App.pbHandsFree = true;
+  App.pbTTS = true;
+  App.pbOpenAITTS = true;
+  localStorage.setItem('mcc_pbTTS', '1');
+  localStorage.setItem('mcc_openaiTTS', '1');
+  startPBSession();
+}
+
 function startPBSession() {
   App.pbTotalCases = parseInt(document.getElementById('pb-count').value) || 1;
   App.pbCheatMode = document.getElementById('pb-cheat').checked;
@@ -7170,6 +7474,10 @@ function startNextPBCase() {
 
     App.pbHistory = [{ role: 'assistant', content: msg }];
     renderPBChat();
+    // Hands-free: speak the opening line then start listening
+    if (App.pbHandsFree) {
+      resumeHandsFreeAfterSpeak_(msg);
+    }
   }).catch(function(e) {
     el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p><button class="btn btn-primary" onclick="startNextPBCase()" style="margin-top:12px">Try Again</button></div>';
   });
@@ -8513,6 +8821,10 @@ function startNextNACStation() {
     }
 
     renderPBChat();
+    // Hands-free: speak the opening line then start listening
+    if (App.pbHandsFree) {
+      resumeHandsFreeAfterSpeak_(msg);
+    }
   }).catch(function(e) {
     el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p>' +
       '<button class="btn btn-primary" onclick="startNextNACStation()" style="margin-top:12px">Retry Station</button></div>';
@@ -9291,14 +9603,28 @@ function renderPBChatInner() {
     html += '</div>';
     html += '</div>'; // close #pb-actions-wrapper
 
-    html += '<div class="chat-input-area">';
-    html += '<textarea id="pb-input" placeholder="Talk to the patient... or tap 🎤" rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendPBMessage()}" oninput="try{window.speechSynthesis.cancel()}catch(e){}"></textarea>';
-    html += '<button class="btn btn-outline" id="pb-mic-btn" onclick="togglePBMic()" title="Voice input" style="font-size:18px;padding:0 10px">&#x1F3A4;</button>';
-    html += '<button class="btn btn-outline" id="pb-tts-btn" onclick="togglePBTTS()" title="Read responses aloud" style="font-size:16px;padding:0 10px">' + (App.pbTTS ? '&#x1F50A;' : '&#x1F507;') + '</button>';
-    html += '<button class="btn btn-primary" onclick="sendPBMessage()">Send</button>';
-    html += '<button class="btn btn-warning pb-diagnose-btn" onclick="showDiagnoseModal()">Diagnose</button>';
-    html += buildFlagButton({ type: 'patientbot', id: App.pbCaseId || 0, specialty: App.pbSpecialty || '', content: 'Case: ' + (App.pbSpecialty || 'Unknown') });
-    html += '</div>';
+    if (App.pbHandsFree) {
+      // ── Hands-free phone-call UI ──
+      html += '<div class="chat-input-area" style="flex-direction:column;align-items:center;padding:16px 20px;gap:12px">';
+      html += '<div style="display:flex;align-items:center;gap:12px;width:100%;justify-content:center">';
+      html += '<div id="hf-indicator" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:20px;background:#c62828;color:white;font-size:13px;font-weight:700;animation:pulse 1.5s infinite">&#x1F534; Listening...</div>';
+      html += '<button class="btn btn-warning pb-diagnose-btn" onclick="showDiagnoseModal()" style="font-size:13px">Diagnose</button>';
+      html += '<button class="btn" onclick="stopHandsFree_()" style="background:#c62828;color:white;font-size:13px;padding:8px 16px;border-radius:20px" title="End hands-free">&#x1F4F5; Hang Up</button>';
+      html += '</div>';
+      html += '<div style="font-size:11px;color:var(--text-light);text-align:center">Speak naturally &bull; Say <strong>"my diagnosis is..."</strong> to diagnose &bull; <strong>"order..."</strong> for orders &bull; <strong>"hang up"</strong> to end</div>';
+      html += '</div>';
+    } else {
+      // ── Standard text input UI ──
+      html += '<div class="chat-input-area">';
+      html += '<textarea id="pb-input" placeholder="Talk to the patient... or tap 🎤" rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendPBMessage()}" oninput="try{window.speechSynthesis.cancel()}catch(e){}"></textarea>';
+      html += '<button class="btn btn-outline" id="pb-mic-btn" onclick="togglePBMic()" title="Voice input" style="font-size:18px;padding:0 10px">&#x1F3A4;</button>';
+      html += '<button class="btn btn-outline" id="pb-tts-btn" onclick="togglePBTTS()" title="Voice: tap to cycle OFF/Browser/OpenAI" style="font-size:16px;padding:0 10px">' + (!App.pbTTS ? '&#x1F507;' : App.pbOpenAITTS ? '&#x1F399;&#xFE0F;' : '&#x1F50A;') + '</button>';
+      html += '<button class="btn btn-outline" id="pb-hf-btn" onclick="toggleHandsFree()" title="Hands-free phone call mode" style="font-size:16px;padding:0 10px">&#x1F4DE;</button>';
+      html += '<button class="btn btn-primary" onclick="sendPBMessage()">Send</button>';
+      html += '<button class="btn btn-warning pb-diagnose-btn" onclick="showDiagnoseModal()">Diagnose</button>';
+      html += buildFlagButton({ type: 'patientbot', id: App.pbCaseId || 0, specialty: App.pbSpecialty || '', content: 'Case: ' + (App.pbSpecialty || 'Unknown') });
+      html += '</div>';
+    }
   } else {
     html += '<div style="padding:16px 20px;border-top:1px solid var(--border);background:var(--bg);display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap">';
     html += '<span style="color:var(--text-light);font-size:15px">Case resolved.</span>';

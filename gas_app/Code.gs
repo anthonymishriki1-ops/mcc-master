@@ -64,7 +64,8 @@ function doGet(e) {
         'getDevStats': getDevStats,
         'generateCaseDebrief': generateCaseDebrief,
         'getPBCaseLibrary': getPBCaseLibrary,
-        'savePBConversation': savePBConversation
+        'savePBConversation': savePBConversation,
+        'textToSpeech': textToSpeech
       };
       if (!allowed[fn]) {
         return ContentService.createTextOutput(JSON.stringify({ error: 'Function not allowed: ' + fn }))
@@ -181,7 +182,8 @@ function doPost(e) {
       'getDevStats': getDevStats,
       'generateCaseDebrief': generateCaseDebrief,
       'getPBCaseLibrary': getPBCaseLibrary,
-      'savePBConversation': savePBConversation
+      'savePBConversation': savePBConversation,
+      'textToSpeech': textToSpeech
     };
 
     if (!allowed[fn]) {
@@ -2895,6 +2897,57 @@ function callAnthropic_(systemPrompt, messages, model) {
     return json.content[0].text;
   } catch (e) {
     return 'Connection error: ' + e.message;
+  }
+}
+
+// =============================================
+// OPENAI TTS SERVICE
+// =============================================
+
+function textToSpeech(text, voice, speed) {
+  var apiKey = PropertiesService.getScriptProperties().getProperty('OPENAI_API_KEY');
+  if (!apiKey) return { error: 'OpenAI API key not configured. Set OPENAI_API_KEY in Script Properties.' };
+
+  // Sanitize + truncate (OpenAI TTS max 4096 chars)
+  text = (text || '').replace(/\*+/g, '').replace(/\[.*?\]/g, '').replace(/[*_~`#]/g, '').trim();
+  if (!text) return { error: 'Empty text' };
+  if (text.length > 4096) text = text.substring(0, 4096);
+
+  voice = voice || 'alloy';
+  speed = speed || 1.0;
+  // Clamp speed 0.25-4.0
+  speed = Math.max(0.25, Math.min(4.0, parseFloat(speed) || 1.0));
+
+  var payload = {
+    model: 'tts-1',
+    input: text,
+    voice: voice,
+    speed: speed,
+    response_format: 'mp3'
+  };
+
+  try {
+    var response = UrlFetchApp.fetch('https://api.openai.com/v1/audio/speech', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { 'Authorization': 'Bearer ' + apiKey },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+
+    var code = response.getResponseCode();
+    if (code !== 200) {
+      var errText = response.getContentText();
+      try { var errJson = JSON.parse(errText); return { error: errJson.error.message || errText }; } catch(e) {}
+      return { error: 'OpenAI TTS error (' + code + '): ' + errText.substring(0, 200) };
+    }
+
+    // Return base64-encoded MP3
+    var audioBytes = response.getBlob().getBytes();
+    var base64 = Utilities.base64Encode(audioBytes);
+    return { audio: base64, format: 'mp3' };
+  } catch (e) {
+    return { error: 'TTS connection error: ' + e.message };
   }
 }
 
