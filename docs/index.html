@@ -5169,6 +5169,15 @@ function renderDevPanel(stats) {
   }
   html += '</div>';
 
+  // PB Conversation Logging toggle
+  var pbLogEnabled = localStorage.getItem('mcc_pb_log_enabled') !== 'false';
+  html += '<h3 style="margin:24px 0 16px">PatientBot Logging</h3>';
+  html += '<div class="card" style="padding:16px">';
+  html += '<label class="toggle-label" style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px">';
+  html += '<input type="checkbox" id="dev-pb-log-toggle" ' + (pbLogEnabled ? 'checked' : '') + ' onchange="localStorage.setItem(\'mcc_pb_log_enabled\', this.checked ? \'true\' : \'false\')" style="accent-color:var(--primary);width:18px;height:18px">';
+  html += '<span><strong>Log PB conversations</strong> — saves full transcripts + all case variables to PB_Conversations sheet</span>';
+  html += '</label></div>';
+
   // Flagged Issues section
   html += '<h3 style="margin:24px 0 16px">&#x1F6A9; Flagged Issues</h3>';
   html += '<div id="dev-flags-container" class="card" style="padding:16px">';
@@ -8229,6 +8238,7 @@ function getPBTranscript() {
 }
 
 function logPBConversation(outcome, extraData) {
+  if (localStorage.getItem('mcc_pb_log_enabled') === 'false') return;
   var data = {
     caseId: App.pbCaseId || '',
     specialty: App.pbSpecialty || '',
