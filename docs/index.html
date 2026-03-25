@@ -5922,15 +5922,15 @@ function speakOpenAI_(text, onDone) {
     if (result && result.audio) {
       playBase64Audio_(result.audio, result.format || 'mp3', onDone);
     } else {
-      console.warn('TTS error:', result && result.error);
-      speakText_(text, getPBVoiceParams_());
+      var errMsg = (result && result.error) || 'TTS unavailable';
+      console.error('OpenAI TTS error:', errMsg);
+      showToast_('Voice error: ' + errMsg);
       if (onDone) onDone();
     }
   }).catch(function(e) {
-    console.warn('TTS fetch error:', e);
-    speakText_(text, getPBVoiceParams_());
+    console.error('OpenAI TTS error:', e);
+    showToast_('Voice error: ' + (e.message || 'Connection failed'));
     if (onDone) onDone();
-  });
   });
 }
 
@@ -9380,12 +9380,175 @@ function startPBMonitorAnimation() {
   App._ecgAnimId = requestAnimationFrame(animate);
 }
 
+// =============================================
+// NAC-OSCE CLINICAL WORKSTATION UI
+// =============================================
+function renderNACStationUI_() {
+  var el = document.getElementById('patientbot-content');
+  if (!el) return;
+  var p = App.pbPatientInfo;
+  var html = '';
+
+  // ── Top bar: Station info + timer + controls ──
+  html += '<div class="pb-top-bar" style="background:linear-gradient(135deg,#0d1442,#1a237e)">';
+  html += '<div class="pb-top-left"><h3 style="color:white">NAC-OSCE &mdash; Test ' + (App.nacTestNumber || '') + ' &mdash; Station ' + App.nacCurrentStation + '/' + App.nacTotalStations + '</h3>';
+  html += '<div style="font-size:12px;color:rgba(255,255,255,0.6);margin-top:2px">' + escapeHtml(App.pbSpecialty || '') + ' &mdash; ' + escapeHtml(App.pbPresentation || '') + '</div></div>';
+  html += '<div class="pb-top-right">';
+  if (App.nacTimerMinutes > 0 && !App.pbDiagResolved) {
+    var timerSec = App.nacTimerSeconds || 0;
+    var tm = Math.floor(timerSec / 60);
+    var ts = timerSec % 60;
+    var timerColor = timerSec <= 60 ? '#ff4444' : timerSec <= 120 ? '#ff8800' : '#4facfe';
+    html += '<span id="nac-timer-display" style="font-size:22px;font-weight:900;font-family:monospace;color:' + timerColor + ';margin-right:12px">' + tm + ':' + (ts < 10 ? '0' : '') + ts + '</span>';
+  }
+  html += '<button class="btn btn-sm" onclick="finishNACStation()" style="background:rgba(255,255,255,0.15);color:white;border:1px solid rgba(255,255,255,0.3)">End Station</button>';
+  html += '</div></div>';
+
+  // ── Patient chart header ──
+  if (p) {
+    var sexLabel = (p.sex === 'nonbinary' || p.sex === 'NB') ? 'NB' : ((p.sex === 'female' || p.sex === 'F' || p.sex === 'trans_f') ? 'F' : ((p.sex === 'trans_m') ? 'M (trans)' : 'M'));
+    html += '<div style="background:var(--card);border-bottom:2px solid var(--border);padding:14px 18px 12px">';
+    html += '<div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:6px">' + escapeHtml(p.name || 'Unknown Patient') + '</div>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px 20px;font-size:13px;color:var(--text-light)">';
+    html += '<span><strong>Age/Sex:</strong> ' + (p.age || '?') + ' &middot; ' + sexLabel + '</span>';
+    if (p.ethnicity) html += '<span><strong>Ethnicity:</strong> ' + escapeHtml(p.ethnicity) + '</span>';
+    html += '</div>';
+    if (p.appearance) {
+      html += '<div style="margin-top:8px;font-size:13px;color:var(--text);border-top:1px solid var(--border);padding-top:8px">';
+      html += '<strong>Doorway Assessment:</strong> ' + escapeHtml(p.appearance) + '</div>';
+    }
+    html += '</div>';
+  }
+
+  // ── Vitals monitor (auto-attached in NAC mode) ──
+  if (!App.pbMonitorAttached) { App.pbMonitorAttached = true; }
+  var vd = VitalsEngine._display || {};
+  var isFlatline = vd.hr === 0 || vd.spo2 === 0;
+  var beatInterval = vd.hr > 0 ? (60 / vd.hr) : 0;
+  if (!App.pbMRN) App.pbMRN = Math.floor(Math.random()*900000+100000);
+  html += '<div class="pb-monitor' + (isFlatline ? ' pb-mon-flatline' : '') + '" id="pb-live-monitor">';
+  html += '<div class="pb-mon-header"><span class="pb-mon-title"><span class="pb-mon-live"></span>BEDSIDE MONITOR</span><span class="pb-mon-id">MRN ' + App.pbMRN + '</span></div>';
+  html += '<div class="pb-mon-ecg"><canvas class="pb-ecg-canvas" id="pb-ecg-canvas" data-hr="' + (vd.hr || 0) + '"></canvas></div>';
+  html += '<div style="padding:0 8px;height:20px;overflow:hidden;background:#0a0a0a;border-bottom:1px solid #1a1a1a"><canvas class="pb-ecg-canvas" id="pb-pleth-canvas" data-hr="' + (vd.hr || 0) + '" style="height:20px"></canvas></div>';
+  html += '<div class="pb-mon-grid">';
+  html += '<div class="pb-mon-cell pb-mon-hr" id="ve-hr-cell"><div class="pb-mon-cell-label">HR <span class="pb-mon-unit">bpm</span></div>';
+  html += '<div class="pb-mon-cell-value"><span id="ve-hr">' + (vd.hr || '--') + '</span><span class="pb-mon-hr-dot' + (vd.hr > 0 ? ' beating' : '') + '" id="ve-hr-dot" style="--beat-interval:' + (beatInterval > 0 ? beatInterval.toFixed(2) : 1) + 's"></span></div></div>';
+  var latBP = VitalsEngine.getLatestBP();
+  var bpHTML = VitalsEngine._bpMeasuring ? '<span style="font-size:10px">Measuring...</span>' : (latBP ? latBP.sbp+'/'+latBP.dbp : '--/--');
+  html += '<div class="pb-mon-cell pb-mon-bp" id="ve-bp-cell"><div class="pb-mon-cell-label">NIBP <span class="pb-mon-unit">mmHg</span></div>';
+  html += '<div class="pb-mon-cell-value" id="ve-bp">' + bpHTML + '</div></div>';
+  html += '<div class="pb-mon-cell pb-mon-spo2" id="ve-spo2-cell"><div class="pb-mon-cell-label">SpO2 <span class="pb-mon-unit">%</span></div>';
+  html += '<div class="pb-mon-cell-value"><span id="ve-spo2">' + (vd.spo2 || '--') + '</span>%</div></div>';
+  html += '<div class="pb-mon-cell pb-mon-rr" id="ve-rr-cell"><div class="pb-mon-cell-label">RR <span class="pb-mon-unit">/min</span></div>';
+  html += '<div class="pb-mon-cell-value"><span id="ve-rr">' + (vd.rr || '--') + '</span></div></div>';
+  html += '<div class="pb-mon-cell pb-mon-temp" id="ve-temp-cell"><div class="pb-mon-cell-label">TEMP <span class="pb-mon-unit">&deg;C</span></div>';
+  html += '<div class="pb-mon-cell-value"><span id="ve-temp">' + (vd.temp || '--') + '</span></div></div>';
+  html += '</div></div>';
+
+  // ── Results panel: lab/imaging results from the encounter ──
+  var results = App.pbHistory.filter(function(m) { return m.role === 'results' || m.role === 'death' || m.role === 'diagnosis_result' || m.role === 'partial'; });
+  if (results.length > 0) {
+    html += '<div style="padding:12px 16px;background:var(--bg);border-bottom:1px solid var(--border)">';
+    html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-light);margin-bottom:8px">Clinical Results</div>';
+    for (var ri = 0; ri < results.length; ri++) {
+      var rm = results[ri];
+      if (rm.role === 'results') {
+        var tr = rm.content;
+        var abBg = tr.abnormal ? 'rgba(244,67,54,0.08)' : 'rgba(76,175,80,0.08)';
+        var abBorder = tr.abnormal ? '#f44336' : '#4caf50';
+        html += '<div style="background:' + abBg + ';border-left:4px solid ' + abBorder + ';border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:13px">';
+        html += '<strong>' + escapeHtml(tr.testName || 'Results') + '</strong>';
+        html += '<span style="float:right;font-size:11px;font-weight:700;color:' + abBorder + '">' + (tr.abnormal ? 'ABNORMAL' : 'NORMAL') + '</span>';
+        html += '<div style="margin-top:6px;white-space:pre-wrap;color:var(--text);line-height:1.6">' + escapeHtml(tr.results || '') + '</div>';
+        html += '</div>';
+      } else if (rm.role === 'death') {
+        html += '<div style="background:#b71c1c;color:white;padding:16px;border-radius:8px;margin-bottom:8px;text-align:center">';
+        html += '<strong>&#x1F480; Patient Deceased</strong><br>' + escapeHtml(rm.content);
+        html += '</div>';
+      } else if (rm.role === 'diagnosis_result') {
+        var dr = rm.content;
+        var drBorder = dr.correct ? '#4caf50' : '#f44336';
+        html += '<div style="background:' + (dr.correct ? 'rgba(76,175,80,0.12)' : 'rgba(244,67,54,0.1)') + ';border:2px solid ' + drBorder + ';border-radius:8px;padding:14px;margin-bottom:8px;font-size:14px">';
+        html += '<strong style="color:' + drBorder + '">' + (dr.correct ? '&#x2705; Correct' : '&#x274C; Incorrect') + '</strong>';
+        if (dr.feedback) html += '<div style="margin-top:6px">' + escapeHtml(dr.feedback) + '</div>';
+        if (!dr.correct) html += '<div style="margin-top:6px"><strong>Answer:</strong> ' + escapeHtml(dr.answer || '?') + '</div>';
+        html += '</div>';
+      }
+    }
+    html += '</div>';
+  }
+
+  // ── Consequence messages (system messages from clinical engine) ──
+  var consequences = App.pbHistory.filter(function(m) { return m.role === 'system'; });
+  if (consequences.length > 0) {
+    var lastCons = consequences[consequences.length - 1];
+    var sev = lastCons.severity || 'safe';
+    var sevColors = { 'safe': '#4caf50', 'caution': '#ff9800', 'danger': '#f44336', 'critical': '#b71c1c' };
+    var sevColor = sevColors[sev] || '#4caf50';
+    html += '<div style="padding:8px 16px;background:rgba(' + (sev === 'safe' ? '76,175,80' : sev === 'caution' ? '255,152,0' : '244,67,54') + ',0.08);border-left:4px solid ' + sevColor + ';font-size:13px;color:var(--text)">';
+    html += escapeHtml(lastCons.content || '');
+    html += '</div>';
+  }
+
+  // ── Bottom: Voice controls ──
+  if (!App.pbDiagResolved) {
+    html += '<div style="flex:1"></div>'; // push controls to bottom
+    html += '<div style="padding:16px 20px;border-top:1px solid var(--border);background:var(--card);display:flex;flex-direction:column;align-items:center;gap:12px">';
+    if (App.pbHandsFree) {
+      html += '<div style="display:flex;align-items:center;gap:12px;width:100%;justify-content:center">';
+      html += '<div id="hf-indicator" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:20px;background:#c62828;color:white;font-size:13px;font-weight:700;animation:pulse 1.5s infinite">&#x1F534; Listening...</div>';
+      html += '<button class="btn btn-warning" onclick="showDiagnoseModal()" style="font-size:13px;padding:8px 16px">Diagnose</button>';
+      html += '<button class="btn" onclick="stopHandsFree_()" style="background:#c62828;color:white;font-size:13px;padding:8px 16px;border-radius:20px">&#x1F4F5; Hang Up</button>';
+      html += '</div>';
+      html += '<div style="font-size:11px;color:var(--text-light);text-align:center">Speak naturally &bull; <strong>"my diagnosis is..."</strong> to diagnose &bull; <strong>"order..."</strong> for orders</div>';
+    } else {
+      // Fallback text input for NAC if hands-free not available
+      html += '<div style="display:flex;gap:8px;width:100%">';
+      html += '<textarea id="pb-input" placeholder="Talk to the patient..." rows="2" style="flex:1" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendPBMessage()}"></textarea>';
+      html += '<button class="btn btn-primary" onclick="sendPBMessage()">Send</button>';
+      html += '<button class="btn btn-warning" onclick="showDiagnoseModal()">Diagnose</button>';
+      html += '</div>';
+    }
+    html += '</div>';
+  } else {
+    // Case resolved — show next station / scorecard
+    html += '<div style="flex:1"></div>';
+    html += '<div style="padding:16px 20px;border-top:1px solid var(--border);background:var(--card);display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap">';
+    html += '<span style="color:var(--text-light);font-size:14px">Station complete.</span>';
+    html += '<button class="btn btn-success" onclick="finishNACStation()">' + (App.nacCurrentStation >= App.nacTotalStations ? 'View Results' : 'Next Station') + '</button>';
+    html += '<button class="btn btn-primary" onclick="showScorecardModal_()">View Scorecard</button>';
+    html += '<button class="btn btn-outline" onclick="if(confirm(\'End entire NAC exam?\')){showNACSummary();}">End Exam</button>';
+    html += '</div>';
+
+    // Auto-load scorecard
+    if (!App.pbScorecard && !App.pbScorecardLoading && !App.pbScorecardError) {
+      App.pbScorecardLoading = true;
+      setTimeout(function() { loadOSCEScorecard(); }, 500);
+    }
+    if (App.pbScorecardLoading && !App.pbScorecard) {
+      html += '<div style="text-align:center;padding:20px;color:var(--text-light)"><div class="spinner" style="margin:0 auto 12px"></div>Generating OSCE Scorecard...</div>';
+    }
+    if (App.pbScorecardError && !App.pbScorecard) {
+      html += '<div style="text-align:center;padding:16px;color:var(--text-light)">&#x26A0;&#xFE0F; Scorecard failed. <button class="btn btn-outline btn-sm" onclick="App.pbScorecardError=false;loadOSCEScorecard()">Retry</button></div>';
+    }
+    if (App.pbScorecard && !App.pbScorecardShown) {
+      App.pbScorecardShown = true;
+      setTimeout(function() { showScorecardModal_(); }, 300);
+    }
+  }
+
+  el.innerHTML = '<div style="display:flex;flex-direction:column;height:100%">' + html + '</div>';
+  startECGAnimation_();
+}
+
 function renderPBChatInner() {
+  // NAC-OSCE gets a dedicated clinical workstation UI
+  if (App.nacActive) { renderNACStationUI_(); return; }
+
   var caseLabel = App.pbTotalCases > 1 ? ' (Case ' + App.pbCurrentCase + '/' + App.pbTotalCases + ')' : '';
-  var nacLabel = App.nacActive ? ' (Test ' + (App.nacTestNumber || '') + ' &mdash; Station ' + App.nacCurrentStation + '/' + App.nacTotalStations + ')' : '';
   var p = App.pbPatientInfo;
 
-  var html = '<div class="pb-top-bar"><div class="pb-top-left"><h3>' + (App.nacActive ? 'NAC-OSCE' : 'PatientBot') + ' &mdash; ' + escapeHtml(App.pbSpecialty) + (App.nacActive ? nacLabel : caseLabel) + '</h3></div>';
+  var html = '<div class="pb-top-bar"><div class="pb-top-left"><h3>PatientBot &mdash; ' + escapeHtml(App.pbSpecialty) + caseLabel + '</h3></div>';
   html += '<div class="pb-top-right">';
   // NAC timer display
   if (App.nacActive && App.nacTimerMinutes > 0 && !App.pbDiagResolved) {
