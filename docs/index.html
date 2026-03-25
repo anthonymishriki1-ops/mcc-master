@@ -5907,7 +5907,7 @@ function getOpenAISpeed_() {
   return 1.0;
 }
 
-// Fetch TTS audio from OpenAI directly (no backend needed)
+// OpenAI TTS — calls API directly, key stored in localStorage per user
 function speakOpenAI_(text, onDone) {
   if (!text) { if (onDone) onDone(); return; }
   var clean = text.replace(/\*+/g, '').replace(/\[.*?\]/g, '').replace(/[*_~`#]/g, '')
@@ -5917,10 +5917,20 @@ function speakOpenAI_(text, onDone) {
 
   var apiKey = localStorage.getItem('mcc_openai_key');
   if (!apiKey) {
-    apiKey = prompt('Enter your OpenAI API key for voice mode.\nThis is stored locally in your browser only.');
-    if (!apiKey) { speakText_(text, getPBVoiceParams_()); if (onDone) onDone(); return; }
-    localStorage.setItem('mcc_openai_key', apiKey.trim());
-    apiKey = apiKey.trim();
+    // Try backend first (if deployed with key)
+    serverCall('textToSpeech', clean, getOpenAIVoice_(), getOpenAISpeed_()).then(function(result) {
+      if (result && result.audio) {
+        playBase64Audio_(result.audio, result.format || 'mp3', onDone);
+      } else {
+        // Backend doesn't have it — fall back to browser TTS
+        speakText_(text, getPBVoiceParams_());
+        if (onDone) onDone();
+      }
+    }).catch(function() {
+      speakText_(text, getPBVoiceParams_());
+      if (onDone) onDone();
+    });
+    return;
   }
 
   var voice = getOpenAIVoice_();
@@ -5928,24 +5938,12 @@ function speakOpenAI_(text, onDone) {
 
   fetch('https://api.openai.com/v1/audio/speech', {
     method: 'POST',
-    headers: {
-      'Authorization': 'Bearer ' + apiKey,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: 'tts-1',
-      input: clean,
-      voice: voice,
-      speed: speed,
-      response_format: 'mp3'
-    })
+    headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'tts-1', input: clean, voice: voice, speed: speed, response_format: 'mp3' })
   }).then(function(resp) {
     if (!resp.ok) {
-      if (resp.status === 401) {
-        localStorage.removeItem('mcc_openai_key');
-        showToast_('Invalid OpenAI key — removed. Try again.');
-      }
-      throw new Error('TTS error: ' + resp.status);
+      if (resp.status === 401) { localStorage.removeItem('mcc_openai_key'); showToast_('Invalid OpenAI key — removed.'); }
+      throw new Error('TTS ' + resp.status);
     }
     return resp.blob();
   }).then(function(blob) {
