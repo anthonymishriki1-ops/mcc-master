@@ -8863,7 +8863,7 @@ function callTTSDirect_(text, voice, speed) {
       'Authorization': 'Bearer ' + key
     },
     body: JSON.stringify({
-      model: 'tts-1-hd',
+      model: 'tts-1',
       input: clean,
       voice: voice || 'alloy',
       speed: speed || 1.0,
@@ -9181,7 +9181,9 @@ function showNACReadingPeriod_(station) {
   var readingSec = 120; // 2 minutes
   App.nacReadingTimer = readingSec;
 
+  App._nacReadingDone = false;
   function renderReading() {
+    if (App._nacReadingDone) return; // station already entered, don't overwrite
     var p = App.pbPatientInfo;
     var html = '<div style="display:flex;flex-direction:column;height:100%;background:var(--bg)">';
 
@@ -9280,6 +9282,7 @@ function showNACReadingPeriod_(station) {
 }
 
 function endNACReadingPeriod_() {
+  App._nacReadingDone = true; // prevent any further reading period renders
   if (App.nacReadingInterval) { clearInterval(App.nacReadingInterval); App.nacReadingInterval = null; }
   // Save final notes
   var notesEl = document.getElementById('nac-notes-input');
