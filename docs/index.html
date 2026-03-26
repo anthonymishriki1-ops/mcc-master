@@ -8893,7 +8893,24 @@ function sendNACMessageDirect_(userMessage) {
 
   // Add user message to history
   App.pbHistory.push({ role: 'user', content: userMessage });
+  App.nacDoctorSpoke = true;
+  if (App.nacIdleTimer) { clearTimeout(App.nacIdleTimer); App.nacIdleTimer = null; }
   renderPBChat();
+
+  // First message from doctor — use pregen opening line instead of API call
+  if (App._nacPregenOpening && App.pbHistory.filter(function(m){return m.role==='user';}).length === 1) {
+    var opening = App._nacPregenOpening;
+    App._nacPregenOpening = null; // use only once
+    App.pbHistory.push({ role: 'assistant', content: opening });
+    renderPBChat();
+    // Speak it
+    var voice = getOpenAIVoice_();
+    var speed = getOpenAISpeed_();
+    callTTSDirect_(opening, voice, speed).then(function() {
+      if (App.pbHandsFree) resumeHandsFreeListening_();
+    });
+    return;
+  }
 
   // Build messages array for Anthropic
   var apiMessages = [];
@@ -9111,8 +9128,9 @@ function startNextNACStation() {
     App.pbDiagResolved = false;
     App.pbPartialUsed = false;
     App.pbMonitorAttached = false;
-    App.pbHistory = [{ role: 'assistant', content: station.op || '' }];
-    App.nacStationMsg = station.op || '';
+    App.pbHistory = []; // empty — doctor speaks first
+    App._nacPregenOpening = station.op || ''; // saved for when doctor speaks
+    App.nacStationMsg = '';
     App.pbDiagnosis = station.dx;
     VitalsEngine.init({ hr: station.hr, sbp: station.sbp, dbp: station.dbp, rr: station.rr, temp: station.tmp, spo2: station.o2 });
     App.nacCaseReady = true;
@@ -9295,10 +9313,8 @@ function enterNACStation_() {
   if (station && station.nm && localStorage.getItem('mcc_anthropic_key')) {
     App._nacDirectMode = true;
     App._nacSystemPrompt = buildNACSystemPrompt_(station);
-    // Use pregen opening line as first assistant message
-    if (station.op && App.pbHistory.length <= 1) {
-      App.pbHistory = [{ role: 'assistant', content: station.op }];
-    }
+    // Don't pre-load opening line — doctor speaks first
+    App._nacPregenOpening = station.op || '';
   } else {
     App._nacDirectMode = false;
   }
