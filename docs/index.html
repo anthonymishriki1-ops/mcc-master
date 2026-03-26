@@ -9323,8 +9323,8 @@ function enterNACStation_() {
   }
   // Render the station UI (no TTS until doctor speaks)
   renderPBChat();
-  // Start hands-free listening
-  if (App.pbHandsFree) startHandsFreeListening_();
+  // Start hands-free listening (slight delay to ensure DOM is ready for mic permission)
+  if (App.pbHandsFree) setTimeout(function() { startHandsFreeListening_(); }, 500);
   // Start 30-second idle nudge — if doctor doesn't speak, patient prompts them
   App.nacIdleTimer = setTimeout(function() {
     if (!App.nacDoctorSpoke && App.nacActive && !App.pbDiagResolved) {
@@ -9645,7 +9645,8 @@ function renderPBChat() {
     // Start mic visualizer if hands-free
     if (App.pbHandsFree) startMicVisualizer_();
     // Doctor speaks first — suppress patient TTS until doctor has spoken
-    if (App.nacDoctorSpoke && !App._pbSpeaking) pbSpeakLastMessage_();
+    // In direct mode, TTS is handled by sendNACMessageDirect_ — don't double-speak
+    if (!App._nacDirectMode && App.nacDoctorSpoke && !App._pbSpeaking) pbSpeakLastMessage_();
     return;
   }
   el.innerHTML = renderPBChatInner();
