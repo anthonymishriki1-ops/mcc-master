@@ -6011,6 +6011,7 @@ var _sttWatchdog = null;
 var _dgSocket = null; // Deepgram WebSocket
 var _dgStream = null; // MediaStream from getUserMedia
 var _dgProcessor = null; // ScriptProcessorNode or AudioWorklet
+var _dgSource = null; // MediaStreamAudioSourceNode (disconnect on restart)
 var _dgAudioCtx = null; // Reuse one AudioContext across restarts (Chrome limits to ~6)
 
 // Central restart scheduler — single path for all restarts
@@ -6031,6 +6032,10 @@ function _cleanupStt() {
     // DON'T close AudioContext — reuse it (Chrome limits to ~6)
     try { _dgProcessor.disconnect(); } catch(e) {}
     _dgProcessor = null;
+  }
+  if (_dgSource) {
+    try { _dgSource.disconnect(); } catch(e) {}
+    _dgSource = null;
   }
   // Don't kill _dgStream here — reuse across restarts to avoid permission re-prompts
   if (handsFreeRecognition) { try { handsFreeRecognition.abort(); } catch(e) {} handsFreeRecognition = null; }
@@ -6163,6 +6168,7 @@ function _launchDeepgram() {
 
       // Pipe mic audio to Deepgram
       var source = ctx.createMediaStreamSource(stream);
+      _dgSource = source;
       var processor = ctx.createScriptProcessor(4096, 1, 1);
       _dgProcessor = processor;
       _dgProcessor._ctx = ctx;
