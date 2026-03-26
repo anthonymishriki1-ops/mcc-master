@@ -6123,10 +6123,20 @@ function startHandsFreeListening_() {
   };
 
   handsFreeRecognition.onend = function() {
-    // Auto-restart if still in hands-free mode
+    // Auto-restart if still in hands-free mode — reuse same object
     App.pbMicActive = false;
     if (App.pbHandsFree && !App.pbDiagResolved) {
-      setTimeout(function() { startHandsFreeListening_(); }, 300);
+      setTimeout(function() {
+        try {
+          if (handsFreeRecognition) {
+            handsFreeRecognition.start();
+            App.pbMicActive = true;
+          }
+        } catch(e) {
+          // If start fails, create fresh instance
+          setTimeout(function() { startHandsFreeListening_(); }, 500);
+        }
+      }, 300);
     }
   };
 
