@@ -9666,7 +9666,8 @@ function renderPBChat() {
     renderNACStationUI_();
     startPBMonitorAnimation();
     // Start mic visualizer if hands-free
-    if (App.pbHandsFree) startMicVisualizer_();
+    // NOTE: mic visualizer disabled — getUserMedia conflicts with SpeechRecognition
+    // if (App.pbHandsFree) startMicVisualizer_();
     // Doctor speaks first — suppress patient TTS until doctor has spoken
     // In direct mode, TTS is handled by sendNACMessageDirect_ — don't double-speak
     if (!App._nacDirectMode && App.nacDoctorSpoke && !App._pbSpeaking) pbSpeakLastMessage_();
@@ -10202,9 +10203,9 @@ function renderNACStationUI_() {
     html += '<div style="padding:16px 20px;border-top:1px solid var(--border);background:var(--card);display:flex;flex-direction:column;align-items:center;gap:12px">';
     if (App.pbHandsFree) {
       html += '<div style="display:flex;align-items:center;gap:12px;width:100%;justify-content:center">';
-      html += '<div id="hf-indicator" style="display:inline-flex;align-items:center;gap:8px;padding:6px 16px;border-radius:24px;background:rgba(198,40,40,0.1);border:2px solid #c62828;min-width:180px;justify-content:center">';
-      html += '<canvas id="mic-visualizer" width="100" height="32" style="width:100px;height:32px"></canvas>';
-      html += '<span style="color:#c62828;font-size:12px;font-weight:700">Listening</span>';
+      html += '<div id="hf-indicator" style="display:inline-flex;align-items:center;gap:8px;padding:8px 20px;border-radius:24px;background:rgba(198,40,40,0.1);border:2px solid #c62828;animation:pulse 1.5s infinite">';
+      html += '<span style="display:inline-block;width:10px;height:10px;background:#c62828;border-radius:50%;animation:pulse 1.5s infinite"></span>';
+      html += '<span style="color:#c62828;font-size:13px;font-weight:700">Listening</span>';
       html += '</div>';
       html += '<button class="btn btn-warning" onclick="showDiagnoseModal()" style="font-size:13px;padding:8px 16px">Diagnose</button>';
       html += '<button class="btn" onclick="stopHandsFree_()" style="background:#c62828;color:white;font-size:13px;padding:8px 16px;border-radius:20px">&#x1F4F5; Hang Up</button>';
