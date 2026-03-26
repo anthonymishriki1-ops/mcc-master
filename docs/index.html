@@ -8953,20 +8953,26 @@ function nacDirectRespond_(text) {
   });
 }
 
-// Stop mic cleanly before processing
+// Stop mic cleanly before processing (don't null it — just stop)
 function stopMicForProcessing_() {
   if (handsFreeRecognition) {
-    try { handsFreeRecognition.abort(); } catch(e) {}
-    handsFreeRecognition = null;
+    try { handsFreeRecognition.stop(); } catch(e) {}
   }
   App.pbMicActive = false;
 }
 
 // Restart mic after TTS finishes
 function restartMicAfterResponse_() {
-  if (App.pbHandsFree && App.nacActive && !App.pbDiagResolved) {
-    setTimeout(function() { startHandsFreeListening_(); }, 300);
-  }
+  if (!App.pbHandsFree || !App.nacActive || App.pbDiagResolved) return;
+  setTimeout(function() {
+    if (handsFreeRecognition) {
+      try { handsFreeRecognition.start(); App.pbMicActive = true; } catch(e) {
+        startHandsFreeListening_();
+      }
+    } else {
+      startHandsFreeListening_();
+    }
+  }, 300);
 }
 
 // Build NAC system prompt from pregen station data (client-side, no server needed)
@@ -9364,14 +9370,10 @@ function enterNACStation_() {
         "...are you the doctor? Should I be worried that you're just standing there?"
       ];
       var nudge = nudges[Math.floor(Math.random() * nudges.length)];
-      App.nacDoctorSpoke = true; // treat nudge as breaking the ice
-      // Use direct respond if in direct mode (speaks + restarts mic)
-      if (App._nacDirectMode) {
-        nacDirectRespond_(nudge);
-      } else {
-        App.pbHistory.push({ role: 'assistant', content: nudge });
-        renderPBChat();
-      }
+      App.nacDoctorSpoke = true;
+      // Just add to history and render — don't touch the mic or TTS
+      App.pbHistory.push({ role: 'assistant', content: nudge });
+      renderPBChat();
     }
   }, 30000);
 }
