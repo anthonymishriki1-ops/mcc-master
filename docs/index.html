@@ -6093,9 +6093,7 @@ function startHandsFreeListening_() {
       VitalsEngine.detectAndApply(best);
       App.pbHistory.push({ role: 'assistant', content: result.response });
       target();
-
-      // Speak the response, then resume listening
-      resumeHandsFreeAfterSpeak_(result.response);
+      // Speech + hands-free resume handled by pbSpeakLastMessage_ inside renderPBChat
     }).catch(function(e) {
       removeEl('pb-typing');
       App.pbHistory.push({ role: 'assistant', content: 'Error: ' + (e.message || String(e)) });
@@ -6373,7 +6371,10 @@ function pbSpeakLastMessage_() {
   var last = App.pbHistory[idx];
   if (last && last.role === 'assistant' && App._pbLastSpokenIdx !== idx) {
     App._pbLastSpokenIdx = idx;
-    pbSpeak_(last.content);
+    pbSpeak_(last.content, function() {
+      // If hands-free, resume listening after speech ends
+      if (App.pbHandsFree) resumeHandsFreeListening_();
+    });
   }
 }
 
@@ -7478,10 +7479,7 @@ function startNextPBCase() {
 
     App.pbHistory = [{ role: 'assistant', content: msg }];
     renderPBChat();
-    // Hands-free: speak the opening line then start listening
-    if (App.pbHandsFree) {
-      resumeHandsFreeAfterSpeak_(msg);
-    }
+    // Speech + hands-free resume handled by pbSpeakLastMessage_ inside renderPBChat
   }).catch(function(e) {
     el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p><button class="btn btn-primary" onclick="startNextPBCase()" style="margin-top:12px">Try Again</button></div>';
   });
@@ -9034,10 +9032,10 @@ function endNACReadingPeriod_() {
   if (App.nacTimerMinutes > 0) {
     startNACTimer(App.nacTimerMinutes * 60);
   }
+  // Render the station UI — this also triggers TTS via pbSpeakLastMessage_
+  // so do NOT call resumeHandsFreeAfterSpeak_ separately (causes echo/overlap)
+  // Render the station UI — speech + hands-free resume handled by pbSpeakLastMessage_
   renderPBChat();
-  if (App.pbHandsFree) {
-    resumeHandsFreeAfterSpeak_(App.nacStationMsg);
-  }
 }
 
 function startNACTimer(seconds) {
