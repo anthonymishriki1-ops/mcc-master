@@ -5901,7 +5901,7 @@ function getOpenAISpeed_() {
 // OpenAI TTS via GAS backend (API key in Script Properties)
 function speakOpenAI_(text, onDone) {
   if (!text) { if (onDone) onDone(); return; }
-  var clean = text.replace(/\*+/g, '').replace(/\[.*?\]/g, '').replace(/[*_~`#]/g, '')
+  var clean = text.replace(/\*[^*]+\*/g, '').replace(/\[.*?\]/g, '').replace(/[*_~`#]/g, '')
     .replace(/\(Note:.*?\)/gi, '').replace(/```[\s\S]*?```/g, '').trim();
   if (!clean || clean.length < 2) { if (onDone) onDone(); return; }
   if (clean.length > 4000) clean = clean.substring(0, 4000);
@@ -6213,7 +6213,7 @@ function speakText_(text, voiceParams, ttsEnabled) {
   if (!isOn || !text || !window.speechSynthesis) return;
   try { window.speechSynthesis.cancel(); } catch(e) {}
   try { if (window.speechSynthesis.paused) window.speechSynthesis.resume(); } catch(e) {}
-  var clean = text.replace(/\*+/g,'').replace(/\[.*?\]/g,'').replace(/[*_~`]/g,'').trim();
+  var clean = text.replace(/\*[^*]+\*/g,'').replace(/\[.*?\]/g,'').replace(/[*_~`]/g,'').trim();
   if (!clean) return;
   var utt = new SpeechSynthesisUtterance(clean);
   utt.lang = 'en-US';
@@ -6399,7 +6399,7 @@ function toggleDDTTS() {
 function speakTextHouse_(text, force) {
   if ((!force && !App.houseTTS) || !text || !window.speechSynthesis) return;
   try { window.speechSynthesis.cancel(); } catch(e) {}
-  var clean = text.replace(/\*+/g,'').replace(/\[.*?\]/g,'').replace(/[*_~`]/g,'').trim();
+  var clean = text.replace(/\*[^*]+\*/g,'').replace(/\[.*?\]/g,'').replace(/[*_~`]/g,'').trim();
   if (!clean) return;
   var utt = new SpeechSynthesisUtterance(clean);
   utt.lang = 'en-US'; utt.rate = 0.9; utt.pitch = 0.8; utt.volume = 1.0;
@@ -8898,14 +8898,14 @@ function startNextNACStation() {
     App.pbCustom.sex = 'female';
   }
 
-  // Show loading in NAC page but use PB content area
   navigateTo('patientbot');
-  var el = document.getElementById('patientbot-content');
-  el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div>' +
-    '<p style="margin-top:16px;color:var(--text-light)">Test ' + (App.nacTestNumber || '') + ' &mdash; Station ' + App.nacCurrentStation + ' of ' + App.nacTotalStations + '</p>' +
-    '<p style="margin-top:4px;color:var(--accent);font-weight:700">' + escapeHtml(station.specialty) + ' — ' + escapeHtml(station.presentation) + '</p>' +
-    '<p style="margin-top:4px;font-size:12px;color:var(--text-light)">' + escapeHtml(station.focus) + '</p></div>';
 
+  // Show reading period IMMEDIATELY with blueprint data — no waiting for server
+  App.nacCaseReady = false;
+  App.nacCaseError = null;
+  showNACReadingPeriod_(station);
+
+  // Fire server call in the background — case loads while user reads door prompt
   serverCall('startPatientBotCase', station.specialty, false, App.nacDifficulty, App.pbCustom).then(function(result) {
     App.pbCaseId = result.caseId;
     App.pbSpecialty = result.specialty;
@@ -8936,13 +8936,10 @@ function startNextNACStation() {
     }
 
     App.pbHistory = [{ role: 'assistant', content: msg }];
-
-    // Show reading period before starting the station
     App.nacStationMsg = msg;
-    showNACReadingPeriod_(station);
+    App.nacCaseReady = true;
   }).catch(function(e) {
-    el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p>' +
-      '<button class="btn btn-primary" onclick="startNextNACStation()" style="margin-top:12px">Retry Station</button></div>';
+    App.nacCaseError = e.message || String(e);
   });
 }
 
@@ -8968,7 +8965,7 @@ function showNACReadingPeriod_(station) {
     html += '<div style="font-size:13px;color:rgba(255,255,255,0.6);margin-top:4px">Station ' + App.nacCurrentStation + ' of ' + App.nacTotalStations + '</div>';
     html += '</div>';
 
-    // Door prompt
+    // Door prompt — uses blueprint data (available instantly), patient details if loaded
     html += '<div style="padding:20px 24px;flex:1;overflow-y:auto">';
     html += '<div style="background:var(--card);border:2px solid var(--primary);border-radius:12px;padding:20px;margin-bottom:16px">';
     if (p) {
@@ -8976,6 +8973,12 @@ function showNACReadingPeriod_(station) {
       html += '<div style="font-size:15px;color:var(--text);line-height:1.7">';
       html += '<strong>' + escapeHtml(p.name || 'A patient') + '</strong> is a <strong>' + (p.age || '?') + '-year-old ' + sx + '</strong> presenting with <strong>' + escapeHtml(station.presentation.toLowerCase()) + '</strong>.';
       html += '</div>';
+    } else {
+      // Patient not loaded yet — show what we know from the blueprint
+      html += '<div style="font-size:15px;color:var(--text);line-height:1.7">';
+      html += 'A patient is presenting with <strong>' + escapeHtml(station.presentation.toLowerCase()) + '</strong>.';
+      html += '</div>';
+      html += '<div style="margin-top:8px;font-size:12px;color:var(--text-light);font-style:italic">Patient details loading...</div>';
     }
     html += '<div style="margin-top:14px;font-size:13px;color:var(--text)">';
     html += 'Take a focused history, perform a relevant physical examination, order appropriate investigations, and provide your diagnosis and management plan.';
@@ -9002,10 +9005,20 @@ function showNACReadingPeriod_(station) {
 
   renderReading();
 
+  var nacReadingPatientShown = !!App.pbPatientInfo;
   App.nacReadingInterval = setInterval(function() {
     // Save notes continuously
     var notesEl = document.getElementById('nac-notes-input');
     if (notesEl) App.nacNotes = notesEl.value;
+
+    // Re-render door prompt once patient data arrives from server
+    if (!nacReadingPatientShown && App.pbPatientInfo) {
+      nacReadingPatientShown = true;
+      renderReading();
+      // Restore notes
+      var nEl = document.getElementById('nac-notes-input');
+      if (nEl) nEl.value = App.nacNotes || '';
+    }
 
     App.nacReadingTimer--;
     var timerEl = document.getElementById('nac-reading-timer');
@@ -9028,12 +9041,30 @@ function endNACReadingPeriod_() {
   var notesEl = document.getElementById('nac-notes-input');
   if (notesEl) App.nacNotes = notesEl.value;
 
-  // Now start the actual station
+  // If case hasn't loaded yet, show brief loading then enter when ready
+  if (!App.nacCaseReady) {
+    var el = document.getElementById('patientbot-content');
+    if (el) el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div><p style="margin-top:16px;color:var(--text-light)">Preparing station...</p></div>';
+    var waitCase = setInterval(function() {
+      if (App.nacCaseReady) {
+        clearInterval(waitCase);
+        enterNACStation_();
+      } else if (App.nacCaseError) {
+        clearInterval(waitCase);
+        if (el) el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(App.nacCaseError) + '</p>' +
+          '<button class="btn btn-primary" onclick="App.nacCurrentStation--;startNextNACStation()" style="margin-top:12px">Retry</button></div>';
+      }
+    }, 200);
+    return;
+  }
+  enterNACStation_();
+}
+
+function enterNACStation_() {
+  // Start the actual station
   if (App.nacTimerMinutes > 0) {
     startNACTimer(App.nacTimerMinutes * 60);
   }
-  // Render the station UI — this also triggers TTS via pbSpeakLastMessage_
-  // so do NOT call resumeHandsFreeAfterSpeak_ separately (causes echo/overlap)
   // Render the station UI — speech + hands-free resume handled by pbSpeakLastMessage_
   renderPBChat();
 }
