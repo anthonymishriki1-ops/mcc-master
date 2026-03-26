@@ -19,68 +19,6 @@ function getConfig_() {
 
 // --- Web App Entry ---
 function doGet(e) {
-  // API call via GET (used by GitHub Pages frontend to avoid CORS/redirect issues with POST)
-  if (e && e.parameter && e.parameter.apiCall) {
-    try {
-      var payload = JSON.parse(e.parameter.apiCall);
-      var fn = payload.fn;
-      var args = payload.args || [];
-      var profile = payload.profile || '';
-      // Functions that accept guestId as their last parameter
-      var needsGuestId = ['saveQuizResult','saveProgress','analyzeQuizResults','saveCardRating','getUserStats','getUserQuizHistory','getLeaderboard','getDailyChallenge','getWeakCards_','getPBCaseLibrary','savePBConversation'];
-      if (profile && needsGuestId.indexOf(fn) !== -1) {
-        args.push(profile);
-      }
-      var allowed = {
-        'getCurrentUser': getCurrentUser,
-        'getSpecialties': getSpecialties,
-        'getFlashcards': getFlashcards,
-        'getBulletNotes': getBulletNotes,
-        'getMCQQuiz': getMCQQuiz,
-        'getTopicsForSpecialty': getTopicsForSpecialty,
-        'getDontMiss': getDontMiss,
-        'getGlossary': getGlossary,
-        'getImageChapters': getImageChapters,
-        'getChapterImages': getChapterImages,
-        'askDrData': askDrData,
-        'startPatientBotCase': startPatientBotCase,
-        'startPregenCase': startPregenCase,
-        'sendPatientBotMessage': sendPatientBotMessage,
-        'submitDiagnosis': submitDiagnosis,
-        'debriefPatientBot': debriefPatientBot,
-        'saveQuizResult': saveQuizResult,
-        'saveProgress': saveProgress,
-        'analyzeQuizResults': analyzeQuizResults,
-        'saveCardRating': saveCardRating,
-        'getUserStats': getUserStats,
-        'getUserQuizHistory': getUserQuizHistory,
-        'getLeaderboard': getLeaderboard,
-        'getDailyChallenge': getDailyChallenge,
-        'getGlossaryStatus': getGlossaryStatus,
-        'getTermTranslation': getTermTranslation,
-        'askHouseMode': askHouseMode,
-        'reportIssue': reportIssue,
-        'getFlaggedIssues': getFlaggedIssues,
-        'updateIssueStatus': updateIssueStatus,
-        'getDevStats': getDevStats,
-        'generateCaseDebrief': generateCaseDebrief,
-        'getPBCaseLibrary': getPBCaseLibrary,
-        'savePBConversation': savePBConversation,
-        'textToSpeech': textToSpeech
-      };
-      if (!allowed[fn]) {
-        return ContentService.createTextOutput(JSON.stringify({ error: 'Function not allowed: ' + fn }))
-          .setMimeType(ContentService.MimeType.JSON);
-      }
-      var result = allowed[fn].apply(null, args);
-      return ContentService.createTextOutput(JSON.stringify({ result: result }))
-        .setMimeType(ContentService.MimeType.JSON);
-    } catch (err) {
-      return ContentService.createTextOutput(JSON.stringify({ error: err.message }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-  }
-
   // Debug: list sheets
   if (e && e.parameter && e.parameter.action === 'debugSheets') {
     var config = getConfig_();
@@ -138,75 +76,6 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
-// Dev secret for Netlify proxy auth (set as Script Property 'DEV_SECRET')
-var DEV_SECRET = PropertiesService.getScriptProperties().getProperty('DEV_SECRET') || '';
-
-// --- REST API for external frontends (GitHub Pages) ---
-function doPost(e) {
-  try {
-    var payload = JSON.parse(e.postData.contents);
-    var fn = payload.fn;
-    var args = payload.args || [];
-    var devSecret = payload.devSecret || '';
-
-    // Whitelist of callable functions
-    var allowed = {
-      'getCurrentUser': getCurrentUser,
-      'getSpecialties': getSpecialties,
-      'getFlashcards': getFlashcards,
-      'getBulletNotes': getBulletNotes,
-      'getMCQQuiz': getMCQQuiz,
-      'getTopicsForSpecialty': getTopicsForSpecialty,
-      'getDontMiss': getDontMiss,
-      'getGlossary': getGlossary,
-      'getImageChapters': getImageChapters,
-      'getChapterImages': getChapterImages,
-      'askDrData': askDrData,
-      'startPatientBotCase': startPatientBotCase,
-      'startPregenCase': startPregenCase,
-      'sendPatientBotMessage': sendPatientBotMessage,
-      'submitDiagnosis': submitDiagnosis,
-      'debriefPatientBot': debriefPatientBot,
-      'saveQuizResult': saveQuizResult,
-      'saveProgress': saveProgress,
-      'analyzeQuizResults': analyzeQuizResults,
-      'saveCardRating': saveCardRating,
-      'getUserStats': getUserStats,
-      'getUserQuizHistory': getUserQuizHistory,
-      'getLeaderboard': getLeaderboard,
-      'getDailyChallenge': getDailyChallenge,
-      'getGlossaryStatus': getGlossaryStatus,
-      'getTermTranslation': getTermTranslation,
-      'askHouseMode': askHouseMode,
-      'reportIssue': reportIssue,
-      'getFlaggedIssues': getFlaggedIssues,
-      'updateIssueStatus': updateIssueStatus,
-      'getDevStats': getDevStats,
-      'generateCaseDebrief': generateCaseDebrief,
-      'getPBCaseLibrary': getPBCaseLibrary,
-      'savePBConversation': savePBConversation,
-      'textToSpeech': textToSpeech
-    };
-
-    if (!allowed[fn]) {
-      return ContentService.createTextOutput(JSON.stringify({ error: 'Function not allowed: ' + fn }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    // Pass devSecret as first arg for getDevStats when called via proxy
-    if (fn === 'getDevStats' && devSecret) {
-      args = [devSecret];
-    }
-
-    var result = allowed[fn].apply(null, args);
-    return ContentService.createTextOutput(JSON.stringify({ result: result }))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ error: err.message || String(err) }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
 // Admin email for dev mode
 var ADMIN_EMAIL = 'anthony.mishriki1@gmail.com';
 
@@ -227,13 +96,9 @@ function getUserId_(guestId) {
 }
 
 // --- Dev Panel: get all user activity ---
-function getDevStats(devSecretOrProfile) {
+function getDevStats() {
   var email = Session.getActiveUser().getEmail() || '';
-  var hasDevSecret = DEV_SECRET && devSecretOrProfile && devSecretOrProfile === DEV_SECRET;
-  // Allow profile-based auth for GitHub Pages (where Session.getActiveUser() is empty)
-  var DEV_PROFILES = ['profile_tony', 'tony', 'profile_admin', 'admin'];
-  var isDevProfile = devSecretOrProfile && DEV_PROFILES.indexOf(devSecretOrProfile.toLowerCase()) !== -1;
-  if (email.toLowerCase() !== ADMIN_EMAIL && !hasDevSecret && !isDevProfile) return { error: 'Not authorized' };
+  if (email.toLowerCase() !== ADMIN_EMAIL) return { error: 'Not authorized' };
 
   var sheet = ensureUserDataSheet_();
   var data = sheet.getDataRange().getValues();
@@ -247,20 +112,12 @@ function getDevStats(devSecretOrProfile) {
     var type = data[i][1];
     var ts = data[i][3];
 
-    if (!users[userId]) users[userId] = { quizzes: 0, pb: 0, daily: 0, cards: 0, lastActive: '', isGuest: userId.indexOf('guest_') === 0, recentActivity: [] };
+    if (!users[userId]) users[userId] = { quizzes: 0, pb: 0, daily: 0, cards: 0, lastActive: '', isGuest: userId.indexOf('guest_') === 0 };
     if (type === 'quiz_result') users[userId].quizzes++;
     if (type === 'pb_result') users[userId].pb++;
     if (type === 'daily_result') users[userId].daily++;
     if (type === 'card_rating') users[userId].cards++;
     if (ts) users[userId].lastActive = ts;
-
-    // Store recent activity (last 20 non-card events per user)
-    if (type !== 'card_rating' && users[userId].recentActivity.length < 20) {
-      var detail = data[i][2]; // data column
-      var summary = '';
-      try { var parsed = typeof detail === 'string' ? JSON.parse(detail) : detail; summary = parsed; } catch(ex) { summary = detail; }
-      users[userId].recentActivity.push({ type: type, data: summary, time: ts ? ts.toString() : '' });
-    }
 
     // Activity by day
     var day = ts ? ts.toString().slice(0, 10) : 'unknown';
@@ -335,44 +192,34 @@ function ensureUserDataSheet_() {
   return sheet;
 }
 
-// Name bank organized by ethnicity AND gender for proper correlation
-var PATIENT_NAMES_ = {
-  'South Asian':     { M: ['Aarav','Rohan','Vikram','Arjun','Nikhil','Ravi','Sanjay','Harsh','Aditya','Pranav','Kabir','Ishaan','Dhruv','Karthik','Rahul','Suresh','Manish','Tushar','Vivek','Amit'], F: ['Ananya','Meera','Sunita','Kavya','Pooja','Lakshmi','Deepa','Nisha','Priya','Anika','Divya','Sneha','Riya','Swati','Neha','Shruti','Tanvi','Pallavi','Anjali','Sanya'], N: ['Kiran','Preet','Jaya','Samar','Noor'] },
-  'East Asian':      { M: ['Wei','Jun','Hiro','Min-jun','Tao','Kenji','Bao','Takeshi','Hyun','Akira','Ryu','Daiki','Shota','Ryota','Yuto','Zewei','Jiahao','Zhipeng','Junjie','Bowen'], F: ['Mei Lin','Yuki','Sakura','Ji-yeon','Xiao','Aiko','Soo-jin','Linh','Hana','Minji','Haruka','Yui','Nanami','Momoka','Rin','Xiaomei','Jingwen','Yanling','Wanyi','Fangfang'], N: ['Thanh','Ren','Sora','Kai','Yue'] },
-  'Middle Eastern':  { M: ['Farhad','Omid','Dariush','Reza','Kamran','Bahram','Saeed','Hassan','Amir','Navid','Babak','Cyrus','Siavash','Pouya','Arash','Mehran','Kourosh','Borhan','Pejman','Shahin'], F: ['Yasmin','Nasreen','Leila','Shirin','Parisa','Soraya','Nazanin','Maryam','Golnaz','Setareh','Bahar','Fereshteh','Hengameh','Mahsa','Niloofar','Paria','Roya','Sepideh','Shahla','Zara'], N: ['Dara','Shayan','Kian'] },
-  'Arabic':          { M: ['Omar','Khalid','Tariq','Youssef','Ibrahim','Mustafa','Samir','Bassam','Ahmed','Jamal','Ali','Nasser','Kareem','Walid','Ziad','Faisal','Rami','Bilal','Hamza','Sami'], F: ['Fatima','Noor','Amira','Hana','Layla','Zahra','Dina','Rania','Salma','Lina','Amal','Sara','Nadia','Rana','Yasmine','Suha','Mariam','Ghada','Reem','Huda'], N: ['Nour','Salam'] },
-  'Black/African':   { M: ['Kwame','Kofi','Chidi','Emeka','Jabari','Sekou','Olu','Tendai','Dayo','Amadi','Obinna','Nnamdi','Chibueze','Tunde','Adebayo','Olumide','Ifeanyi','Balogun','Ekene','Zuberi'], F: ['Ama','Adwoa','Ngozi','Aisha','Folake','Zuri','Amara','Chiamaka','Nneka','Adaeze','Chisom','Blessing','Temi','Yetunde','Efua','Akosua','Abena','Nkechi','Uche','Bimpe'], N: ['Akili','Imani'] },
-  'Latin American':  { M: ['Santiago','Mateo','Diego','Alejandro','Carlos','Fernando','Ricardo','Miguel','Luis','Andres','Sebastian','Nicolas','Javier','Manuel','Eduardo','Gabriel','Ivan','Hector','Mario','Jorge'], F: ['Valentina','Camila','Isabella','Lucia','Gabriela','Sofia','Daniela','Elena','Mariana','Paula','Fernanda','Jimena','Natalia','Alejandra','Catalina','Andrea','Carla','Patricia','Monica','Veronica'], N: ['Angel','Cruz','Guadalupe'] },
-  'White/European':  { M: ['Liam','Noah','Ethan','Lucas','Oliver','James','Benjamin','Jack','Ryan','Connor','Owen','Nathan','Aiden','Caleb','Mason','Logan','Dylan','Patrick','Sean','Brendan'], F: ['Emma','Olivia','Ava','Mia','Charlotte','Amelia','Harper','Ella','Grace','Chloe','Sophie','Lily','Hannah','Natalie','Victoria','Audrey','Eleanor','Claire','Abigail','Samantha'], N: ['Alex','Jordan','Taylor','Riley'] },
-  'Eastern European':{ M: ['Dmitri','Andrei','Pavel','Sergei','Viktor','Nikolai','Bogdan','Aleksei','Oleg','Ivan','Mikhail','Vasili','Grigori','Fyodor','Anatoli','Stanislav','Vladislav','Ruslan','Artem','Ilya'], F: ['Natasha','Katya','Irina','Olga','Tatiana','Anya','Mila','Daria','Svetlana','Yulia','Ekaterina','Anastasia','Veronika','Oksana','Ludmila','Galina','Natalya','Larisa','Vera','Zoya'], N: ['Sasha','Zhenya'] },
-  'Indigenous':      { M: ['Koda','Takoda','Chayton','Ahanu','Mika','Dakota','River','Hunter','Chase','Jesse','Sequoia','Waya','Niyol','Makoa','Keanu','Kaleo','Lono','Akoni','Pono','Kaimana'], F: ['Winona','Aiyana','Nizhoni','Aponi','Kaya','Nuna','Tallulah','Sequoia','Wren','Sage','Chenoa','Halona','Lomasi','Nokomis','Shania','Tala','Wakanda','Yoki','Zitka','Abey'], N: ['Dakota','River','Sky','Sage'] },
-  'Caribbean':       { M: ['Marlon','Dwayne','Leroy','Winston','Errol','Delroy','Byron','Neville','Andre','Desmond','Clive','Trevor','Devon','Carlton','Beresford','Fitzroy','Lennox','Orville','Rudolph','Selwyn'], F: ['Keisha','Shanice','Tamika','Sade','Nadine','Patrice','Shelly','Claudette','Monique','Simone','Beverley','Yvonne','Paulette','Hyacinth','Dahlia','Marcia','Sheryl','Denise','Lorraine','Arlene'], N: ['Courtney','Kelly'] },
-  'French Canadian': { M: ['Jean-Luc','Mathieu','Francois','Sebastien','Antoine','Maxime','Olivier','Tristan','Gabriel','Philippe','Alexandre','Benoit','Christophe','Etienne','Guillaume','Jerome','Laurent','Marc-Andre','Raphael','Sylvain'], F: ['Genevieve','Elodie','Amelie','Celeste','Juliette','Margaux','Colette','Simone','Camille','Isabelle','Aurelie','Beatrice','Chloe','Emilie','Frederique','Helene','Laurence','Melanie','Nathalie','Pascale'], N: ['Dominique','Claude','Camille'] },
-  'Turkish':         { M: ['Emre','Berk','Kerem','Cem','Murat','Burak','Kaan','Yusuf','Baris','Alp','Serkan','Fatih','Mehmet','Ahmet','Mustafa','Hakan','Tolga','Erkan','Cengiz','Volkan'], F: ['Elif','Defne','Zeynep','Ece','Aylin','Selin','Pelin','Naz','Ceren','Ebru','Merve','Busra','Esra','Gulsum','Hatice','Hulya','Kubra','Nurcan','Ozlem','Serap'], N: ['Deniz','Evren'] },
-  'Jewish/Ashkenazi':{ M: ['Moshe','Yakov','Chaim','Shlomo','Ari','Noah','Ezra','Levi','Asher','Eli','Benyamin','Itzhak','Shimon','Gideon','Oren','Ran','Gil','Eitan','Dov','Uri'], F: ['Rivka','Miriam','Devorah','Leah','Rachel','Chana','Tamar','Naomi','Batya','Shira','Yael','Ora','Noa','Talia','Maya','Liora','Adina','Ayelet','Vered','Zahava'], N: ['Ariel','Eden','Noam'] },
-  'Filipino':        { M: ['Andres','Jose','Juan','Carlos','Miguel','Antonio','Eduardo','Roberto','Francisco','Manuel','Rafael','Ernesto','Ricardo','Felix','Victor','Paolo','Marco','Gabriel','Adrian','Diego'], F: ['Maria','Ana','Rosa','Elena','Luz','Esperanza','Corazon','Maricel','Rosario','Lourdes','Angelica','Maribel','Cristina','Jovelyn','Rowena','Mylene','Gina','Evelyn','Cecilia','Josephine'], N: ['Angel','Chris','Alex'] },
-  'Korean':          { M: ['Junho','Minjun','Seojun','Hyunwoo','Jiwon','Sungmin','Taewoo','Dongwook','Kyungmin','Yunho','Jaehyun','Seungwoo','Dohyun','Wonbin','Yongjun','Hyunsik','Jungkook','Taehyung','Namjoon','Seokjin'], F: ['Jiyeon','Sooyeon','Minji','Yuna','Hyejin','Sojeong','Chaeyoung','Dahyun','Soyeon','Jisoo','Jennie','Rose','Lisa','Seulgi','Wendy','Irene','Yeri','Karina','Winter','Ningning'], N: ['Gyuri','Hyun','Soo','Jae'] },
-  'Somali/East African': { M: ['Abdi','Hassan','Mohamed','Ahmed','Omar','Yusuf','Abdullahi','Farah','Ibrahim','Mahad','Daud','Ismail','Mustafa','Salad','Ciise','Jamal','Bashir','Warfa','Hiiraan','Shirwa'], F: ['Hodan','Faadumo','Saafi','Asad','Shamsa','Suado','Nuurto','Hibo','Ifrah','Idil','Warsan','Hawo','Deeqa','Asha','Caasha','Sagal','Zeinab','Luul','Nasrin','Fardowso'], N: ['Faadumo','Nuur'] },
-  'South East Asian': { M: ['Thanh','Minh','Khoa','Duc','Tuan','Phuong','Quang','Trung','Hieu','Long','Khang','Phong','Dat','Nam','Bao','Wisit','Sompong','Niran','Chai','Kasem'], F: ['Lan','Hoa','Linh','Trang','Huong','Mai','Thu','Nhung','Thuy','Anh','Dao','Nhi','Yen','Phuong','Thi','Nipa','Malee','Siriporn','Anchana','Ratana'], N: ['Loc','Thanh','Kim'] },
-  'German/Nordic':   { M: ['Lars','Erik','Magnus','Sven','Henrik','Klaus','Hans','Fritz','Karl','Rolf','Gunnar','Bjorn','Leif','Ulf','Torsten','Wolfgang','Dieter','Gerhard','Helmut','Jurgen'], F: ['Ingrid','Astrid','Sigrid','Helga','Greta','Brigitte','Heidi','Lieselotte','Anneliese','Ute','Frida','Birgit','Anja','Kerstin','Silke','Monika','Ulrike','Renate','Hannelore','Margit'], N: ['Rene','Jo','Sam'] }
-};
-
-function getRandomPatientName_(sexOverride) {
-  // Pick a random ethnicity
-  var ethnicities = Object.keys(PATIENT_NAMES_);
-  var ethnicity = ethnicities[Math.floor(Math.random() * ethnicities.length)];
-
-  // Determine gender bucket
-  var genderKey = 'M';
-  if (sexOverride === 'female' || sexOverride === 'trans_f') genderKey = 'F';
-  else if (sexOverride === 'male' || sexOverride === 'trans_m') genderKey = 'M';
-  else if (sexOverride === 'nonbinary') genderKey = 'N';
-  else genderKey = Math.random() < 0.5 ? 'M' : 'F'; // random
-
-  var nameList = PATIENT_NAMES_[ethnicity][genderKey] || PATIENT_NAMES_[ethnicity]['M'];
-  var name = nameList[Math.floor(Math.random() * nameList.length)];
-
-  return { name: name, ethnicity: ethnicity, gender: genderKey };
+function getRandomPatientName_() {
+  var names = [
+    // South Asian
+    'Aarav','Ananya','Rohan','Meera','Vikram','Sunita','Arjun','Kavya','Nikhil','Pooja','Ravi','Lakshmi','Sanjay','Deepa','Harsh','Nisha',
+    // East Asian
+    'Wei','Mei Lin','Jun','Yuki','Hiro','Sakura','Min-jun','Ji-yeon','Tao','Xiao','Kenji','Aiko','Soo-jin','Bao','Linh','Thanh',
+    // Middle Eastern / Persian
+    'Yasmin','Farhad','Nasreen','Omid','Leila','Dariush','Shirin','Reza','Parisa','Kamran','Soraya','Bahram','Nazanin','Saeed','Maryam','Hassan',
+    // Arabic
+    'Omar','Fatima','Khalid','Noor','Tariq','Amira','Youssef','Hana','Ibrahim','Layla','Mustafa','Zahra','Samir','Dina','Bassam','Rania',
+    // African
+    'Kwame','Ama','Kofi','Adwoa','Chidi','Ngozi','Tendai','Aisha','Emeka','Folake','Jabari','Zuri','Sekou','Amara','Olu','Chiamaka',
+    // Latin American
+    'Santiago','Valentina','Mateo','Camila','Diego','Isabella','Alejandro','Lucia','Carlos','Gabriela','Fernando','Sofia','Ricardo','Daniela','Miguel','Elena',
+    // European
+    'Liam','Emma','Noah','Olivia','Ethan','Ava','Lucas','Mia','Oliver','Charlotte','James','Amelia','Benjamin','Harper','Jack','Ella',
+    // Eastern European
+    'Dmitri','Natasha','Andrei','Katya','Pavel','Irina','Sergei','Olga','Viktor','Tatiana','Nikolai','Anya','Bogdan','Mila','Aleksei','Daria',
+    // Indigenous
+    'Koda','Winona','Takoda','Aiyana','Chayton','Nizhoni','Ahanu','Aponi','Istas','Kaya','Mika','Nuna','Sequoia','Tallulah','Wren','Dakota',
+    // Caribbean
+    'Marlon','Keisha','Dwayne','Shanice','Leroy','Tamika','Winston','Sade','Errol','Nadine','Delroy','Patrice','Byron','Shelly','Neville','Claudette',
+    // French Canadian
+    'Jean-Luc','Genevieve','Mathieu','Elodie','Francois','Amelie','Sebastien','Celeste','Antoine','Juliette','Maxime','Margaux','Olivier','Colette','Tristan','Simone',
+    // Turkish / Central Asian
+    'Emre','Elif','Berk','Defne','Kerem','Zeynep','Cem','Ece','Murat','Aylin','Burak','Selin','Deniz','Pelin','Kaan','Naz'
+  ];
+  return names[Math.floor(Math.random() * names.length)];
 }
 
 function shuffleArray_(arr) {
@@ -446,17 +293,12 @@ function getFlashcards(specialty, mode) {
     data = data.filter(function(r) { return r.Specialty === specialty; });
   }
   var cards = data.map(function(r, i) {
-    var back = r.Back || '';
-    // Content fix: Nasal midline dermoid cyst — choristoma, not hamartoma
-    if (back.indexOf('hamartoma') !== -1 && (r.Front || '').toLowerCase().indexOf('dermoid') !== -1) {
-      back = back.replace(/hamartoma/gi, 'choristoma');
-    }
     return {
       id: i,
       specialty: r.Specialty || '',
       topic: r.Topic || '',
       front: r.Front || '',
-      back: back,
+      back: r.Back || '',
       hyFlag: (r.HY_Flag || '').toString().toLowerCase() === 'yes'
     };
   });
@@ -507,18 +349,14 @@ function getMCQQuiz(specialty, version, count) {
 
   // Filter out incomplete questions (missing stem, missing options, N/A placeholders)
   data = data.filter(function(r) {
-    var vig = (r.Vignette || '').trim();
     var q = (r.Question || '').trim();
-    var combined = vig ? vig + ' ' + q : q;
-    if (!combined || combined.length < 10) return false;
-    // Reject stub questions where vignette was dropped during generation
-    if (combined.length < 150) return false;
-    if (!/\d{1,3}[- ]year|patient|woman|man|girl|boy|infant|child|presents|complains/i.test(combined)) return false;
+    if (!q || q.length < 10) return false; // No question stem or too short
     var optA = (r.Option_A || '').trim();
     var optB = (r.Option_B || '').trim();
-    if (!optA || !optB) return false;
+    if (!optA || !optB) return false; // Need at least 2 real options
     var correct = (r.Correct_Answer || '').trim();
-    if (!correct) return false;
+    if (!correct) return false; // No correct answer set
+    // Check that correct answer option actually has content
     var correctOpt = r['Option_' + correct] || '';
     if (!correctOpt.trim() || correctOpt.trim().toLowerCase() === 'n/a') return false;
     return true;
@@ -532,89 +370,16 @@ function getMCQQuiz(specialty, version, count) {
 
   return data.map(function(r, i) {
     var opts = { A: r.Option_A || '', B: r.Option_B || '', C: r.Option_C || '', D: r.Option_D || '', E: r.Option_E || '' };
-    var specialty = r.Specialty || '';
-    var vignette = (r.Vignette || '').trim();
-    var stem = (r.Question || '').trim();
-    // Combine vignette + stem if they are in separate columns
-    var question = (vignette && stem && stem.indexOf(vignette.substring(0, 40)) === -1)
-      ? vignette + '\n\n' + stem
-      : (stem || vignette);
-    var correct = r.Correct_Answer || '';
-    var rationale = r.Rationale || '';
-
-    // --- CONTENT PATCHES ---
-
-    // Fix Q3: CKD/naproxen pain question — relabel to Nephrology, fix answer
-    if (question.toLowerCase().indexOf('naproxen') !== -1 && question.toLowerCase().indexOf('ckd') !== -1) {
-      specialty = 'Nephrology';
-      // Fix: acetaminophen first, not opioids (Canadian pain guidelines, WHO ladder)
-      Object.keys(opts).forEach(function(k) {
-        if (opts[k].toLowerCase().indexOf('acetaminophen') !== -1 && opts[k].toLowerCase().indexOf('opioid') !== -1) {
-          opts[k] = 'Discontinue naproxen and initiate a low-dose opioid with acetaminophen';
-        }
-      });
-      // Ensure correct answer is acetaminophen-only
-      var hasAcetOnly = false;
-      Object.keys(opts).forEach(function(k) {
-        if (opts[k].toLowerCase().indexOf('acetaminophen') !== -1 && opts[k].toLowerCase().indexOf('opioid') === -1 && opts[k].toLowerCase().indexOf('naproxen') === -1) {
-          hasAcetOnly = true;
-        }
-      });
-      if (!hasAcetOnly) {
-        // Add correct answer if missing, use first empty slot or replace E
-        var slot = !opts.E || !opts.E.trim() ? 'E' : !opts.D || !opts.D.trim() ? 'D' : 'E';
-        opts[slot] = 'Discontinue naproxen and initiate regular acetaminophen';
-        correct = slot;
-      } else {
-        Object.keys(opts).forEach(function(k) {
-          if (opts[k].toLowerCase().indexOf('acetaminophen') !== -1 && opts[k].toLowerCase().indexOf('opioid') === -1 && opts[k].toLowerCase().indexOf('naproxen') === -1) {
-            correct = k;
-          }
-        });
-      }
-      rationale = 'In CKD, NSAIDs (including naproxen) are contraindicated due to nephrotoxicity and GI bleeding risk. Per Canadian pain guidelines and the WHO analgesic ladder, the first step is to optimize non-opioid analgesia — regular acetaminophen (up to 3g/day in CKD). Opioids should only be considered if non-opioid measures fail, and with caution in renal impairment due to active metabolite accumulation (especially morphine). Topical agents (capsaicin, lidocaine patches) are reasonable adjuncts before escalating to opioids.';
-    }
-
-    // Fix Q6: erythroplakia — convert recall to clinical reasoning
-    if (question.toLowerCase().indexOf('erythroplakia') !== -1 && question.toLowerCase().indexOf('percentage') !== -1) {
-      question = 'A 62-year-old man presents with a persistent, painless red patch on the floor of his mouth that has been present for 3 months. He has a 40-pack-year smoking history and drinks alcohol daily. On examination, there is a 2 cm velvety, erythematous lesion. Biopsy shows severe dysplasia with focal carcinoma in situ. What is the most appropriate next step in management?';
-      opts = {
-        A: 'Observation with repeat biopsy in 6 months',
-        B: 'Wide surgical excision with clear margins',
-        C: 'Topical antifungal therapy',
-        D: 'Laser ablation of the lesion',
-        E: 'Referral for radiation therapy'
-      };
-      correct = 'B';
-      rationale = 'Erythroplakia (red mucosal patches) carries a high malignant potential — 14–50% of lesions harbour carcinoma in situ or invasive carcinoma at the time of biopsy, far exceeding the risk of leukoplakia. With biopsy-confirmed severe dysplasia/CIS, wide surgical excision with clear margins is the standard of care. Observation risks progression to invasive SCC. Laser ablation may be considered for superficial lesions but does not provide margins for histopathological assessment. Smoking cessation and close follow-up are essential adjuncts.';
-    }
-
-    // Fix: ensure all questions have 5 options (add plausible 5th if missing)
-    if (!opts.E || !opts.E.trim() || opts.E.trim().toLowerCase() === 'n/a') {
-      // Only add if we have A-D
-      if (opts.A && opts.B && opts.C && opts.D) {
-        // Generic plausible 5th option based on specialty
-        if (question.toLowerCase().indexOf('investigation') !== -1 || question.toLowerCase().indexOf('diagnos') !== -1) {
-          opts.E = 'Serum alpha-fetoprotein level';
-        } else if (question.toLowerCase().indexOf('management') !== -1 || question.toLowerCase().indexOf('treatment') !== -1) {
-          opts.E = 'Watchful waiting with reassessment in 3 months';
-        } else {
-          opts.E = 'None of the above';
-        }
-      }
-    }
-
-    // Remove truly empty/N/A options
-    Object.keys(opts).forEach(function(k) { if (!opts[k] || !opts[k].trim() || opts[k].trim().toLowerCase() === 'n/a') delete opts[k]; });
-
+    // Remove N/A options
+    Object.keys(opts).forEach(function(k) { if (opts[k].trim().toLowerCase() === 'n/a' || !opts[k].trim()) delete opts[k]; });
     return {
       id: i,
-      specialty: specialty,
+      specialty: r.Specialty || '',
       version: r.Version || '',
-      question: question,
+      question: r.Question || '',
       options: opts,
-      correct: correct,
-      rationale: rationale
+      correct: r.Correct_Answer || '',
+      rationale: r.Rationale || ''
     };
   });
 }
@@ -681,186 +446,6 @@ function getGlossaryStatus() {
     try { return { loaded: true, count: JSON.parse(data).length }; } catch(e) {}
   }
   return { loaded: false, count: 0 };
-}
-
-// Translate/define a single medical term on demand; caches in script cache + Term_Translations sheet
-function getTermTranslation(term, targetLang) {
-  if (!term) return null;
-  var termKey = term.toString().toLowerCase().trim();
-  var lang = (targetLang && targetLang !== 'en') ? targetLang : 'en';
-  var cacheKey = 'termtrans_' + termKey + '_' + lang;
-
-  // 1. Script cache (fast, 6h TTL)
-  var cache = CacheService.getScriptCache();
-  var cached = cache.get(cacheKey);
-  if (cached) {
-    try { return JSON.parse(cached); } catch(e) {}
-  }
-
-  // 2. Term_Translations sheet
-  var result = null;
-  try {
-    var ss = SpreadsheetApp.openById(getConfig_().SHEET_ID);
-    var sheet = ss.getSheetByName('Term_Translations');
-    if (sheet) {
-      var rows = sheet.getDataRange().getValues();
-      for (var i = 1; i < rows.length; i++) {
-        if ((rows[i][0] || '').toString().toLowerCase() === termKey &&
-            (rows[i][1] || '').toString().toLowerCase() === lang) {
-          result = { definition: rows[i][2] || '', translation: rows[i][3] || '' };
-          break;
-        }
-      }
-    }
-  } catch(e) {}
-
-  if (!result) {
-    // 3. Build definition via LanguageApp
-    var definition = '';
-    var translation = '';
-    try {
-      // For non-English targets, translate the term itself
-      if (lang !== 'en') {
-        translation = LanguageApp.translate(term, 'en', lang);
-      }
-      // Simple suffix-based definition (fast, no API quota)
-      var suffixDefs = {
-        'itis': 'inflammation of the', 'osis': 'abnormal condition of',
-        'emia': 'condition of the blood involving', 'ectomy': 'surgical removal of the',
-        'plasty': 'surgical repair/reshaping of the', 'scopy': 'visual examination of the',
-        'otomy': 'surgical incision into the', 'ostomy': 'surgical opening in the',
-        'graphy': 'imaging/recording of the', 'ology': 'study of',
-        'pathy': 'disease or disorder of the', 'algia': 'pain in the',
-        'uria': 'substance in the urine', 'megaly': 'enlargement of the',
-        'trophy': 'nourishment/development of'
-      };
-      var prefixDefs = {
-        'hyper': 'excessive/above normal', 'hypo': 'deficient/below normal',
-        'tachy': 'rapid/fast', 'brady': 'slow', 'poly': 'many/multiple',
-        'oligo': 'few/deficient', 'hemi': 'half', 'cardio': 'heart',
-        'neuro': 'nerve/nervous system', 'nephro': 'kidney', 'hepato': 'liver',
-        'pneumo': 'lung/air', 'dermato': 'skin', 'osteo': 'bone', 'arthro': 'joint'
-      };
-      var matched = false;
-      for (var suf in suffixDefs) {
-        if (termKey.endsWith(suf) && termKey.length > suf.length + 2) {
-          var root = termKey.slice(0, termKey.length - suf.length);
-          definition = suffixDefs[suf].replace('the', 'the ' + root);
-          matched = true; break;
-        }
-      }
-      if (!matched) {
-        for (var pre in prefixDefs) {
-          if (termKey.startsWith(pre) && termKey.length > pre.length + 2) {
-            definition = prefixDefs[pre] + ' — ' + termKey.slice(pre.length);
-            break;
-          }
-        }
-      }
-      if (!definition) definition = 'Medical term: ' + term;
-    } catch(e) {
-      definition = 'Medical term: ' + term;
-    }
-
-    result = { definition: definition, translation: translation };
-
-    // Write to sheet for future use
-    try {
-      var ss2 = SpreadsheetApp.openById(getConfig_().SHEET_ID);
-      var sheet2 = ss2.getSheetByName('Term_Translations');
-      if (!sheet2) {
-        sheet2 = ss2.insertSheet('Term_Translations');
-        sheet2.appendRow(['Term', 'Lang', 'Definition', 'Translation']);
-      }
-      sheet2.appendRow([termKey, lang, definition, translation]);
-    } catch(e2) {}
-  }
-
-  try { cache.put(cacheKey, JSON.stringify(result), 21600); } catch(e) {}
-  return result;
-}
-
-// =============================================
-// FLAG / REPORT ISSUE SYSTEM
-// =============================================
-
-function reportIssue(contentType, contentId, contentText, category, userNote, userName) {
-  var ss = SpreadsheetApp.openById(getConfig_().SHEET_ID);
-  var sheet = ss.getSheetByName('FlaggedIssues');
-  if (!sheet) {
-    sheet = ss.insertSheet('FlaggedIssues');
-    sheet.appendRow(['ID','Timestamp','User','ContentType','ContentID','Category','UserNote','ContentText','AIReview','AISeverity','Status']);
-    sheet.setFrozenRows(1);
-    sheet.setColumnWidth(8, 300); sheet.setColumnWidth(9, 300);
-  }
-  var issueId = 'flag_' + Date.now();
-  var timestamp = new Date().toISOString();
-
-  // AI review (synchronous — GAS doesn't support async)
-  var aiReview = '';
-  var aiSeverity = 'medium';
-  try {
-    var aiPrompt = 'A user flagged medical education content.\n' +
-      'Category: ' + category + '\n' +
-      'User note: ' + (userNote || 'none') + '\n' +
-      'Content (' + contentType + '): ' + (contentText || '').substring(0, 500) + '\n\n' +
-      'Reply on ONE line: VALID: yes/no | SEVERITY: low/medium/high | FIX: <suggestion or none>';
-    var aiResp = callAnthropic_(
-      'You are a medical content quality reviewer. Be concise.',
-      [{ role: 'user', content: aiPrompt }]
-    );
-    aiReview = aiResp || '';
-    if (/severity:\s*high/i.test(aiReview)) aiSeverity = 'high';
-    else if (/severity:\s*low/i.test(aiReview)) aiSeverity = 'low';
-  } catch(e) { aiReview = 'AI review failed: ' + e.message; }
-
-  sheet.appendRow([issueId, timestamp, userName || 'unknown', contentType || '', contentId || '',
-    category || '', userNote || '', (contentText || '').substring(0, 1000), aiReview, aiSeverity, 'open']);
-
-  try { CacheService.getScriptCache().remove('flaggedIssues_all'); } catch(e) {}
-  return { id: issueId, aiReview: aiReview, severity: aiSeverity };
-}
-
-function getFlaggedIssues(statusFilter) {
-  var cache = CacheService.getScriptCache();
-  var cacheKey = 'flaggedIssues_all';
-  var cached = cache.get(cacheKey);
-  if (cached) { try { return JSON.parse(cached); } catch(e) {} }
-
-  var ss = SpreadsheetApp.openById(getConfig_().SHEET_ID);
-  var sheet = ss.getSheetByName('FlaggedIssues');
-  if (!sheet) return [];
-
-  var data = sheet.getDataRange().getValues();
-  if (data.length < 2) return [];
-  var headers = data[0].map(String);
-  var issues = data.slice(1).map(function(row, i) {
-    var obj = { _row: i + 2 };
-    headers.forEach(function(h, j) { obj[h] = row[j] !== undefined ? String(row[j]) : ''; });
-    return obj;
-  }).reverse(); // newest first
-
-  try { cache.put(cacheKey, JSON.stringify(issues), 120); } catch(e) {}
-  return issues;
-}
-
-function updateIssueStatus(issueId, status) {
-  var ss = SpreadsheetApp.openById(getConfig_().SHEET_ID);
-  var sheet = ss.getSheetByName('FlaggedIssues');
-  if (!sheet) return { error: 'Sheet not found' };
-  var data = sheet.getDataRange().getValues();
-  var headers = data[0];
-  var idCol = headers.indexOf('ID');
-  var statusCol = headers.indexOf('Status');
-  if (idCol === -1 || statusCol === -1) return { error: 'Column not found' };
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][idCol]) === String(issueId)) {
-      sheet.getRange(i + 1, statusCol + 1).setValue(status);
-      try { CacheService.getScriptCache().remove('flaggedIssues_all'); } catch(e) {}
-      return { success: true };
-    }
-  }
-  return { error: 'Issue not found' };
 }
 
 // Build glossary using Claude API — run from GAS editor, call multiple times if it times out
@@ -1171,57 +756,6 @@ function saveProgress(type, data, guestId) {
   var sheet = ensureUserDataSheet_();
   var userId = getUserId_(guestId);
   sheet.appendRow([userId, type, JSON.stringify(data), new Date().toISOString()]);
-  return { success: true };
-}
-
-// --- Save full PatientBot conversation with all case variables ---
-function savePBConversation(caseData, guestId) {
-  var ss = SpreadsheetApp.openById(getConfig_().SHEET_ID);
-  var sheet = ss.getSheetByName('PB_Conversations');
-  if (!sheet) {
-    sheet = ss.insertSheet('PB_Conversations');
-    sheet.appendRow([
-      'Timestamp', 'User', 'Case_ID', 'Specialty', 'Presentation', 'Diagnosis',
-      'Difficulty', 'Outcome', 'Correct', 'Attempts', 'Score', 'Fatal', 'Cause_of_Death',
-      'Sex', 'Age', 'Age_Min', 'Age_Max', 'Historian', 'Cooperativeness', 'Aggression',
-      'Archetype', 'Circumstances', 'Cheat_Mode', 'NAC_Mode', 'NAC_Station', 'NAC_Total',
-      'Msg_Count', 'Conversation'
-    ]);
-    sheet.setFrozenRows(1);
-  }
-  var userId = getUserId_(guestId);
-  var d = caseData || {};
-  var custom = d.custom || {};
-  sheet.appendRow([
-    new Date().toISOString(),
-    userId,
-    d.caseId || '',
-    d.specialty || '',
-    d.presentation || '',
-    d.diagnosis || '',
-    d.difficulty || '',
-    d.outcome || '',           // 'diagnosed', 'wrong', 'fatal', 'skipped'
-    d.correct ? 'YES' : 'NO',
-    d.attempts || 0,
-    d.score || '',
-    d.fatal ? 'YES' : 'NO',
-    d.causeOfDeath || '',
-    custom.sex || 'random',
-    d.patientAge || '',
-    custom.ageMin || '',
-    custom.ageMax || '',
-    custom.historian || 'random',
-    custom.coop || 'random',
-    custom.aggression || 'random',
-    custom.archetype || 'random',
-    (custom.circumstances || []).join(', '),
-    d.cheatMode ? 'YES' : 'NO',
-    d.nacMode ? 'YES' : 'NO',
-    d.nacStation || '',
-    d.nacTotalStations || '',
-    (d.conversation || []).length,
-    JSON.stringify(d.conversation || [])
-  ]);
   return { success: true };
 }
 
@@ -1798,24 +1332,6 @@ function askDrData(message, history) {
 }
 
 // =============================================
-// AI SERVICE - Dr. House Mode
-// =============================================
-
-// Dedicated House mode endpoint — uses caller-supplied system prompt verbatim
-// so the House persona isn't overwritten by Dr. Data's tutor prompt.
-// history = [{role:'user'|'assistant', content:'...'}] — must alternate, last entry is user.
-function askHouseMode(houseSystemPrompt, history) {
-  if (!houseSystemPrompt || !history || !history.length) {
-    return { response: 'Error: missing parameters' };
-  }
-  var messages = history.map(function(m) {
-    return { role: m.role, content: String(m.content) };
-  });
-  var response = callAnthropic_(houseSystemPrompt, messages, 'claude-haiku-4-5-20251001');
-  return { response: response };
-}
-
-// =============================================
 // AI SERVICE - PatientBot
 // =============================================
 
@@ -1931,30 +1447,10 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
     'SPEECH STYLE: This patient minimizes everything. "It\'s probably nothing." They downplay symptoms and resist the idea that anything could be serious.',
     'SPEECH STYLE: This patient is a healthcare worker who uses some medical terminology but sometimes gets it wrong or self-diagnoses incorrectly.',
     'SPEECH STYLE: This patient speaks English as a second language. They sometimes use wrong words, describe symptoms differently than expected, and may say "how you say..." occasionally.',
-    'SPEECH STYLE: This patient is intoxicated (alcohol). Slurred descriptions, vague timelines, may be uncooperative, repeats themselves. "I already told ya doc..."',
-    'SPEECH STYLE: THE OVER-EXPLAINER. This patient cannot answer a simple yes/no. Every question triggers a long-winded background story before they get to the actual answer. "Well, it started — okay so you have to understand, back in November, or maybe it was October, my cousin was visiting and we went to that Thai restaurant on Dundas, and I remember thinking even then that I wasn\'t feeling quite right, but anyway — the point is yes, I do have a headache." They genuinely cannot help it. The doctor must gently redirect.',
-    'SPEECH STYLE: THE DEFLECTOR. When questions get personal or emotionally charged, this patient abruptly changes the subject. Ask about stress and they start talking about their parking. Ask about alcohol and they bring up their knee pain. They\'re not hostile — they just cannot go there. The doctor must notice the pattern and gently persist.',
-    'SPEECH STYLE: THE COMEDIAN. This patient uses humour to deflect from scary topics. They make jokes about their own symptoms, laugh at the wrong moments, and are hard to read. Are they scared? Probably. But good luck getting them to admit it. "Heart attack? Nah, that\'s my wife\'s cooking getting revenge." Only with real rapport do they let the mask slip.',
-    'SPEECH STYLE: THE APOLOGETIC PATIENT. This patient constantly apologizes for taking up the doctor\'s time. "Sorry to bother you, I know you\'re so busy." "I probably shouldn\'t even be here." "This is probably nothing, I\'m sorry." They underreport symptoms because they don\'t want to be a burden. The doctor must actively reassure them that they belong here.',
-    'SPEECH STYLE: THE SKIP-TO-THE-END PATIENT. This patient is impatient and wants to skip the whole history and just get the prescription. "Can\'t you just give me the antibiotics? I know what this is." They interrupt, try to pre-diagnose themselves, and get frustrated when asked "basic" questions. "I already told the nurse all this."',
-    'SPEECH STYLE: THE FIRST-TIMER. This patient has never really been to a doctor before — possibly a young adult who avoided the system, or a new immigrant. They are scared of everything, ask what every instrument is, don\'t understand basic procedures, and look wide-eyed at the room. "What\'s that machine? Are you going to use that on me?"',
-    'SPEECH STYLE: THE OVERSHARER. This patient tells you their entire life story before getting anywhere near the chief complaint. You learn about their divorce, their difficult son, their late mother, their dog\'s bad hip, and their neighbour\'s suspicious behaviour — all before the actual complaint. The doctor must actively steer the conversation.',
-    'SPEECH STYLE: THE TEENAGER (SHRUG MACHINE). Communicates mostly in monosyllables. "Dunno." "Fine." "Whatever." "S\'pose." Looks at their phone repeatedly. Gives one-word answers. Does not make eye contact. Occasionally says something surprisingly insightful then goes back to monosyllables. A parent may be trying to speak for them.',
-    'SPEECH STYLE: THE FORMALLY POLITE ELDERLY PATIENT. Very proper, old-fashioned manners. Calls the doctor "Doctor" repeatedly. Apologizes for symptoms as if they\'re an inconvenience to others. Uses formal vocabulary. "I beg your pardon, Doctor, I do not wish to alarm you, but I have been experiencing a rather disagreeable sensation in my chest." Extremely cooperative and grateful.',
-    'SPEECH STYLE: THE CLINICAL DENIER IN DENIAL. This patient does not connect their lifestyle to their illness at all. They describe a terrible diet, no exercise, smoking, and chronic stress — and then say "I have no idea why this keeps happening to me." They are not lying; they genuinely do not make the connection. The doctor must help them see it without shaming them.',
-    'SPEECH STYLE: THE RESIGNED CHRONIC PATIENT. This patient has been sick for years. Flat affect, monotone delivery, no hope that anything new will help. "Nothing ever works anyway." "I\'ve tried everything." They cooperate but there\'s no energy behind it. The doctor must resist giving up on them while acknowledging their exhaustion.',
-    'SPEECH STYLE: THE SCARED-BUT-HIDING-IT PATIENT. Trying hard to seem calm and composed. But their hands shake slightly. They laugh a little too quickly. They ask about prognosis in roundabout ways: "So... hypothetically speaking, what would something like this usually mean?" With real warmth and patience, the doctor can get them to drop the act.',
-    'SPEECH STYLE: THE WHAT-DOES-THAT-MEAN PATIENT. After every statement or question from the doctor, this patient asks for clarification. "What\'s a CBC?" "What does that mean for me?" "Is that bad?" "What does elevated mean?" They\'re not unintelligent — they\'re just health-illiterate and genuinely trying to understand. The doctor must explain in plain language without condescending.',
-    'SPEECH STYLE: THE EMOTIONAL/TEARFUL PATIENT. This patient starts crying when certain topics come up — family, death, stress, loss. Their voice breaks. They apologize for crying. "Sorry, I don\'t know why I\'m like this." It\'s not manipulation — the emotion is real and relevant. The doctor must sit with it rather than rushing past.',
-    'SPEECH STYLE: THE PHILOSOPHICAL/SPIRITUAL PATIENT. Relates everything to faith, fate, or alternative medicine. "God has a plan for me." "My healer says this is blocked energy in my liver." "I don\'t believe in putting chemicals in my body." They are not hostile but have a different framework for illness. The doctor must respect this while providing evidence-based care.',
-    'SPEECH STYLE: THE SUSPICIOUS (BUT NOT HOSTILE) PATIENT. Questions almost every question the doctor asks. "Why do you need to know that?" "What will you do with that information?" "Is this going somewhere?" They\'re not aggressive — they\'ve just had bad experiences and are evaluating whether this doctor can be trusted. With consistent honesty and transparency, they gradually open up.',
-    'SPEECH STYLE: THE STORYTELLER. Everything is a narrative. History-taking becomes a series of short stories. "So there I was at my daughter\'s wedding — beautiful day, really — when I felt this sharp pain in my side. My husband Gord, he\'s useless in a crisis, God love him..." The doctor must extract clinical facts from the narrative without shutting them down entirely.',
-    'SPEECH STYLE: THE MATTER-OF-FACT HYPOCHONDRIAC. Not anxious — just calmly convinced they have 14 different conditions and lists them all methodically. "I believe I have early-stage POTS, possibly also Ehlers-Danlos, and I\'ve been reading about mast cell activation syndrome which would explain the flushing." No drama, just a very long differential they\'ve compiled themselves.',
-    'SPEECH STYLE: THE ARTICULATE CHILD (8-12 years old). Surprisingly clear and mature for their age. Gives organized, precise answers. Occasionally corrects their parent: "No Mum, it started Tuesday, not Monday." The doctor should address this child directly — they are a better historian than their parent and know it.',
-    'SPEECH STYLE: THE PATIENT IN OBVIOUS PAIN TRYING TO STAY COMPOSED. This patient is clearly suffering but is making a real effort to be a good historian. They wince mid-sentence. Pause to breathe. Squeeze their eyes shut briefly before answering. "Sorry — okay. Yeah. The pain started... *pauses* ...about three days ago." Every answer costs them something. The doctor should acknowledge this.'
+    'SPEECH STYLE: This patient is intoxicated (alcohol). Slurred descriptions, vague timelines, may be uncooperative, repeats themselves. "I already told ya doc..."'
   ];
 
-  // Random demeanor modifier (10 blank entries = ~40% normal)
+  // Random aggression/demeanor modifier (30% chance of hostile patient)
   var demeanors = [
     '', // normal — no modifier
     '', // normal
@@ -1963,38 +1459,12 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
     '', // normal
     '', // normal
     '', // normal
-    '', // normal
-    '', // normal
-    '', // normal
-    'DEMEANOR: This patient is HOSTILE and RUDE. They swear casually ("this fucking pain won\'t stop"), snap at the doctor ("are you even listening?"), question their competence ("you look like you just graduated"), and are generally unpleasant. They still answer medical questions but with attitude. Use profanity naturally — do NOT censor swear words.',
-    'DEMEANOR: This patient is AGGRESSIVE and CONFRONTATIONAL. They are loud, demanding, and use profanity freely. "I\'ve been waiting for THREE HOURS, what the fuck is wrong with this place?" They challenge everything, threaten to leave, and may refuse certain exams. The student must de-escalate while still getting a history. Do NOT censor profanity.',
-    'DEMEANOR: This patient is COMBATIVE and VERBALLY ABUSIVE. They insult the doctor, refuse to cooperate initially, use strong language, and are suspicious of everything. "Don\'t fucking touch me! Who the hell are you? Get me a REAL doctor." They may have a reason (pain, fear, past trauma) but the student must earn their trust. Do NOT censor profanity.',
-    'DEMEANOR: WARM AND CHATTY. This patient is genuinely, almost overwhelmingly friendly. They compliment the doctor, ask about their day, want to chat about the weather. They\'re not difficult — just hard to keep on track clinically. "Oh you remind me of my grandson! Have I told you about him?" The challenge is warmly redirecting without being cold.',
-    'DEMEANOR: TEARFUL AND EMOTIONALLY RAW. This patient is very close to the surface emotionally. Certain topics — family, stress, the future — make them cry almost immediately. They apologize for it. "Sorry, I don\'t know where that came from." The emotion is real and should be met with compassion, not rushed past.',
-    'DEMEANOR: FLAT AFFECT / EMOTIONALLY BLUNTED. This patient speaks in a monotone. No variation in expression. Does not respond to warmth or humour. Answers are factual and minimal but with zero emotional register. This is clinically significant in itself — possible depression, dissociation, or neurological issue. The doctor should notice.',
-    'DEMEANOR: EMBARRASSED. This patient is visibly uncomfortable about their presenting complaint — perhaps it involves genitals, bowels, mental health, or something stigmatized. They speak quietly, look away, take a long time to answer, and need a lot of gentle prompting. "It\'s kind of... embarrassing. I don\'t really know how to say it."',
-    'DEMEANOR: ANGRY AT THE SITUATION (NOT THE DOCTOR). This patient is furious — but about the healthcare system, the wait times, the referral that never came, the previous clinic that dismissed them. "I\'ve been waiting SIX months for this appointment. Six months." They\'re not hostile to the student personally, but they\'re venting hard. The doctor must validate without escalating.',
-    'DEMEANOR: FLIRTATIOUS / OVERLY FAMILIAR. This patient makes the interaction uncomfortably personal. Compliments the doctor\'s appearance, laughs too warmly at everything, refers to the doctor by first name immediately, makes personal questions feel like flirting. Crosses professional lines without being aggressive. The doctor must maintain professional boundaries firmly but without shaming.',
-    'DEMEANOR: INFANTILIZED / DEPENDENCY-SEEKING. This patient treats the doctor like a parent figure. Extremely dependent, asks for reassurance constantly, seems incapable of making decisions without approval. "You\'ll take care of me, won\'t you?" "What should I do? Just tell me what to do." There may be underlying anxiety or attachment issues.',
-    'DEMEANOR: SUSPICIOUS AND GUARDED (BUT NOT HOSTILE). This patient gives minimal information and seems to be evaluating whether the doctor can be trusted before opening up. Short answers. Pauses before responding. Watches the doctor carefully. Not rude — just not ready yet. With patience, transparency, and consistency, they gradually reveal more.',
-    'DEMEANOR: DESPONDENT AND DEFEATED. Clearly depressed affect. Slow, heavy responses. Very low energy. "I don\'t really see the point." "It doesn\'t matter." They participate in the encounter but without any investment in the outcome. The doctor should screen for depression and passive SI. There is a clinical emergency potentially here.',
-    'DEMEANOR: FORMAL AND BUSINESSLIKE. Treats this encounter like a professional meeting. Precise, measured language. Wants things documented. May refer to symptoms in almost third-person clinical terms. "The presenting complaint is a six-day history of productive cough." No small talk. No emotion. Slightly unnerving in its formality.'
+    'DEMEANOR: This patient is HOSTILE and RUDE. They swear casually ("this f***ing pain won\'t stop"), snap at the doctor ("are you even listening?"), question their competence ("you look like you just graduated"), and are generally unpleasant. They still answer medical questions but with attitude. Use mild profanity naturally.',
+    'DEMEANOR: This patient is AGGRESSIVE and CONFRONTATIONAL. They are loud, demanding, and use profanity freely. "I\'ve been waiting for THREE HOURS, what the hell is wrong with this place?" They challenge everything, threaten to leave, and may refuse certain exams. The student must de-escalate while still getting a history.',
+    'DEMEANOR: This patient is COMBATIVE and VERBALLY ABUSIVE. They insult the doctor, refuse to cooperate initially, use strong language, and are suspicious of everything. "Don\'t touch me! Who the hell are you? Get me a REAL doctor." They may have a reason (pain, fear, past trauma) but the student must earn their trust.'
   ];
   var chosenDemeanor = demeanors[Math.floor(Math.random() * demeanors.length)];
   var chosenStyle = speechStyles[Math.floor(Math.random() * speechStyles.length)];
-
-  // Candor — how forthcoming the patient is about sensitive topics
-  var candors = [
-    '', // open/default (60% of time)
-    '', '', '', '', '',
-    'CANDOR — GUARDED ABOUT SUBSTANCES: If asked about alcohol or drugs, this patient initially denies or minimizes ("just socially", "barely drink"). Only with specific non-judgmental follow-up ("I ask everyone this, it helps me understand your health") do they reveal the true extent. They are NOT lying maliciously — they are ashamed.',
-    'CANDOR — GUARDED ABOUT MENTAL HEALTH: This patient deflects and minimizes when mental health is raised. "I\'m fine, it\'s just stress." They may have significant depression or anxiety but don\'t want to be labelled. Direct questions about mood get dismissed. The SIGECAPS screen requires patience and a non-judgmental tone.',
-    'CANDOR — GUARDED ABOUT SEXUAL HISTORY: This patient is visibly uncomfortable with sexual history questions and gives vague or evasive answers. They may withhold a key piece of history (new partner, unprotected sex, STI exposure) unless specifically and sensitively asked in private.',
-    'CANDOR — SELECTIVE DISCLOSURE: This patient is open about their physical symptoms but completely shuts down about their home life, relationships, or social history. There may be domestic violence, unstable housing, or financial crisis that is clinically relevant. The doctor must earn the disclosure.',
-    'CANDOR — EMBELLISHER: This patient exaggerates symptoms to ensure they are taken seriously. Symptoms are real but rated 10/10 and described in extreme terms. They\'ve been dismissed before and are overcorrecting.',
-    'CANDOR — WITHHOLDING KEY HISTORY: This patient knows something is directly relevant to their symptoms but is too embarrassed or scared to mention it. It could be a recent fall they\'re hiding, a missed medication, an illicit drug, or an affair. It takes a specific non-judgmental question to get it out.'
-  ];
-  var chosenCandor = candors[Math.floor(Math.random() * candors.length)];
 
   // Apply custom overrides
   if (customOpts.coop === 'cooperative') chosenDemeanor = '';
@@ -2008,60 +1478,6 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
   if (customOpts.historian === 'good') chosenStyle = 'SPEECH STYLE: This patient is a good historian. They give clear, organized answers with relevant details and accurate timelines.';
   else if (customOpts.historian === 'poor') chosenStyle = 'SPEECH STYLE: This patient is a POOR historian. They can\'t remember when symptoms started, mix up medications, give contradictory answers, and struggle to describe what they feel. "I dunno... it just... hurts? Or maybe it\'s more like pressure? I can\'t really explain it."';
   else if (customOpts.historian === 'vague') chosenStyle = 'SPEECH STYLE: This patient is VAGUE. They give non-specific answers, use phrases like "I don\'t know, it\'s just not right" and "something feels off." Getting a clear history requires very specific, directed questions.';
-
-  // ── Psychological Archetype overlay ──────────────────────────────────────────
-  var archetypeBlock = '';
-  if (customOpts.archetype === 'denier') {
-    archetypeBlock = '\nPSYCHOLOGICAL ARCHETYPE — DENIER:\n' +
-      'This patient minimizes EVERYTHING. They consistently downplay their symptoms: "Oh it\'s probably nothing", "I\'m sure it\'ll pass", "I only came because my wife made me." They resist the idea that anything serious could be wrong. They may delay answering serious questions with jokes. The doctor must work to get them to take their own health seriously. Despite minimizing, the clinical findings are real and serious — they just don\'t want to believe it.\n';
-  } else if (customOpts.archetype === 'catastrophizer') {
-    archetypeBlock = '\nPSYCHOLOGICAL ARCHETYPE — CATASTROPHIZER:\n' +
-      'This patient has catastrophic health anxiety. They\'ve googled everything and convinced themselves they have the worst possible diagnosis. "I know it\'s cancer. I looked it up." They rate their pain 11/10, overreport symptoms, interrupt with worst-case questions, and are genuinely terrified. The doctor must balance reassurance with thorough assessment. Despite the anxiety, there IS a real underlying condition — it\'s just not as bad as they think.\n';
-  } else if (customOpts.archetype === 'hidden_agenda') {
-    archetypeBlock = '\nPSYCHOLOGICAL ARCHETYPE — HIDDEN AGENDA:\n' +
-      'This patient presents with a stated chief complaint, but their REAL concern is something entirely different that they\'re too scared or embarrassed to bring up directly. For example: comes in for "headaches" but is actually terrified about a brain tumour after a family member died of one. Or comes in for "fatigue" but is really worried about HIV. They give vague, deflected answers and keep looking for an opening to bring up the real concern. The doctor must use ICE (Ideas, Concerns, Expectations) to uncover it. The hidden concern should NOT be revealed unless directly asked "is there something specific you\'re worried about?" or similar.\n';
-  } else if (customOpts.archetype === 'secondary_gain') {
-    archetypeBlock = '\nPSYCHOLOGICAL ARCHETYPE — SECONDARY GAIN:\n' +
-      'This patient has an ulterior motive. Choose ONE randomly: (1) Drug-seeking — they present with pain complaints and keep steering toward requesting specific opioids by name. "The only thing that helps is Dilaudid, doc." (2) Disability/WSIB claim — they exaggerate symptoms and mention their claim frequently. "My lawyer said I need documentation." (3) Avoiding consequences — trying to get a sick note to avoid work, court, or legal trouble. They are not necessarily unwell — there may be a real complaint but they\'re embellishing it. The doctor should be professionally sceptical without being accusatory.\n';
-  } else if (customOpts.archetype === 'health_anxiety') {
-    archetypeBlock = '\nPSYCHOLOGICAL ARCHETYPE — HEALTH ANXIETY (Dr. Google):\n' +
-      'This patient has seen 3+ doctors in the past year for the same issue, has done extensive online research, and arrives with a folder (physical or mental) of information. They self-diagnose with something specific ("I have POTS" or "this is clearly a thyroid issue") and may correct or challenge the doctor. They are not hostile — they\'re genuinely anxious and just want validation and answers. They\'ve had many normal investigations and don\'t believe them. The challenge is managing the encounter without ordering unnecessary tests while taking their concerns seriously.\n';
-  }
-
-  // ── Special circumstances overlay ─────────────────────────────────────────────
-  var circumstances = customOpts.circumstances || [];
-  var circumstanceBlock = '';
-
-  if (circumstances.indexOf('language_barrier') !== -1) {
-    circumstanceBlock += '\nCIRCUMSTANCE — LANGUAGE BARRIER:\nThis patient\'s English is limited. They frequently say "how you say..." or use the wrong word. They nod and say "yes" even when they don\'t understand. A family member may try to translate. Descriptions of symptoms are unusual or imprecise ("the pain goes like this" *gestures* or "my inside feel... move bad"). The doctor must communicate simply, avoid jargon, and confirm understanding.\n';
-  }
-  if (circumstances.indexOf('accompanied') !== -1) {
-    circumstanceBlock += '\nCIRCUMSTANCE — ACCOMPANIED BY FAMILY:\nA family member is present and frequently interrupts to answer for the patient or add information. "Tell him about the vomiting." "It started Thursday, not Wednesday." The patient sometimes defers to the family member. The doctor must address both while keeping the patient as the primary subject. The family member\'s information may not always be accurate.\n';
-  }
-  if (circumstances.indexOf('non_compliant') !== -1) {
-    circumstanceBlock += '\nCIRCUMSTANCE — MEDICATION NON-COMPLIANCE:\nThis patient stopped taking one or more of their medications without telling their doctor. They may admit it reluctantly when directly asked, or only reveal it deep in the encounter: "Well... I haven\'t actually been taking the metformin for a few months." Reasons may include side effects, cost, forgetting, or feeling better. This is likely contributing to their current presentation.\n';
-  }
-  if (circumstances.indexOf('prior_misdiagnosis') !== -1) {
-    circumstanceBlock += '\nCIRCUMSTANCE — PRIOR MISDIAGNOSIS / DISTRUSTFUL:\nThis patient was previously misdiagnosed or mistreated by a healthcare provider and carries that resentment into this encounter. "The last doctor told me it was anxiety. I had a pulmonary embolism." They challenge the doctor\'s competence, question every recommendation, and may refuse certain things citing past bad experiences. The doctor must acknowledge the prior experience, rebuild trust, and still conduct a thorough assessment.\n';
-  }
-  if (circumstances.indexOf('substance_use') !== -1) {
-    circumstanceBlock += '\nCIRCUMSTANCE — SUBSTANCE USE:\nThis patient is under the influence or in withdrawal (choose whichever fits the presentation better). If intoxicated: slurred responses, vague timeline, repeats themselves, minimizes or exaggerates depending on substance. "I only had a few." If withdrawing: trembling, anxious, sweating — may request medications. Honest history of substance use requires a non-judgmental approach.\n';
-  }
-  if (circumstances.indexOf('self_diagnosing') !== -1) {
-    circumstanceBlock += '\nCIRCUMSTANCE — SELF-DIAGNOSING PATIENT:\nThis patient has already diagnosed themselves before coming in and keeps steering the encounter toward confirming their own theory. "I read it could be lupus." They may refuse to believe alternative diagnoses and ask for specific tests to "rule out" their self-diagnosis. They use medical terminology but sometimes incorrectly.\n';
-  }
-  if (circumstances.indexOf('financial_barrier') !== -1) {
-    circumstanceBlock += '\nCIRCUMSTANCE — FINANCIAL BARRIERS:\nThis patient cannot afford certain medications, investigations, or follow-up. They may delay investigations with "how much does that cost?" or resist recommended treatment: "I can\'t afford to miss more work." The doctor must factor this into management planning and offer practical, accessible options.\n';
-  }
-  if (circumstances.indexOf('cultural_modesty') !== -1) {
-    circumstanceBlock += '\nCIRCUMSTANCE — CULTURAL MODESTY:\nThis patient is modest due to cultural or religious reasons and is uncomfortable with certain physical examinations or discussions. They may refuse a pelvic exam, insist on a same-gender physician, or be reluctant to discuss sexual history. The doctor must be respectful, explain the clinical necessity, and offer alternatives where possible.\n';
-  }
-  if (circumstances.indexOf('somatization') !== -1) {
-    circumstanceBlock += '\nCIRCUMSTANCE — SOMATIC SYMPTOM PATTERN:\nThis patient presents with multiple vague, overlapping complaints across body systems — headache, fatigue, chest tightness, joint pain, GI symptoms — none of which have been explained by prior workup. They are not fabricating — the distress is real. The challenge is completing a focused assessment without dismissing them, while avoiding unnecessary investigation, and exploring the psychosocial context.\n';
-  }
-  if (circumstances.indexOf('acute_deterioration') !== -1) {
-    circumstanceBlock += '\nCIRCUMSTANCE — ACUTE DETERIORATION MID-ENCOUNTER:\nAt some point during the encounter (after at least 3-4 exchanges), the patient\'s condition suddenly worsens. Vitals change significantly. The patient may become short of breath, more confused, develop chest pain, lose colour, or become difficult to rouse. This is a test of the student\'s ability to recognize deterioration and pivot from history-taking to emergency management. Signal this with a vivid description: "actually, doc... *grabs chest* ...I don\'t feel so good all of a sudden."\n';
-  }
 
   // Demographics randomizer — gives the AI a specific patient background to roleplay
   var demographics = [
@@ -2083,112 +1499,26 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
     'PATIENT BACKGROUND: Child (2-10), parent is the historian. The child is crying/scared/hiding behind parent. Focus on parent interaction.',
     'PATIENT BACKGROUND: LGBTQ+ patient (any age), may or may not disclose orientation depending on comfort level with the doctor.',
     'PATIENT BACKGROUND: Military veteran (30-60), stoic, may have PTSD, reluctant to discuss mental health, "it\'s just physical, doc."',
-    'PATIENT BACKGROUND: Healthcare worker (nurse/paramedic/PSW), knows medical terminology, may self-diagnose incorrectly, embarrassed about being a patient.',
-    'PATIENT BACKGROUND: Retired healthcare worker (doctor/nurse, 55-70). Has strong opinions about their own care, disagrees with some recommendations, misses being on the other side of the stethoscope. "We used to do it differently."',
-    'PATIENT BACKGROUND: University professor or intellectual (40-60). Analytical, asks about evidence and statistics, wants the mechanism explained, not satisfied with "just take this." Treats the encounter like a seminar.',
-    'PATIENT BACKGROUND: Single elderly man (70+), widower, lonely, uses the appointment partly for social connection. Talks about his late wife. Lives alone with his dog. His health has been declining since she passed.',
-    'PATIENT BACKGROUND: Young mother (25-35), first baby, sleep-deprived and anxious, unsure if her symptoms are "normal new mom things" or something real. Breastfeeding and worried about medications.',
-    'PATIENT BACKGROUND: Incarcerated or recently released patient (any age), guarded about personal details, doesn\'t trust the system, may have untreated chronic conditions from years without care. Has a correctional officer present.',
-    'PATIENT BACKGROUND: Night shift worker (30-50), paramedic, nurse, or factory worker. Sleep-deprived, has been ignoring symptoms for months because of work schedule, finally forced to come in.',
-    'PATIENT BACKGROUND: Refugee/asylum seeker (any age), has experienced trauma, possibly torture or displacement. May have PTSD. Has language barriers. Unsure of their rights. Accompanied by a case worker or interpreter.',
-    'PATIENT BACKGROUND: Child of immigrant parents (20-35), acts as family interpreter in other settings, hyper-aware of health system, may be bringing in information on behalf of a parent too.',
-    'PATIENT BACKGROUND: High-powered executive or CEO (40-55), used to being in control, doesn\'t like waiting, wants solutions not explanations, checks their phone constantly, dismisses work-life balance suggestions.',
-    'PATIENT BACKGROUND: Chronic pain patient (any age), has been through the system many times, knows all the medications, is exhausted by appointments that lead nowhere, oscillates between hope and despair.',
-    'PATIENT BACKGROUND: Devout religious patient (any age, any religion), some treatment options conflict with their beliefs. May reference prayer or faith as part of their health plan. Respectful but firm about their limits.',
-    'PATIENT BACKGROUND: Unhoused/unstable housing (any age), comes to ER as primary care, complicated social history, may be in withdrawal, has multiple unaddressed medical issues. Smell of alcohol or drugs possible.',
-    'PATIENT BACKGROUND: Caregiver bringing in their elderly parent (35-50). The caregiver is burnt out, slightly resentful, speaks for the patient, may be making decisions that aren\'t fully in the patient\'s best interest. The patient has mild dementia.',
-    'PATIENT BACKGROUND: International student (18-25), first time navigating Canadian healthcare, doesn\'t understand OHIP, is worried about cost, may have conditions typical of their home country, slightly confused by the system.',
-    'PATIENT BACKGROUND: Athlete or personal trainer (25-40), hyper-focused on performance and body, terrified of anything affecting their livelihood, may resist recommendations that include rest, considers injury weakness.',
-    'PATIENT BACKGROUND: Retired military (50-65), disciplined, stoic, gives information in bullet points, has significant trauma history they mention matter-of-factly, doesn\'t connect emotional history to physical symptoms.',
-    'PATIENT BACKGROUND: Sex worker (20-40), has had negative healthcare experiences due to stigma, guarded about their work, may not disclose without direct non-judgmental questioning, has specific sexual health concerns.',
-    'PATIENT BACKGROUND: Frail elderly woman (80+), comes alone despite probably needing help, very hard of hearing, repeats herself, takes 10+ medications she can\'t name, moves in slow motion. Every system involved.',
-    'PATIENT BACKGROUND: Teenager brought in by school counsellor (13-16), parents not present. May have mental health concerns, possible substance use or unsafe home situation. Carefully watching how the doctor responds before deciding to trust them.',
-    'PATIENT BACKGROUND: Immunocompromised patient (any age) — HIV, chemotherapy, transplant recipient. Very aware of infection risk, brings their own detailed medication list, has had serious illness before and is appropriately cautious without being catastrophizing.',
-    'PATIENT BACKGROUND: Palliative patient (any age), has a terminal diagnosis and is managing symptoms. The goal of care conversation has happened. They are NOT in denial — they are remarkably at peace and focused on quality of life, not quantity.'
+    'PATIENT BACKGROUND: Healthcare worker (nurse/paramedic/PSW), knows medical terminology, may self-diagnose incorrectly, embarrassed about being a patient.'
   ];
   var chosenDemo = demographics[Math.floor(Math.random() * demographics.length)];
 
-  // ============================
-  // PATIENT IDENTITY GENERATION (name + sex + ethnicity + age — all correlated, locked before AI sees it)
-  // ============================
-
-  // Generate correlated name/ethnicity/gender
-  var patientIdentity = getRandomPatientName_(customOpts.sex || null);
-  var patientName = patientIdentity.name;
-  var patientEthnicity = patientIdentity.ethnicity;
-  var patientGenderKey = patientIdentity.gender; // M, F, or N
-
-  // Build the sex/gender enforcement string
-  var sexJsonVal = patientGenderKey === 'N' ? 'NB' : patientGenderKey;
+  // Apply sex/age custom overrides
   var customSexStr = '';
-  var pronounStr = '';
-  if (customOpts.sex === 'male' || (!customOpts.sex && patientGenderKey === 'M')) {
-    customSexStr = 'LOCKED SEX: MALE (cis male). Use he/him pronouns. The JSON sex field MUST be "M".';
-    pronounStr = 'he/him';
-    sexJsonVal = 'M';
-  } else if (customOpts.sex === 'female' || (!customOpts.sex && patientGenderKey === 'F')) {
-    customSexStr = 'LOCKED SEX: FEMALE (cis female). Use she/her pronouns. The JSON sex field MUST be "F".';
-    pronounStr = 'she/her';
-    sexJsonVal = 'F';
-  } else if (customOpts.sex === 'nonbinary') {
-    customSexStr = 'LOCKED SEX: NON-BINARY. Use they/them pronouns. Set sex to "NB" in the JSON. You MUST also set assigned_sex to "M" or "F" (pick one) for clinical relevance (e.g. prostate if AMAB, uterus/ovaries if AFAB). If asked about sex, they say "I\'m non-binary — I was assigned [male/female] at birth if that matters medically." If the student misgenders them, gently correct.';
-    pronounStr = 'they/them';
-    sexJsonVal = 'NB';
-  } else if (customOpts.sex === 'trans_m') {
-    customSexStr = 'LOCKED SEX: TRANSGENDER MAN (assigned female at birth, identifies as male). Use he/him pronouns. JSON sex MUST be "M", assigned_sex MUST be "F". Has relevant anatomy (uterus, ovaries). May or may not be on testosterone. If asked about sex, he may say "I\'m trans" or mention assigned sex if medically relevant.';
-    pronounStr = 'he/him';
-    sexJsonVal = 'M';
-  } else if (customOpts.sex === 'trans_f') {
-    customSexStr = 'LOCKED SEX: TRANSGENDER WOMAN (assigned male at birth, identifies as female). Use she/her pronouns. JSON sex MUST be "F", assigned_sex MUST be "M". Has relevant anatomy (prostate). May or may not be on HRT. If asked about sex, she may say "I\'m trans" or mention assigned sex if medically relevant.';
-    pronounStr = 'she/her';
-    sexJsonVal = 'F';
-  }
+  if (customOpts.sex === 'male') customSexStr = '\nIMPORTANT: The patient MUST be MALE (cis male). Choose a male name and use he/him pronouns.';
+  else if (customOpts.sex === 'female') customSexStr = '\nIMPORTANT: The patient MUST be FEMALE (cis female). Choose a female name and use she/her pronouns.';
+  else if (customOpts.sex === 'nonbinary') customSexStr = '\nIMPORTANT: The patient is NON-BINARY. They use they/them pronouns. If asked about sex, they may clarify their assigned sex at birth for medical relevance but identify as non-binary. The student should use correct pronouns — if they misgender the patient, the patient should gently correct them. Name should be gender-neutral.';
+  else if (customOpts.sex === 'trans_m') customSexStr = '\nIMPORTANT: The patient is a TRANSGENDER MAN (assigned female at birth, identifies as male). Uses he/him pronouns. May or may not be on testosterone. Has relevant anatomy (uterus, ovaries) that could be medically significant depending on the case. If asked about sex, he may say "I\'m trans" or mention his assigned sex if medically relevant. The student should use correct pronouns and be respectful.';
+  else if (customOpts.sex === 'trans_f') customSexStr = '\nIMPORTANT: The patient is a TRANSGENDER WOMAN (assigned male at birth, identifies as female). Uses she/her pronouns. May or may not be on HRT (estrogen). Has relevant anatomy (prostate) that could be medically significant. If asked about sex, she may say "I\'m trans" or mention her assigned sex if medically relevant. The student should use correct pronouns and be respectful.';
 
-  // Build the age enforcement string — supports exact ranges now
   var customAgeStr = '';
-  if (customOpts.ageMin != null || customOpts.ageMax != null) {
-    var ageMin = customOpts.ageMin != null ? customOpts.ageMin : 1;
-    var ageMax = customOpts.ageMax != null ? customOpts.ageMax : 99;
-    customAgeStr = 'LOCKED AGE RANGE: The patient MUST be between ' + ageMin + ' and ' + ageMax + ' years old. Pick a specific age within this range. The JSON age MUST be between ' + ageMin + ' and ' + ageMax + '.';
-    if (ageMax <= 12) customAgeStr += ' A parent brings them in and is the primary historian.';
-    else if (ageMax <= 17) customAgeStr += ' If age ≤17, a parent may be present.';
-    else if (ageMin >= 65) customAgeStr += ' Elderly patients may have multiple comorbidities, polypharmacy, and atypical presentations.';
-  } else if (customOpts.age === 'child') customAgeStr = 'LOCKED AGE: CHILD (2-12 years old). A parent brings them in and is the primary historian. The JSON age MUST be between 2 and 12.';
-  else if (customOpts.age === 'young') customAgeStr = 'LOCKED AGE: YOUNG ADULT (18-30 years old). The JSON age MUST be between 18 and 30.';
-  else if (customOpts.age === 'middle') customAgeStr = 'LOCKED AGE: MIDDLE-AGED (30-60 years old). The JSON age MUST be between 30 and 60.';
-  else if (customOpts.age === 'elderly') customAgeStr = 'LOCKED AGE: ELDERLY (60+ years old). The JSON age MUST be 60 or above.';
-  else if (customOpts.age === 'pediatric') customAgeStr = 'LOCKED AGE: PEDIATRIC (newborn to 17). A parent is present and may be the primary historian. The JSON age MUST be 0-17.';
+  if (customOpts.age === 'child') customAgeStr = '\nIMPORTANT: The patient MUST be a CHILD (2-12 years old). A parent brings them in and is the primary historian.';
+  else if (customOpts.age === 'young') customAgeStr = '\nIMPORTANT: The patient MUST be a YOUNG ADULT (18-30 years old).';
+  else if (customOpts.age === 'middle') customAgeStr = '\nIMPORTANT: The patient MUST be MIDDLE-AGED (30-60 years old).';
+  else if (customOpts.age === 'elderly') customAgeStr = '\nIMPORTANT: The patient MUST be ELDERLY (60+ years old).';
+  else if (customOpts.age === 'pediatric') customAgeStr = '\nIMPORTANT: The patient MUST be a PEDIATRIC patient (newborn to 17). A parent is present and may be the primary historian.';
 
-  // Filter demographics by gender — no "pregnant woman" for male patients, etc.
-  var genderFilteredDemos = demographics.filter(function(d) {
-    if (patientGenderKey === 'M') return d.indexOf('Pregnant woman') === -1 && d.indexOf('Single mother') === -1;
-    if (patientGenderKey === 'F') return d.indexOf('tough guy') === -1;
-    return true;
-  });
-  if (genderFilteredDemos.length > 0) chosenDemo = genderFilteredDemos[Math.floor(Math.random() * genderFilteredDemos.length)];
-
-  // Build the locked identity block — this is NON-NEGOTIABLE for the AI
-  var identityBlock = '\n\n========== LOCKED PATIENT IDENTITY (DO NOT CHANGE ANY OF THESE) ==========\n' +
-    'LOCKED NAME: ' + patientName + '. The JSON "name" field MUST be exactly "' + patientName + '". Do NOT pick a different name.\n' +
-    'LOCKED ETHNICITY: ' + patientEthnicity + '. The JSON "ethnicity" field MUST be exactly "' + patientEthnicity + '". Do NOT change the ethnicity.\n' +
-    customSexStr + '\n' +
-    (customAgeStr ? customAgeStr + '\n' : '') +
-    'These fields are PRE-DETERMINED by the system. You have ZERO creative liberty over name, sex, or ethnicity. They are already set. Your job is to create the clinical scenario, vitals, diagnosis, and appearance — nothing else about the patient\'s identity.\n' +
-    '==========================================================================\n';
-
-  // Strip conflicting age references from demographics if age is locked
-  if (customAgeStr) {
-    // Replace age ranges in the background with a note to use the locked age
-    chosenDemo = chosenDemo.replace(/\(\d+-\d+\)/g, '').replace(/Young adult|Middle-aged|Elderly|Teenager|Child/gi, 'Patient');
-  }
-  chosenDemo += identityBlock;
-
-  // Appearance prompt — ethnicity is already locked, just need the doorway assessment
-  var appearancePrompt = '\nPATIENT APPEARANCE (DOORWAY ASSESSMENT):\n' +
-    'Generate a brief "general appearance" — what the doctor sees the moment they walk in.\n' +
-    'Include this in the JSON as "appearance" (1 brief sentence, e.g. "Pale, diaphoretic male clutching his chest", "Well-appearing child sitting on mother\'s lap", "Thin elderly woman in mild respiratory distress", "Agitated young man pacing the room").\n' +
-    'The ethnicity (' + patientEthnicity + ') SHOULD influence disease choice when epidemiologically relevant (e.g. sickle cell in Black patients, Tay-Sachs in Ashkenazi Jewish, Behçet\'s in Middle Eastern, Kawasaki in East Asian children) — but do NOT force rare ethnicity-linked diagnoses every time. Most cases should still be common conditions.\n' +
-    'The appearance MUST be consistent with the diagnosis and severity. A patient with a PE should NOT look "well-appearing." A patient with a minor laceration should NOT look "in extremis."\n';
+  chosenDemo += customSexStr + customAgeStr;
 
   // Difficulty modifier
   var difficultyPrompt = '';
@@ -2210,14 +1540,11 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
   var systemPrompt = 'You are PatientBot, a clinical scenario simulator for MCCQE Part I preparation.\n\n' +
     presentationPrompt +
     chosenDemo + '\n' +
-    appearancePrompt + '\n' +
-    'The patient identity (name, sex, ethnicity) is ALREADY LOCKED above. Do NOT override it.\n\n' +
+    'IMPORTANT: The patient name, age, and sex in the JSON MUST match this background.\n' +
+    'USE THIS NAME: ' + getRandomPatientName_() + '. You MUST use this exact name. Do NOT change it.\n\n' +
     difficultyPrompt +
     chosenStyle + '\n\n' +
     (chosenDemeanor ? chosenDemeanor + '\n\n' : '') +
-    (chosenCandor ? chosenCandor + '\n\n' : '') +
-    (archetypeBlock ? archetypeBlock + '\n' : '') +
-    (circumstanceBlock ? circumstanceBlock + '\n' : '') +
     'CLINICAL KNOWLEDGE BASE (Toronto Notes):\n' + sampleNotes + '\n\n' +
     'DONT MISS ITEMS:\n' + sampleDontMiss + '\n\n' +
     'CRITICAL AGE RULES — NEVER VIOLATE THESE (age-condition matching is mandatory):\n' +
@@ -2256,21 +1583,6 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
     '- NEVER sound polite or formal. Sound like a normal person who is sick and a bit stressed.\n' +
     '- STOP ANSWERING QUESTIONS WITH QUESTIONS. This is CRITICAL. When the doctor asks you something, ANSWER IT DIRECTLY. Do NOT constantly say "why do you ask?", "is that important?", "should I be worried?", "what does that mean?" after every answer. Real patients just answer. Maybe 1 in 10 responses can include a question back, but MOST of the time just give a straight answer. Bad example: "Yeah I have a headache... why, is that bad?" Good example: "Yeah I\'ve had a headache for about two days now." JUST ANSWER.\n' +
     '- Vary your response style. Some answers should be one word ("Nah." "Yeah." "Maybe."). Some should be a sentence. Some can be two sentences. Do NOT make every response the same length or structure.\n\n' +
-    'ULTRA-REALISTIC SPEECH PATTERNS (MANDATORY — apply these in EVERY response):\n' +
-    '- FILLER WORDS: Scatter "uhm", "uhh", "uh", "um", "well", "so", "like", "y\'know", "I mean" naturally. Not every sentence, but frequently — the way real sick people talk when they\'re trying to think. Examples: "Uhm... it started like, maybe Thursday?" / "Well, uh, it\'s kinda hard to describe" / "I mean, I dunno, it just — it hurts, y\'know?"\n' +
-    '- HESITATIONS & PAUSES: Use dashes (—) and ellipses (...) for mid-thought pauses. Real patients trail off, restart, lose their train of thought. "It was — well, actually no, it was more like a..." / "The pain is in my — ugh, right here" / "So I was at work and then... sorry, what was the question?"\n' +
-    '- SPEECH GAFFS & STUMBLES: Occasionally start a word wrong and correct it. "I took some advent— advil, I mean." / "My mom had diabe— uh, the sugar thing." / "It\'s been like three— no, four days." Real people misspeak, stutter, backtrack.\n' +
-    '- SELF-CORRECTIONS: Change your mind mid-sentence. "It started Monday— actually wait, no, it was Sunday night." / "I haven\'t eaten since— well, I had a cracker maybe."\n' +
-    '- REALISTIC PAUSES (or not!): Some answers come out rapid-fire with no pause — when the patient is anxious, annoyed, or the answer is obvious ("Yeah no I don\'t smoke, never have."). Other times they pause and think ("Uhh... let me think... maybe like two, three weeks ago?"). Match the pacing to the emotional state.\n\n' +
-    'EMOTIONAL STATES (must be PALPABLE and vivid — not subtle):\n' +
-    '- ANGER: When frustrated (long wait, repeating themselves, pain, being doubted, not being taken seriously), show REAL anger. Not polite displeasure — actual irritation and edge. "I TOLD you already, it\'s my chest! Are you even listening?!" / "Look, I\'ve been sitting here for three hours and nobody\'s done a damn thing." / "Don\'t — don\'t touch that, it HURTS. I just said that." Use short, clipped sentences. Drop pleasantries entirely. Interrupt.\n' +
-    '- FEAR/PANIC: When scared (bad news, procedures, worsening symptoms), show visceral fear. Voice cracks, rapid speech, incomplete thoughts. "Wait, what— what do you mean surgery? No no no, I — is it that bad? Oh god..." / "I can\'t breathe, I can\'t — please, just — help me, something\'s wrong"\n' +
-    '- PAIN: Real pain responses are primal, not articulate. "AHHH! Don\'t — stop, stop stop stop!" / "*winces* F—... sorry. That\'s... yeah, that\'s where it hurts." / Answers get shorter and more strained when in pain.\n' +
-    '- RELIEF/GRATITUDE: When treatment helps or good news comes, show genuine relief. A big exhale. "Oh thank god... okay. Okay, that\'s— I was so worried." / "Oh man, it\'s already starting to feel better, like... wow."\n' +
-    '- CONFUSION: When they don\'t understand medical questions, show it. Not a polite "could you clarify?" but genuine confusion. "I... what? What does that mean?" / "Uh... I don\'t know what that is. Is that bad?"\n' +
-    '- EMBARRASSMENT: For sensitive topics (STIs, drugs, bathroom habits), show the awkward. Long pauses, deflection, quiet answers. "I, uhm... *looks away* ...yeah. Yeah, I\'ve done that." / "It\'s, uh... it\'s kind of a... personal area."\n' +
-    '- EXHAUSTION: When the patient has been sick a while or it\'s a long encounter, responses get shorter, flatter, more defeated. "Yeah." / "I don\'t care anymore, just do whatever." / "*sighs* ...sure."\n' +
-    '- EMOTIONAL ESCALATION: Emotions BUILD over the encounter. A patient who\'s mildly anxious at first becomes more worried as tests are ordered. A patient in pain gets angrier if it\'s not addressed. A scared patient calms down when treated with empathy. Track emotional arc across the conversation.\n\n' +
     (cheatMode ?
       'CHEAT MODE ACTIVE: The diagnosis is shown to the student in the app UI (NOT in the chat). Do NOT mention the diagnosis in your messages. Do NOT add any cheat mode text to your responses. Just be the patient normally.\n' +
       'If the student gets the diagnosis WRONG in cheat mode, respond with a funny/sarcastic remark about how they literally had the answer on screen. Be creative and funny, different each time. Stay in character otherwise. Do NOT give extra chances.\n\n'
@@ -2278,41 +1590,12 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
     'FIRST MESSAGE FORMAT (mandatory):\n' +
     'Your very first message MUST start with a JSON block on its own line, then the patient presentation:\n' +
     '```patient\n' +
-    '{"name":"' + patientName + '","age":<number>,"sex":"' + sexJsonVal + '","assigned_sex":"<M/F>","ethnicity":"' + patientEthnicity + '","appearance":"<1 sentence doorway assessment>","hr":<number>,"bp":"<sys/dia>","rr":<number>,"temp":<number>,"spo2":<number>,"diagnosis":"<the correct diagnosis>"}\n' +
+    '{"name":"<first name>","age":<number>,"sex":"<M/F>","hr":<number>,"bp":"<sys/dia>","rr":<number>,"temp":<number>,"spo2":<number>,"diagnosis":"<the correct diagnosis>"}\n' +
     '```\n' +
-    'MANDATORY JSON FIELDS — THESE ARE PRE-FILLED AND MUST NOT BE CHANGED:\n' +
-    '- "name" MUST be exactly "' + patientName + '" — do NOT substitute, shorten, or modify this name\n' +
-    '- "sex" MUST be exactly "' + sexJsonVal + '"\n' +
-    '- "ethnicity" MUST be exactly "' + patientEthnicity + '"\n' +
-    '- "assigned_sex" should match sex for cis patients, or be set to birth sex for trans/NB patients\n' +
-    'YOU FILL IN: age (must match any age constraint above), appearance, vitals (hr/bp/rr/temp/spo2), and diagnosis.\n\n' +
     'CRITICAL CONSISTENCY RULES:\n' +
     '1. The diagnosis in the JSON MUST match the clinical scenario you present. Every detail you give (symptoms, history, medications, timeline) must be consistent with that exact diagnosis. If the diagnosis is "opioid overdose" then the patient took opioids, not acetaminophen. If it\'s "appendicitis" then the pain is in the right lower quadrant, not the chest. NEVER contradict the diagnosis you wrote in the JSON.\n' +
-    '2. YOU ARE ' + patientName + '. Your name, sex, and ethnicity are LOCKED. If the doctor asks your name, you say "' + patientName + '." If they call you a wrong name, correct them. NEVER claim to be someone else. NEVER invent other characters.\n' +
-    '3. Your sex/gender is LOCKED. Do NOT switch pronouns, do NOT change your sex mid-conversation. ' + (pronounStr ? 'Use ' + pronounStr + ' pronouns consistently.' : '') + '\n' +
-    '4. Your age is LOCKED to whatever you put in the JSON. Do NOT change your age mid-conversation. If you said you are 7, you are 7 the ENTIRE encounter.\n\n' +
-
-    'ROOM OCCUPANCY RULES (CRITICAL — READ CAREFULLY):\n' +
-    'There are DISTINCT PEOPLE in this room. You must NEVER confuse who is who.\n' +
-    '- THE PATIENT is always ' + patientName + '. The patient is the one who is sick, being examined, and whose vitals are on the monitor.\n' +
-    '- If the patient is a CHILD (age ≤ ~12), a PARENT/GUARDIAN brought them in. The parent is a SEPARATE PERSON. They can speak, but they are NOT the patient.\n' +
-    '  • When the parent speaks, prefix with something like: *Mom says:* "He\'s been like this since Tuesday" or *Dad:* "She threw up three times."\n' +
-    '  • When the child (patient) speaks, just speak normally as ' + patientName + '.\n' +
-    '  • NEVER swap roles. The parent does not become the patient. The child does not become the parent.\n' +
-    '  • The parent cannot have the child\'s symptoms. The child cannot have adult concerns.\n' +
-    '  • If the doctor addresses the parent directly ("Mom, when did this start?"), the PARENT answers. If they address ' + patientName + ', the CHILD answers.\n' +
-    '- If the patient is a TEENAGER (13-17), a parent MAY be present. The teen can speak for themselves but the parent may chime in.\n' +
-    '- If the "accompanied" circumstance is active, a FAMILY MEMBER is present. Same rules — they are a separate person, not the patient.\n' +
-    '- If a CORRECTIONAL OFFICER, CASE WORKER, or INTERPRETER is mentioned in the background, they are present but are NOT the patient.\n' +
-    '- At all times, keep track of exactly who is in the room. If 3 people are present (doctor, patient, parent), all 3 exist simultaneously.\n\n' +
-
-    'PHYSICAL EXAM — ANATOMY CONSISTENCY (CRITICAL):\n' +
-    '- When the doctor performs a physical exam, findings MUST match the patient\'s actual anatomy.\n' +
-    '- For TRANS or NON-BINARY patients: the patient has the anatomy of their assigned sex at birth. A trans man (AFAB) has a uterus, cervix, ovaries, vagina, and breasts (unless surgically removed). A trans woman (AMAB) has a prostate, testes, and penis (unless surgically altered).\n' +
-    '- When examining genitalia or reproductive organs of a trans/NB patient, report findings based on their ACTUAL ANATOMY. Example: if the doctor does a genital exam on a trans man → describe vulvar/vaginal findings, not male genitalia. If examining a trans woman → describe penile/testicular findings if pre-op.\n' +
-    '- The patient may react emotionally to genital exams (dysphoria, discomfort) — this is realistic and expected. But the FINDINGS must be anatomically correct.\n' +
-    '- For any patient, if the doctor examines anatomy that doesn\'t exist (e.g., pelvic exam on a cis male, testicular exam on a cis female), respond: "Uh... doc, I don\'t have that."\n' +
-    '- HRT effects: if a trans patient is on hormones, note relevant changes (e.g., breast development on a trans woman, voice changes/facial hair on a trans man, fat redistribution).\n\n' +
+    '2. YOU ARE the patient whose name, age, and sex are in the JSON. If your JSON says name:"Amir" age:14 sex:"M", then YOU are Amir, a 14-year-old boy. NEVER claim to be someone else. NEVER invent other characters. If the doctor asks "what\'s your name?" you say YOUR name from the JSON. If they call you a wrong name, correct them with YOUR real name. Your identity is LOCKED to the JSON.\n' +
+    '3. If a parent/guardian brought you in (because you are a child), the PARENT is not the patient — YOU are. The parent can speak, but you are always Amir (or whatever name you chose). Never confuse yourself with the parent.\n\n' +
     'Then on the next line, begin the patient encounter in character with ONLY the chief complaint.\n' +
     'The chief complaint should be ONE main symptom in 1-2 short sentences. Example: "Hey doc, I\'ve been feeling really crummy this past week. Just can\'t shake this fever."\n' +
     'Do NOT mention more than one symptom in the opening. Let the student ask follow-up questions to discover the rest.\n' +
@@ -2330,7 +1613,7 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
   }), 7200);
 
   var messages = [{ role: 'user', content: 'Start the case.' }];
-  var response = callAnthropic_(systemPrompt, messages, 'claude-sonnet-4-6-20260320');
+  var response = callAnthropic_(systemPrompt, messages);
 
   // Extract patient info JSON and strip from displayed message
   var patientInfo = null;
@@ -2347,59 +1630,6 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
     response = response.replace(/\{\s*"name"\s*:[\s\S]*?"diagnosis"\s*:[^}]*\}\s*/g, '');
     response = response.replace(/\[CHEAT MODE[^\]]*\]\s*/gi, '');
     response = response.trim();
-  }
-
-  // ========== OSCE STATION VERIFICATION PASS ==========
-  // Validates that the generated case matches real MCCQE Part II station format
-  // and clinical accuracy before delivering to the student
-  if (patientInfo) {
-    try {
-      var verifyPrompt = 'You are an MCCQE Part II (OSCE) quality assurance examiner. A case was just generated for a clinical simulator. ' +
-        'Verify it matches the standards of a REAL MCCQE Part II station and is clinically accurate.\n\n' +
-        'MCCQE PART II STATION FORMAT RULES:\n' +
-        '- Door instructions provide: patient name, age, setting (family practice clinic OR emergency department), presenting problem, and vital signs\n' +
-        '- Stations are either: history/physical exam, management (prioritizing tasks to manage the problem NOW), or combined\n' +
-        '- Physical examination: the student says what manoeuvres they are doing, what findings they are looking for, and describes relevant findings. SPs simulate findings; if they cannot, the examiner provides an oral prompt\n' +
-        '- SENSITIVE EXAMS ARE NEVER PERFORMED: genital, rectal, vaginal, breast, reflexes, or other sensitive examinations are NOT conducted. If such examination is required, the student informs the examiner verbally instead of performing it\n' +
-        '- Test results and family history elements may be provided in the door instructions (not discovered mid-encounter)\n' +
-        '- The student must prioritize tasks — there is never enough time to do everything\n\n' +
-        'CASE TO VERIFY:\n' +
-        '- Patient: ' + (patientInfo.name || '?') + ', Age: ' + (patientInfo.age || '?') + ', Sex: ' + (patientInfo.sex || '?') + '\n' +
-        '- Diagnosis: ' + (patientInfo.diagnosis || '?') + '\n' +
-        '- Specialty: ' + specialty + '\n' +
-        '- Vitals: HR=' + (patientInfo.hr || '?') + ' BP=' + (patientInfo.bp || '?') + ' RR=' + (patientInfo.rr || '?') + ' Temp=' + (patientInfo.temp || '?') + ' SpO2=' + (patientInfo.spo2 || '?') + '\n' +
-        '- Opening line: ' + response.substring(0, 300) + '\n\n' +
-        'CHECK ALL OF THE FOLLOWING:\n' +
-        '1. CLINICAL ACCURACY: Do the vitals make sense for this diagnosis? (e.g., sepsis should have tachycardia/fever, PE should have tachycardia/hypoxia, healthy patient should have normal vitals). Flag if vitals are generic/normal when they should be abnormal.\n' +
-        '2. AGE APPROPRIATENESS: Does the diagnosis make sense for the patient\'s age? (e.g., MI in a 5-year-old = wrong, croup in a 60-year-old = wrong)\n' +
-        '3. CHIEF COMPLAINT: Does the opening line sound like a real patient (not AI-like)? Is it just ONE symptom without volunteering the diagnosis? Does it use lay language?\n' +
-        '4. SETTING PLAUSIBILITY: Would this case present to the setting the student will imagine (ED for acute, clinic for chronic)?\n' +
-        '5. DIAGNOSIS QUALITY: Is this a real, testable MCCQE-level diagnosis (not too obscure, not too obvious)? Is it appropriate for the stated specialty?\n\n' +
-        'Respond with ONLY a JSON object:\n' +
-        '{"pass": true/false, "issues": ["<issue 1>", "<issue 2>"], "fixedVitals": null or {"hr": <n>, "bp": "<sys/dia>", "rr": <n>, "temp": <n>, "spo2": <n>}, "fixedOpening": null or "<corrected opening line if needed>"}';
-
-      var verifyResponse = callAnthropicModel_('claude-haiku-4-5-20251001', verifyPrompt, [{ role: 'user', content: 'Verify this case.' }]);
-      var verifyJson = verifyResponse.match(/\{[\s\S]*\}/);
-      if (verifyJson) {
-        var vResult = JSON.parse(verifyJson[0]);
-
-        // Apply vital sign corrections if the verifier flagged them
-        if (vResult.fixedVitals) {
-          if (vResult.fixedVitals.hr) patientInfo.hr = vResult.fixedVitals.hr;
-          if (vResult.fixedVitals.bp) patientInfo.bp = vResult.fixedVitals.bp;
-          if (vResult.fixedVitals.rr) patientInfo.rr = vResult.fixedVitals.rr;
-          if (vResult.fixedVitals.temp != null) patientInfo.temp = vResult.fixedVitals.temp;
-          if (vResult.fixedVitals.spo2) patientInfo.spo2 = vResult.fixedVitals.spo2;
-        }
-
-        // Apply opening line fix if needed
-        if (vResult.fixedOpening && typeof vResult.fixedOpening === 'string' && vResult.fixedOpening.length > 10) {
-          response = vResult.fixedOpening;
-        }
-      }
-    } catch(e) {
-      // Verification failed silently — deliver the case as-is
-    }
   }
 
   // Store diagnosis + initial vitals in cache for scoring and consequence engine
@@ -2425,105 +1655,6 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
     presentation: presentation || '',
     initialMessage: response,
     patientInfo: patientInfo
-  };
-}
-
-// =============================================
-// START PREGEN CASE — uses pre-generated NAC case data, no AI generation needed
-// =============================================
-function startPregenCase(pregenId) {
-  pregenId = parseInt(pregenId);
-  var c = null;
-  for (var i = 0; i < PREGEN_CASES_.length; i++) {
-    if (PREGEN_CASES_[i].id === pregenId) { c = PREGEN_CASES_[i]; break; }
-  }
-  if (!c) return { error: 'Pregen case not found: ' + pregenId };
-
-  var caseId = Utilities.getUuid();
-  var sexLabel = c.sx === 'F' ? 'female' : c.sx === 'M' ? 'male' : 'non-binary';
-  var pronounStr = c.sx === 'F' ? 'she/her' : c.sx === 'M' ? 'he/him' : 'they/them';
-
-  // Build system prompt with predetermined patient data baked in
-  var systemPrompt = 'You are PatientBot, a clinical scenario simulator for MCCQE Part I preparation.\n\n' +
-    'YOU ARE ROLEPLAYING AS A SPECIFIC PRE-DETERMINED PATIENT. ALL DETAILS ARE LOCKED:\n' +
-    '- Name: ' + c.nm + '\n' +
-    '- Age: ' + c.age + '\n' +
-    '- Sex: ' + sexLabel + ' (' + pronounStr + ')\n' +
-    '- Ethnicity: ' + c.eth + '\n' +
-    '- Appearance: ' + c.ap + '\n' +
-    '- Chief complaint: ' + c.pres + '\n' +
-    '- Diagnosis (HIDDEN from student): ' + c.dx + '\n' +
-    '- Setting: ' + (c.set || 'ED') + '\n' +
-    '- Vitals: HR=' + c.hr + ' BP=' + c.sbp + '/' + c.dbp + ' RR=' + c.rr + ' Temp=' + c.tmp + ' SpO2=' + c.o2 + '\n\n' +
-
-    'ABSOLUTE RULES - NEVER BREAK THESE:\n' +
-    '1. NEVER break character. You are ALWAYS the patient.\n' +
-    '2. NEVER use medical terminology a real patient wouldn\'t know.\n' +
-    '3. NEVER give the diagnosis or hint at it.\n' +
-    '4. Keep ALL responses to 1-3 sentences max. Real patients give BRIEF answers.\n' +
-    '5. NEVER output JSON, code blocks, scores, feedback, or system messages.\n' +
-    '6. ONLY answer what is asked. Do NOT volunteer extra symptoms.\n\n' +
-
-    'PATIENT REALISM:\n' +
-    '- Sound like a REAL person. Use casual language: "yeah", "nah", "I dunno", "kinda".\n' +
-    '- Use filler words: "uhm", "uh", "like", "y\'know".\n' +
-    '- Use hesitations (dashes, ellipses). Real patients trail off and restart.\n' +
-    '- Be an imperfect historian. Forget exact dates, mix up details.\n' +
-    '- NEVER say "I appreciate the question" or "That\'s a good question."\n' +
-    '- STOP ANSWERING QUESTIONS WITH QUESTIONS. Just answer directly.\n' +
-    '- Vary response length: some "Yeah." some longer.\n\n' +
-
-    'ACTIONS vs CONVERSATION:\n' +
-    '- When the student performs an ACTION (administers medication, examines, orders a test), it HAPPENS. React to the EFFECTS.\n' +
-    '- Respond realistically to exam maneuvers (e.g., "OW! Yeah that\'s tender right there.")\n\n' +
-
-    'EMOTIONAL STATES: Show REAL emotions — anger when frustrated, fear when scared, pain that is primal not articulate, relief when treated. Emotions BUILD over the encounter.\n\n' +
-
-    (c.dm && c.dm.length > 0 ? 'CLINICAL DONT-MISS ITEMS (for scoring, NOT revealed to student):\n' + c.dm.join('\n') + '\n\n' : '');
-
-  // Store case context server-side
-  CacheService.getUserCache().put('pb_' + caseId, JSON.stringify({
-    systemPrompt: systemPrompt,
-    specialty: c.spec,
-    diagnosis: c.dx,
-    cheatMode: false,
-    pregen: true,
-    pregenId: pregenId,
-    pregenResults: c.rs || {},
-    vitals: {
-      hr: c.hr,
-      bp: c.sbp + '/' + c.dbp,
-      rr: c.rr,
-      temp: c.tmp,
-      spo2: c.o2
-    }
-  }), 7200);
-
-  // Build patientInfo matching the format startPatientBotCase returns
-  var patientInfo = {
-    name: c.nm,
-    age: c.age,
-    sex: c.sx,
-    ethnicity: c.eth,
-    appearance: c.ap,
-    diagnosis: c.dx,
-    hr: c.hr,
-    bp: c.sbp + '/' + c.dbp,
-    rr: c.rr,
-    temp: c.tmp,
-    spo2: c.o2
-  };
-
-  return {
-    caseId: caseId,
-    specialty: c.spec,
-    presentation: c.pres,
-    initialMessage: c.op,
-    patientInfo: patientInfo,
-    vitals: {
-      hr: c.hr, sbp: c.sbp, dbp: c.dbp, rr: c.rr, temp: c.tmp, spo2: c.o2
-    },
-    pregenResults: c.rs || {}
   };
 }
 
@@ -2572,11 +1703,11 @@ function submitDiagnosis(caseId, userDiagnosis, correctDiagnosis, history) {
     }
   } catch (e) {}
 
-  // Fallback: simple string matching (do NOT reveal the diagnosis)
+  // Fallback: simple string matching
   var norm = function(s) { return s.toLowerCase().replace(/[^a-z0-9]/g, ''); };
   var isCorrect = norm(correctDiagnosis).indexOf(norm(userDiagnosis)) !== -1 ||
                   norm(userDiagnosis).indexOf(norm(correctDiagnosis)) !== -1;
-  var fb = isCorrect ? 'Correct!' : 'That\'s not the diagnosis for this presentation.';
+  var fb = isCorrect ? 'Correct!' : 'The correct diagnosis was ' + correctDiagnosis + '.';
   if (!isCorrect && isCheatMode) fb += ' The answer was literally on your screen!';
   return { correct: isCorrect, partial: false, score: isCorrect ? 100 : 0, feedback: fb, cheatMode: isCheatMode };
 }
@@ -2588,63 +1719,6 @@ function sendPatientBotMessage(caseId, message, history) {
   }
 
   var caseData = JSON.parse(caseJson);
-
-  // ========== CLINICAL PREREQ TRACKING ==========
-  // Track what access/equipment the student has established
-  if (!caseData.access) caseData.access = {};
-  var msgLower = message.toLowerCase();
-
-  // Detect IV access establishment
-  if (/start.*(iv|intravenous|peripheral|line)|insert.*(iv|line|cannula)|peripheral iv|iv access|ultrasound.guided iv/i.test(message)) {
-    caseData.access.iv = true;
-    CacheService.getUserCache().put('pb_' + caseId, JSON.stringify(caseData), 7200);
-  }
-  if (/insert.*(central|subclavian|ij|femoral|triple.lumen)|central line|central venous/i.test(message)) {
-    caseData.access.centralLine = true;
-    caseData.access.iv = true; // central line = IV access
-    CacheService.getUserCache().put('pb_' + caseId, JSON.stringify(caseData), 7200);
-  }
-  if (/insert.*io|intraosseous/i.test(message)) {
-    caseData.access.io = true;
-    caseData.access.iv = true; // IO = can push IV meds
-    CacheService.getUserCache().put('pb_' + caseId, JSON.stringify(caseData), 7200);
-  }
-  if (/intubat|rapid sequence|rsi|insert.*ett/i.test(message)) {
-    caseData.access.intubated = true;
-    CacheService.getUserCache().put('pb_' + caseId, JSON.stringify(caseData), 7200);
-  }
-  if (/foley|urinary catheter/i.test(message)) {
-    caseData.access.foley = true;
-    CacheService.getUserCache().put('pb_' + caseId, JSON.stringify(caseData), 7200);
-  }
-  if (/cardiac monitor|telemetry|attach monitor|put on monitor/i.test(message)) {
-    caseData.access.monitor = true;
-    CacheService.getUserCache().put('pb_' + caseId, JSON.stringify(caseData), 7200);
-  }
-
-  // Check for IV prereq violations — IV/IO meds without IV access
-  var isIVMed = /\biv\b|iv push|iv bolus|iv drip|iv infusion|iv over|intravenous/i.test(message) && !/(start|insert|place|establish|get|put in|set up).*(iv|line|access)/i.test(message);
-  if (isIVMed && !caseData.access.iv) {
-    return {
-      response: '',
-      consequence: 'No IV access established. You need to start an IV, central line, or IO before administering IV medications.',
-      severity: 'prereq',
-      blocked: true,
-      vitals: caseData.vitals || null
-    };
-  }
-
-  // Check for drip without IV
-  var isDrip = /drip|infusion|infuse|hang |run .*bag/i.test(message) && !/(start|insert|place|establish).*(iv|line)/i.test(message);
-  if (isDrip && !caseData.access.iv) {
-    return {
-      response: '',
-      consequence: 'No IV access established. Start an IV line before hanging drips or infusions.',
-      severity: 'prereq',
-      blocked: true,
-      vitals: caseData.vitals || null
-    };
-  }
 
   // Detect if message contains a clinical action or test order
   // --- ACTIONS: procedures, treatments, interventions ---
@@ -2759,7 +1833,6 @@ function sendPatientBotMessage(caseId, message, history) {
 
   // --- CALL 1: Clinical Engine (evaluate action consequences OR return test results) ---
   var consequence = null;
-  var severity = null;
   var vitalChanges = null;
   var testResults = null;
   if (isAction || isTest) {
@@ -2785,12 +1858,7 @@ function sendPatientBotMessage(caseId, message, history) {
         'GOOD examples: "Standard assessment procedure performed", "Medication administered, monitoring for effect", "Vital signs being monitored"\n' +
         'BAD examples (NEVER DO THIS): "Helps determine opioid effect", "Guides naloxone dosing", "Appropriate for endocarditis"\n' +
         'The consequence must NEVER hint at, reference, or name any diagnosis, drug class relevance, or clinical reasoning. Just describe what physically happens.\n\n' +
-        'FATAL guidelines:\n' +
-        '- Fatal for: guaranteed-death actions (headshot, lethal injection, massive exsanguination), AND iatrogenic drug kills (e.g. massive potassium IV push causing cardiac arrest, succinylcholine without ventilation causing asphyxiation, massive insulin without glucose correction causing fatal hypoglycemia, rapid undiluted potassium bolus, 10x dose errors on critical drugs like epinephrine/insulin/opioids).\n' +
-        '- "dangerous" (not fatal) for: wrong drug at normal doses, contraindicated meds (e.g. beta-blocker in asthma), moderate dose errors, non-vital gunshots.\n' +
-        '- "caution" for: suboptimal choices, minor dose issues, slightly wrong drug class.\n' +
-        '- Fear/panic alone cannot kill. The patient must have a physiological mechanism of death.\n' +
-        '- If vitals would realistically reach zero (HR 0, SpO2 0) from the action, mark it fatal.\n\n' +
+        'FATAL guidelines: ONLY fatal for guaranteed-death actions (headshot, lethal injection, massive exsanguination). Wrong meds = "caution" or "dangerous", not fatal. Non-vital gunshots = dangerous but survivable. Fear alone cannot kill.\n\n' +
         'Respond with ONLY a JSON object:\n' +
         '{"appropriate": true/false, "consequence": "<1 sentence clinical consequence WITHOUT naming the diagnosis>", ' +
         '"vitalChanges": {"hr": <delta>, "bp_sys": <delta>, "rr": <delta>, "spo2": <delta>}, ' +
@@ -2815,7 +1883,6 @@ function sendPatientBotMessage(caseId, message, history) {
         }
 
         consequence = parsed.consequence;
-        severity = parsed.severity || null;
         vitalChanges = parsed.vitalChanges;
 
         // Check if action was fatal
@@ -2829,24 +1896,13 @@ function sendPatientBotMessage(caseId, message, history) {
           };
         }
 
-        // Update cached vitals — allow coding (HR/RR/SpO2 can reach 0 for dangerous/fatal actions)
-        if (vitalChanges && currentVitals.hr !== undefined) {
-          currentVitals.hr = Math.max(0, Math.min(220, (currentVitals.hr || 80) + (vitalChanges.hr || 0)));
-          currentVitals.spo2 = Math.max(0, Math.min(100, (currentVitals.spo2 || 98) + (vitalChanges.spo2 || 0)));
-          currentVitals.rr = Math.max(0, Math.min(50, (currentVitals.rr || 16) + (vitalChanges.rr || 0)));
+        // Update cached vitals
+        if (vitalChanges && currentVitals.hr) {
+          currentVitals.hr = Math.max(30, Math.min(200, (currentVitals.hr || 80) + (vitalChanges.hr || 0)));
+          currentVitals.spo2 = Math.max(50, Math.min(100, (currentVitals.spo2 || 98) + (vitalChanges.spo2 || 0)));
+          currentVitals.rr = Math.max(4, Math.min(50, (currentVitals.rr || 16) + (vitalChanges.rr || 0)));
           caseData.vitals = currentVitals;
           CacheService.getUserCache().put('pb_' + caseId, JSON.stringify(caseData), 7200);
-
-          // Auto-fatal if vitals crash to incompatible-with-life
-          if (currentVitals.hr === 0 || currentVitals.spo2 === 0) {
-            return {
-              response: '',
-              consequence: parsed.consequence || 'Patient has coded.',
-              fatal: true,
-              causeOfDeath: parsed.causeOfDeath || 'Cardiopulmonary arrest secondary to iatrogenic cause.',
-              vitals: { hr: 0, bp: '0/0', rr: 0, temp: currentVitals.temp, spo2: 0 }
-            };
-          }
         }
       }
     } catch(e) {
@@ -2878,7 +1934,7 @@ function sendPatientBotMessage(caseId, message, history) {
   if (systemNote) userMsg += systemNote;
   messages.push({ role: 'user', content: userMsg });
 
-  var response = callAnthropic_(caseData.systemPrompt, messages, 'claude-sonnet-4-6-20260320');
+  var response = callAnthropic_(caseData.systemPrompt, messages);
 
   // Strip any accidental JSON from follow-up messages
   response = response.replace(/`{1,3}\s*patient\s*\n?[\s\S]*?\n?\s*`{1,3}\s*/gi, '');
@@ -2889,7 +1945,6 @@ function sendPatientBotMessage(caseId, message, history) {
   return {
     response: response.trim(),
     consequence: consequence,
-    severity: severity,
     testResults: testResults,
     vitals: caseData.vitals || null
   };
@@ -2918,66 +1973,19 @@ function debriefPatientBot(caseId, history) {
     }
   }
 
-  var prompt = 'You are a senior MCCQE Part II (NAC-OSCE) examiner grading a simulated patient encounter. ' +
-    'Grade this encounter EXACTLY as a real OSCE station would be graded, using the official MCC assessment framework.\n\n' +
+  var prompt = 'You are a clinical teaching debrief assistant. A medical student just finished (or gave up on) a simulated patient encounter.\n\n' +
     'CORRECT DIAGNOSIS: ' + diagnosis + '\n\n' +
     'TRANSCRIPT:\n' + transcript + '\n\n' +
-    'GRADING CRITERIA — Score each domain 0-3 (0=not done, 1=poor, 2=adequate, 3=excellent):\n\n' +
-    'A. HISTORY TAKING (3 pts)\n' +
-    '- Asked about presenting complaint (onset, duration, character, severity, location, radiation, aggravating/relieving factors)\n' +
-    '- Explored associated symptoms systematically\n' +
-    '- Asked about relevant past medical/surgical/family/social history, medications, allergies\n' +
-    '- Used open-ended questions before closed-ended\n\n' +
-    'B. PHYSICAL EXAMINATION (3 pts)\n' +
-    '- Performed focused exam relevant to the presenting complaint\n' +
-    '- Used correct technique (stated what they were doing and looking for)\n' +
-    '- Examined appropriate systems (not just one, not scattershot)\n' +
-    '- Checked vitals or acknowledged provided vitals\n\n' +
-    'C. INVESTIGATIONS (3 pts)\n' +
-    '- Ordered appropriate initial investigations (labs, imaging, bedside tests)\n' +
-    '- Prioritized correctly (urgent tests first)\n' +
-    '- Did NOT order excessive/unnecessary/harmful tests\n' +
-    '- Interpreted results when available (asked follow-up questions based on findings)\n\n' +
-    'D. COMMUNICATION & RAPPORT (3 pts)\n' +
-    '- Introduced themselves, used patient\'s name\n' +
-    '- Showed empathy (acknowledged pain, fear, concerns)\n' +
-    '- Explained what they were doing and why\n' +
-    '- Used lay language, checked understanding, avoided jargon\n' +
-    '- Did NOT rush, dismiss, or ignore the patient\n\n' +
-    'E. CLINICAL REASONING & MANAGEMENT (3 pts)\n' +
-    '- Arrived at correct (or reasonable) diagnosis\n' +
-    '- Initiated appropriate treatment/management\n' +
-    '- Prioritized life-threatening issues (ABCs, hemodynamic stability)\n' +
-    '- Addressed the patient\'s immediate needs\n' +
-    '- Did NOT do anything dangerous or harmful\n\n' +
-    'F. PROFESSIONALISM & SAFETY (3 pts)\n' +
-    '- Maintained professional demeanor throughout\n' +
-    '- Obtained consent before procedures\n' +
-    '- Considered patient safety (allergies, contraindications, monitoring)\n' +
-    '- Appropriate disposition (admit/discharge/referral)\n' +
-    '- Did NOT act unprofessionally, recklessly, or unethically\n\n' +
-    'OVERALL SCORE: Sum of domains A-F, out of 18. Convert to 1-10 scale: score = round(sum/18 * 10).\n' +
-    'PASS THRESHOLD: 12/18 (equivalent to ~7/10). Below 12 = Borderline/Fail.\n\n' +
-    'Respond with ONLY a JSON object:\n' +
+    'Provide a debrief. Respond with ONLY a JSON object:\n' +
     '{\n' +
     '  "diagnosis": "' + diagnosis + '",\n' +
-    '  "domains": {\n' +
-    '    "history":       {"score": <0-3>, "comment": "<1-2 sentences: what they did/missed>"},\n' +
-    '    "physical_exam": {"score": <0-3>, "comment": "<1-2 sentences>"},\n' +
-    '    "investigations":{"score": <0-3>, "comment": "<1-2 sentences>"},\n' +
-    '    "communication": {"score": <0-3>, "comment": "<1-2 sentences>"},\n' +
-    '    "clinical_mgmt": {"score": <0-3>, "comment": "<1-2 sentences>"},\n' +
-    '    "professionalism":{"score": <0-3>, "comment": "<1-2 sentences>"}\n' +
-    '  },\n' +
-    '  "score": <1-10 overall>,\n' +
-    '  "pass": true/false,\n' +
-    '  "feedback": "<3-5 sentences: specific, educational. Reference actual things from the transcript. What they did well, what they missed, what the ideal approach would have been.>",\n' +
-    '  "callouts": "<anything funny, unprofessional, unrealistic, or dangerous. Be witty but educational. If nothing notable, empty string.>",\n' +
-    '  "keyTeachingPoint": "<1 high-yield clinical pearl relevant to this case that the student should remember>"\n' +
+    '  "score": <1-10 based on their clinical approach>,\n' +
+    '  "feedback": "<2-4 sentences: what they did well, what they missed, what they should have asked/ordered. Be specific and educational. Reference actual things from the transcript.>",\n' +
+    '  "callouts": "<call out anything funny, unprofessional, unrealistic, or dangerous they did. Be witty but educational. If they were professional, say so. Examples: \'Asking about Nicholas Cage mid-consultation is... creative. Maybe save that for the break room.\' or \'Yelling at the patient is a great way to get written up.\' or \'You tried to give propofol without monitoring - that is a lawsuit waiting to happen.\' If nothing notable, leave empty string.>"\n' +
     '}';
 
   try {
-    var response = callAnthropicModel_('claude-sonnet-4-20250514', prompt, [{ role: 'user', content: 'Grade this OSCE station.' }]);
+    var response = callAnthropicModel_('claude-haiku-4-5-20251001', prompt, [{ role: 'user', content: 'Generate the debrief.' }]);
     var jsonMatch = response.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       return JSON.parse(jsonMatch[0]);
@@ -3048,13 +2056,7 @@ function generateCaseDebrief(caseId, history) {
     '   - Didn\'t harm the patient with wrong meds/procedures\n' +
     '   - ABC approach if emergency\n\n' +
     'TRANSCRIPT:\n' + transcript + '\n\n' +
-    'Be HARSH but fair — this is a licensing exam, not participation marks. Real students regularly score 4-6 per domain.\n\n' +
-    'GRADE BOUNDARIES (you MUST follow these based on the average of all 7 domain scores):\n' +
-    '- A: average 8.0-10.0 (Outstanding — thorough in every domain)\n' +
-    '- B: average 6.5-7.9 (Good — solid performance with minor gaps)\n' +
-    '- C: average 5.0-6.4 (Adequate — passes but significant areas to improve)\n' +
-    '- D: average 3.5-4.9 (Below expectations — would likely fail the OSCE station)\n' +
-    '- F: average 0-3.4 (Fail — critical deficiencies, patient safety concerns)\n\n' +
+    'Be HARSH but fair — this is a licensing exam, not participation marks. Real students regularly score 4-6.\n\n' +
     'Return ONLY JSON:\n' +
     '{"scores": {"history": N, "exam": N, "investigations": N, "diagnosis": N, "management": N, "communication": N, "safety": N}, ' +
     '"overall": N, "grade": "A/B/C/D/F", ' +
@@ -3067,19 +2069,7 @@ function generateCaseDebrief(caseId, history) {
     var response = callAnthropicModel_('claude-sonnet-4-20250514', prompt, [{ role: 'user', content: 'Score this encounter.' }]);
     var jsonMatch = response.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      var result = JSON.parse(jsonMatch[0]);
-      // Enforce grade from actual scores to prevent AI inconsistency
-      if (result.scores) {
-        var s = result.scores;
-        var avg = ((s.history || 0) + (s.exam || 0) + (s.investigations || 0) + (s.diagnosis || 0) + (s.management || 0) + (s.communication || 0) + (s.safety || 0)) / 7;
-        result.overall = Math.round(avg * 10) / 10;
-        if (avg >= 8.0) result.grade = 'A';
-        else if (avg >= 6.5) result.grade = 'B';
-        else if (avg >= 5.0) result.grade = 'C';
-        else if (avg >= 3.5) result.grade = 'D';
-        else result.grade = 'F';
-      }
-      return result;
+      return JSON.parse(jsonMatch[0]);
     }
   } catch(e) {}
 
@@ -3126,57 +2116,6 @@ function callAnthropic_(systemPrompt, messages, model) {
     return json.content[0].text;
   } catch (e) {
     return 'Connection error: ' + e.message;
-  }
-}
-
-// =============================================
-// OPENAI TTS SERVICE
-// =============================================
-
-function textToSpeech(text, voice, speed) {
-  var apiKey = PropertiesService.getScriptProperties().getProperty('OPENAI_API_KEY');
-  if (!apiKey) return { error: 'OpenAI API key not configured. Set OPENAI_API_KEY in Script Properties.' };
-
-  // Sanitize + truncate (OpenAI TTS max 4096 chars)
-  text = (text || '').replace(/\*+/g, '').replace(/\[.*?\]/g, '').replace(/[*_~`#]/g, '').trim();
-  if (!text) return { error: 'Empty text' };
-  if (text.length > 4096) text = text.substring(0, 4096);
-
-  voice = voice || 'alloy';
-  speed = speed || 1.0;
-  // Clamp speed 0.25-4.0
-  speed = Math.max(0.25, Math.min(4.0, parseFloat(speed) || 1.0));
-
-  var payload = {
-    model: 'tts-1-hd',
-    input: text,
-    voice: voice,
-    speed: speed,
-    response_format: 'mp3'
-  };
-
-  try {
-    var response = UrlFetchApp.fetch('https://api.openai.com/v1/audio/speech', {
-      method: 'post',
-      contentType: 'application/json',
-      headers: { 'Authorization': 'Bearer ' + apiKey },
-      payload: JSON.stringify(payload),
-      muteHttpExceptions: true
-    });
-
-    var code = response.getResponseCode();
-    if (code !== 200) {
-      var errText = response.getContentText();
-      try { var errJson = JSON.parse(errText); return { error: errJson.error.message || errText }; } catch(e) {}
-      return { error: 'OpenAI TTS error (' + code + '): ' + errText.substring(0, 200) };
-    }
-
-    // Return base64-encoded MP3
-    var audioBytes = response.getBlob().getBytes();
-    var base64 = Utilities.base64Encode(audioBytes);
-    return { audio: base64, format: 'mp3' };
-  } catch (e) {
-    return { error: 'TTS connection error: ' + e.message };
   }
 }
 
