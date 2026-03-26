@@ -6178,7 +6178,11 @@ function _launchDeepgram() {
       else clearInterval(keepAlive);
     }, 8000);
 
-    ws.onopen = function() {
+    // Audio pipeline setup — extracted so it can be called by both addEventListener AND readyState check
+    var _audioPipelineConnected = false;
+    function connectAudioPipeline() {
+      if (_audioPipelineConnected) return; // only once
+      _audioPipelineConnected = true;
       if (myGen !== _sttGen) { ws.close(); clearInterval(keepAlive); return; }
       App.pbMicActive = true;
       _setHFIndicatorState_('Listening...', '#c62828', '#fff');
@@ -6203,9 +6207,14 @@ function _launchDeepgram() {
       };
       source.connect(processor);
       processor.connect(ctx.destination);
-    };
+    }
 
-    ws.onmessage = function(evt) {
+    // Use addEventListener (not onopen) to avoid race condition where WS opens before handler is assigned
+    ws.addEventListener('open', connectAudioPipeline);
+    // Also check immediately — if WS already opened before addEventListener ran
+    if (ws.readyState === 1) connectAudioPipeline();
+
+    ws.addEventListener('message', function(evt) {
       if (myGen !== _sttGen) return;
       try {
         var data = JSON.parse(evt.data);
@@ -6218,20 +6227,20 @@ function _launchDeepgram() {
           }
         }
       } catch(e) { console.warn('DG parse error:', e); }
-    };
+    });
 
-    ws.onerror = function(e) {
+    ws.addEventListener('error', function(e) {
       if (myGen !== _sttGen) return;
       console.warn('Deepgram WS error:', e);
-    };
+    });
 
-    ws.onclose = function() {
+    ws.addEventListener('close', function() {
       clearInterval(keepAlive);
       if (myGen !== _sttGen) return;
       App.pbMicActive = false;
       _sttRetryMs = Math.min(_sttRetryMs * 2, 5000); // backoff on close
       if (_sttShouldRun) _scheduleSttRestart(_sttRetryMs);
-    };
+    });
     }); // end ready.then
   }).catch(function(e) {
     console.warn('Mic access failed:', e);
