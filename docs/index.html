@@ -5992,6 +5992,7 @@ function stopHandsFree_() {
     handsFreeRecognition = null;
   }
   App.pbMicActive = false;
+  stopMicVisualizer_();
   var renderFn = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
   renderFn();
   showToast_('Hands-free mode OFF');
@@ -9416,6 +9417,8 @@ function renderPBChat() {
   if (App.nacActive) {
     renderNACStationUI_();
     startPBMonitorAnimation();
+    // Start mic visualizer if hands-free
+    if (App.pbHandsFree) startMicVisualizer_();
     // Doctor speaks first — suppress patient TTS until doctor has spoken
     if (App.nacDoctorSpoke && !App._pbSpeaking) pbSpeakLastMessage_();
     return;
@@ -9433,6 +9436,66 @@ function renderPBChat() {
   startPBMonitorAnimation();
   // Speak last patient message if TTS is on
   if (!App._pbSpeaking) pbSpeakLastMessage_();
+}
+
+// ── Mic Input Visualizer ──
+function startMicVisualizer_() {
+  var canvas = document.getElementById('mic-visualizer');
+  if (!canvas || App._micVisActive) return;
+  var ctx = canvas.getContext('2d');
+  var dpr = window.devicePixelRatio || 1;
+  canvas.width = 100 * dpr;
+  canvas.height = 32 * dpr;
+  ctx.scale(dpr, dpr);
+
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+    App._micVisStream = stream;
+    var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    var src = audioCtx.createMediaStreamSource(stream);
+    var analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 64;
+    src.connect(analyser);
+    App._micVisActive = true;
+    App._micVisAudioCtx = audioCtx;
+
+    var barCount = 16;
+    var data = new Uint8Array(analyser.frequencyBinCount);
+
+    function draw() {
+      if (!App._micVisActive) return;
+      analyser.getByteFrequencyData(data);
+      ctx.clearRect(0, 0, 100, 32);
+
+      var barW = 100 / barCount - 1.5;
+      for (var i = 0; i < barCount; i++) {
+        var val = data[i] || 0;
+        var h = Math.max(2, (val / 255) * 28);
+        var y = (32 - h) / 2;
+        var alpha = 0.4 + (val / 255) * 0.6;
+        ctx.fillStyle = 'rgba(198,40,40,' + alpha + ')';
+        ctx.beginPath();
+        ctx.roundRect(i * (barW + 1.5), y, barW, h, 1.5);
+        ctx.fill();
+      }
+      requestAnimationFrame(draw);
+    }
+    draw();
+  }).catch(function() {
+    // No mic access — show static bars
+    App._micVisActive = false;
+  });
+}
+
+function stopMicVisualizer_() {
+  App._micVisActive = false;
+  if (App._micVisStream) {
+    App._micVisStream.getTracks().forEach(function(t) { t.stop(); });
+    App._micVisStream = null;
+  }
+  if (App._micVisAudioCtx) {
+    try { App._micVisAudioCtx.close(); } catch(e) {}
+    App._micVisAudioCtx = null;
+  }
 }
 
 // Live ECG + pleth waveform animation
@@ -9857,7 +9920,10 @@ function renderNACStationUI_() {
     html += '<div style="padding:16px 20px;border-top:1px solid var(--border);background:var(--card);display:flex;flex-direction:column;align-items:center;gap:12px">';
     if (App.pbHandsFree) {
       html += '<div style="display:flex;align-items:center;gap:12px;width:100%;justify-content:center">';
-      html += '<div id="hf-indicator" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:20px;background:#c62828;color:white;font-size:13px;font-weight:700;animation:pulse 1.5s infinite">&#x1F534; Listening...</div>';
+      html += '<div id="hf-indicator" style="display:inline-flex;align-items:center;gap:8px;padding:6px 16px;border-radius:24px;background:rgba(198,40,40,0.1);border:2px solid #c62828;min-width:180px;justify-content:center">';
+      html += '<canvas id="mic-visualizer" width="100" height="32" style="width:100px;height:32px"></canvas>';
+      html += '<span style="color:#c62828;font-size:12px;font-weight:700">Listening</span>';
+      html += '</div>';
       html += '<button class="btn btn-warning" onclick="showDiagnoseModal()" style="font-size:13px;padding:8px 16px">Diagnose</button>';
       html += '<button class="btn" onclick="stopHandsFree_()" style="background:#c62828;color:white;font-size:13px;padding:8px 16px;border-radius:20px">&#x1F4F5; Hang Up</button>';
       html += '</div>';
