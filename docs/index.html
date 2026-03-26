@@ -5988,6 +5988,8 @@ function toggleHandsFree() {
 function stopHandsFree_() {
   App.pbHandsFree = false;
   _sttShouldRun = false;
+  _sttGen++; // invalidate any in-flight events
+  if (_sttWatchdog) { clearTimeout(_sttWatchdog); _sttWatchdog = null; }
   if (handsFreeRecognition) {
     try { handsFreeRecognition.abort(); } catch(e) {}
     handsFreeRecognition = null;
@@ -6002,19 +6004,28 @@ function stopHandsFree_() {
 var _sttShouldRun = false;
 var _sttRestarting = false;
 var _sttRetryMs = 250;
+var _sttGen = 0; // generation token — ignore stale events from old instances
+var _sttWatchdog = null;
 
-function startHandsFreeListening_() {
-  if (!App.pbHandsFree || App.pbDiagResolved) return;
+// Central restart scheduler — single path for all restarts
+function _scheduleSttRestart(delayMs) {
+  if (_sttRestarting || !_sttShouldRun) return;
+  _sttRestarting = true;
+  // Abort old instance first, then wait before creating new one
+  if (handsFreeRecognition) { try { handsFreeRecognition.abort(); } catch(e) {} handsFreeRecognition = null; }
+  setTimeout(function() {
+    _sttRestarting = false;
+    if (_sttShouldRun) _launchStt();
+  }, delayMs);
+}
+
+function _launchStt() {
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) return;
+  if (!SR || !_sttShouldRun) return;
 
-  _sttShouldRun = true;
-  // Only reset backoff on explicit user-initiated start, not auto-restarts
-  if (!_sttRestarting) _sttRetryMs = 250;
-  _sttRestarting = false;
+  _sttGen++;
+  var myGen = _sttGen;
 
-  // Always create a fresh instance (Chrome is more reliable this way)
-  if (handsFreeRecognition) { try { handsFreeRecognition.abort(); } catch(e) {} }
   handsFreeRecognition = new SR();
   handsFreeRecognition.lang = 'en-US';
   handsFreeRecognition.continuous = true;
@@ -6022,7 +6033,23 @@ function startHandsFreeListening_() {
   handsFreeRecognition.maxAlternatives = 3;
   App.pbMicActive = true;
 
+  // Watchdog: if no event fires within 2s, assume hung and force-recover
+  if (_sttWatchdog) clearTimeout(_sttWatchdog);
+  _sttWatchdog = setTimeout(function() {
+    if (myGen !== _sttGen) return; // stale
+    console.warn('STT watchdog: no events in 2s, force-recovering');
+    App.pbMicActive = false;
+    _sttRetryMs = Math.min(_sttRetryMs * 2, 5000);
+    _scheduleSttRestart(500);
+  }, 2000);
+
+  var clearWatchdog = function() {
+    if (_sttWatchdog) { clearTimeout(_sttWatchdog); _sttWatchdog = null; }
+  };
+
   handsFreeRecognition.onresult = function(e) {
+    if (myGen !== _sttGen) return; // stale instance
+    clearWatchdog();
     _sttRetryMs = 250; // reset backoff on healthy results
     // Get the latest final result
     var lastIdx = e.results.length - 1;
@@ -6123,29 +6150,43 @@ function startHandsFreeListening_() {
   };
 
   handsFreeRecognition.onerror = function(e) {
-    // 'no-speech' and 'aborted' are normal — onend will handle restart
+    if (myGen !== _sttGen) return; // stale
+    clearWatchdog();
     if (e.error === 'no-speech' || e.error === 'aborted') return;
     console.warn('HandsFree mic error:', e.error);
-    // Gate with _sttShouldRun — don't restart if we've been told to stop
-    // onend fires after onerror, so let onend handle the restart (single path)
+    // onend fires after onerror — let it handle restart via single path
   };
 
   handsFreeRecognition.onend = function() {
+    if (myGen !== _sttGen) return; // stale
+    clearWatchdog();
     App.pbMicActive = false;
-    if (!_sttShouldRun || _sttRestarting) return;
-    _sttRestarting = true;
-    setTimeout(function() {
-      _sttRestarting = false;
-      if (_sttShouldRun) {
-        _sttRetryMs = Math.min(_sttRetryMs * 2, 5000);
-        startHandsFreeListening_(); // fresh instance every time
-      }
-    }, _sttRetryMs);
+    _sttRetryMs = Math.min(_sttRetryMs * 2, 5000);
+    _scheduleSttRestart(_sttRetryMs);
   };
 
+  // Catch synchronous start() failures
   try { handsFreeRecognition.start(); } catch(e) {
-    // Start failed — retry after delay
-    setTimeout(function() { if (_sttShouldRun) startHandsFreeListening_(); }, 1000);
+    clearWatchdog();
+    App.pbMicActive = false;
+    _scheduleSttRestart(1000);
+  }
+}
+
+// Public entry point — called by UI and other code
+function startHandsFreeListening_() {
+  if (!App.pbHandsFree || App.pbDiagResolved) return;
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+  _sttShouldRun = true;
+  _sttRetryMs = 250;
+  // Abort any existing instance, wait, then launch fresh
+  if (handsFreeRecognition) {
+    try { handsFreeRecognition.abort(); } catch(e) {}
+    handsFreeRecognition = null;
+    setTimeout(function() { _launchStt(); }, 300);
+  } else {
+    _launchStt();
   }
 }
 
@@ -8959,7 +9000,9 @@ function nacDirectRespond_(text) {
 
 // Stop mic cleanly before processing
 function stopMicForProcessing_() {
-  _sttShouldRun = false; // prevent auto-restart during processing
+  _sttShouldRun = false;
+  _sttGen++; // invalidate stale events
+  if (_sttWatchdog) { clearTimeout(_sttWatchdog); _sttWatchdog = null; }
   if (handsFreeRecognition) {
     try { handsFreeRecognition.abort(); } catch(e) {}
     handsFreeRecognition = null;
