@@ -3148,7 +3148,7 @@ function navigateTo(page) {
       break;
     case 'dontmiss': if (App.dontMissItems.length === 0) loadDontMiss('All'); break;
     case 'search': document.getElementById('search-input').focus(); break;
-    case 'patientbot': if (!App.pbCaseId) showPatientBotSetup(); break;
+    case 'patientbot': if (!App.pbCaseId && !App.nacActive) showPatientBotSetup(); break;
     case 'house': showHouseSetup(); break;
     case 'mccqe-sim': showMCCQESetup(); break;
     case 'nac-sim': showNACSetup(); break;
@@ -8805,35 +8805,35 @@ function showNACTutorial(callback) {
   html += '<div style="padding:20px 24px">';
 
   html += '<div style="margin-bottom:16px">';
-  html += '<div style="font-weight:700;font-size:15px;margin-bottom:6px;color:var(--text)">&#x1F4DE; It\'s a Phone Call</div>';
-  html += '<div style="font-size:13px;color:var(--text-light);line-height:1.5">Your mic activates automatically. Speak naturally to your patient like a real encounter. No typing, no chatbox — just talk.</div>';
+  html += '<div style="font-weight:700;font-size:15px;margin-bottom:6px;color:var(--text)">&#x1F399; Hands-Free Voice</div>';
+  html += '<div style="font-size:13px;color:var(--text-light);line-height:1.5">Your mic turns on automatically. Speak to the patient naturally, like you would in a real OSCE station. There\'s no chatbox.</div>';
   html += '</div>';
 
   html += '<div style="margin-bottom:16px">';
   html += '<div style="font-weight:700;font-size:15px;margin-bottom:6px;color:var(--text)">&#x23F1; Timed Stations</div>';
-  html += '<div style="font-size:13px;color:var(--text-light);line-height:1.5">Each station has a countdown timer (default 11 min, real NAC pace). When time runs out, the station ends — just like the real exam.</div>';
+  html += '<div style="font-size:13px;color:var(--text-light);line-height:1.5">Each station has a countdown (default 11 min). When time runs out, the station ends. You get a 2-minute reading period before each station to review the door prompt and take notes.</div>';
   html += '</div>';
 
   html += '<div style="margin-bottom:16px">';
   html += '<div style="font-weight:700;font-size:15px;margin-bottom:6px;color:var(--text)">&#x1F3E5; Clinical Workstation</div>';
-  html += '<div style="font-size:13px;color:var(--text-light);line-height:1.5">You\'ll see a patient chart, live vitals monitor, and clinical results — not a chat window. Lab and imaging results appear as they\'re ordered.</div>';
+  html += '<div style="font-size:13px;color:var(--text-light);line-height:1.5">Instead of a chat window, you get tabbed panels: Overview, Vitals, Labs, Imaging, Physical Exam, and your Notes. Results appear as you order them.</div>';
   html += '</div>';
 
   html += '<div style="margin-bottom:16px">';
   html += '<div style="font-weight:700;font-size:15px;margin-bottom:6px;color:var(--text)">&#x1F50A; Voice Commands</div>';
-  html += '<div style="font-size:13px;color:var(--text-light);line-height:1.5">Say <strong>"my diagnosis is..."</strong> to give your diagnosis. Say <strong>"order CBC"</strong> or <strong>"order chest X-ray"</strong> to get results. Say <strong>"examine the abdomen"</strong> for physical exam findings.</div>';
+  html += '<div style="font-size:13px;color:var(--text-light);line-height:1.5">Say <strong>"my diagnosis is..."</strong> to give your diagnosis. Say <strong>"order CBC"</strong> or <strong>"order chest X-ray"</strong> for investigations. Say <strong>"examine the abdomen"</strong> for physical exam findings.</div>';
   html += '</div>';
 
   html += '<div style="margin-bottom:16px">';
   html += '<div style="font-weight:700;font-size:15px;margin-bottom:6px;color:var(--text)">&#x1F4CB; OSCE Scorecard</div>';
-  html += '<div style="font-size:13px;color:var(--text-light);line-height:1.5">After each station you get a real MCC-format scorecard: history, physical exam, investigations, communication, diagnosis, and management — each scored individually.</div>';
+  html += '<div style="font-size:13px;color:var(--text-light);line-height:1.5">After each station you get a scorecard based on the MCC format: history, physical exam, investigations, communication, diagnosis, and management.</div>';
   html += '</div>';
 
   html += '<div style="background:rgba(255,152,0,0.1);border-left:3px solid #ff9800;padding:10px 14px;border-radius:6px;margin-bottom:20px;font-size:13px;color:var(--text)">';
-  html += '<strong>Tip:</strong> Treat this like the real thing. Introduce yourself, wash your hands, ask open-ended questions first, then focused ones. The AI scores your approach, not just your answer.';
+  html += '<strong>Tip:</strong> Treat this like the real thing. Introduce yourself, ask open-ended questions first, then focused ones. The AI scores your approach, not just your answer.';
   html += '</div>';
 
-  html += '<button onclick="dismissNACTutorial()" style="width:100%;padding:14px;font-size:16px;font-weight:700;background:linear-gradient(135deg,#1a237e,#3949ab);color:white;border:none;border-radius:10px;cursor:pointer">Got It — Start My Exam</button>';
+  html += '<button onclick="dismissNACTutorial()" style="width:100%;padding:14px;font-size:16px;font-weight:700;background:linear-gradient(135deg,#1a237e,#3949ab);color:white;border:none;border-radius:10px;cursor:pointer">Got It</button>';
   html += '</div></div>';
 
   overlay.innerHTML = html;
