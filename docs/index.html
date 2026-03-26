@@ -8516,6 +8516,7 @@ function submitPBDiagnosis() {
       serverCall('saveProgress', 'pb_result', { correct: false, specialty: App.pbSpecialty, diagnosis: App.pbDiagnosis, attempts: App.pbDiagAttempts, points: 0, feedback: result.feedback, score: result.score, transcript: getPBTranscript() });
       logPBConversation('wrong', { correct: false, score: result.score });
     }
+
     renderFn();
   }).catch(function(e) {
     App.pbDiagnosing = false; App.pbHistory.push({ role: 'assistant', content: 'Error: ' + (e.message || String(e)) });
