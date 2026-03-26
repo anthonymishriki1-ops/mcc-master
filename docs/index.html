@@ -6048,6 +6048,10 @@ function startHandsFreeListening_() {
     }
 
     // Send as regular message
+    if (App.nacActive && !App.nacDoctorSpoke) {
+      App.nacDoctorSpoke = true;
+      if (App.nacIdleTimer) { clearTimeout(App.nacIdleTimer); App.nacIdleTimer = null; }
+    }
     App.pbHistory.push({ role: 'user', content: best });
     var target = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
     target();
@@ -7522,6 +7526,10 @@ function sendPBMessage() {
     }
   }
 
+  if (App.nacActive && !App.nacDoctorSpoke) {
+    App.nacDoctorSpoke = true;
+    if (App.nacIdleTimer) { clearTimeout(App.nacIdleTimer); App.nacIdleTimer = null; }
+  }
   input.value = ''; App.pbHistory.push({ role: 'user', content: message });
 
   var target = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
@@ -9087,8 +9095,26 @@ function enterNACStation_() {
   if (App.nacTimerMinutes > 0) {
     startNACTimer(App.nacTimerMinutes * 60);
   }
-  // Render the station UI — speech + hands-free resume handled by pbSpeakLastMessage_
+  // Doctor speaks first — don't auto-play patient's opening line
+  App.nacDoctorSpoke = false;
+  // Render the station UI (no TTS until doctor speaks)
   renderPBChat();
+  // Start 30-second idle nudge — if doctor doesn't speak, patient prompts them
+  App.nacIdleTimer = setTimeout(function() {
+    if (!App.nacDoctorSpoke && App.nacActive && !App.pbDiagResolved) {
+      var nudges = [
+        "Uh... hi? Are you my doctor?",
+        "...so, are you gonna help me or...",
+        "Hello? Is everything okay?",
+        "Um... doc? I'm kinda in pain here...",
+        "...are you the doctor? Should I be worried that you're just standing there?"
+      ];
+      var nudge = nudges[Math.floor(Math.random() * nudges.length)];
+      App.pbHistory.push({ role: 'assistant', content: nudge });
+      App.nacDoctorSpoke = true; // treat nudge as breaking the ice
+      renderPBChat();
+    }
+  }, 30000);
 }
 
 function startNACTimer(seconds) {
@@ -9390,8 +9416,8 @@ function renderPBChat() {
   if (App.nacActive) {
     renderNACStationUI_();
     startPBMonitorAnimation();
-    // Only speak if not already speaking (prevent overlapping TTS)
-    if (!App._pbSpeaking) pbSpeakLastMessage_();
+    // Doctor speaks first — suppress patient TTS until doctor has spoken
+    if (App.nacDoctorSpoke && !App._pbSpeaking) pbSpeakLastMessage_();
     return;
   }
   el.innerHTML = renderPBChatInner();
