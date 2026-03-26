@@ -9323,6 +9323,8 @@ function enterNACStation_() {
   }
   // Render the station UI (no TTS until doctor speaks)
   renderPBChat();
+  // Start hands-free listening
+  if (App.pbHandsFree) startHandsFreeListening_();
   // Start 30-second idle nudge — if doctor doesn't speak, patient prompts them
   App.nacIdleTimer = setTimeout(function() {
     if (!App.nacDoctorSpoke && App.nacActive && !App.pbDiagResolved) {
@@ -9973,21 +9975,21 @@ function renderNACStationUI_() {
     if (p) {
       var sexLabel = (p.sex === 'nonbinary' || p.sex === 'NB') ? 'NB' : ((p.sex === 'female' || p.sex === 'F' || p.sex === 'trans_f') ? 'F' : ((p.sex === 'trans_m') ? 'M (trans)' : 'M'));
       html += '<div style="background:var(--card);border-radius:10px;padding:16px;margin-bottom:12px;border:1px solid var(--border)">';
-      html += '<div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:8px">' + escapeHtml(p.name || 'Unknown Patient') + '</div>';
-      html += '<div style="display:flex;flex-wrap:wrap;gap:6px 20px;font-size:13px;color:var(--text-light)">';
+      html += '<div style="font-size:22px;font-weight:800;color:var(--text);margin-bottom:8px">' + escapeHtml(p.name || 'Unknown Patient') + '</div>';
+      html += '<div style="display:flex;flex-wrap:wrap;gap:6px 20px;font-size:15px;color:var(--text-light)">';
       html += '<span><strong>Age/Sex:</strong> ' + (p.age || '?') + ' &middot; ' + sexLabel + '</span>';
       if (p.ethnicity) html += '<span><strong>Ethnicity:</strong> ' + escapeHtml(p.ethnicity) + '</span>';
       html += '</div>';
       if (p.appearance) {
-        html += '<div style="margin-top:10px;font-size:13px;color:var(--text);border-top:1px solid var(--border);padding-top:10px">';
+        html += '<div style="margin-top:10px;font-size:15px;color:var(--text);border-top:1px solid var(--border);padding-top:10px">';
         html += '<strong>Doorway Assessment:</strong> ' + escapeHtml(p.appearance) + '</div>';
       }
       html += '</div>';
     }
     // Quick vitals summary (no ECG, just numbers)
     html += '<div style="background:var(--card);border-radius:10px;padding:16px;margin-bottom:12px;border:1px solid var(--border)">';
-    html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-light);margin-bottom:10px">Current Vitals</div>';
-    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px">';
+    html += '<div style="font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-light);margin-bottom:10px">Current Vitals</div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px">';
     var vitals = [
       { label: 'HR', val: vd.hr || '--', unit: 'bpm', color: '#4caf50' },
       { label: 'BP', val: (function(){ var bp = VitalsEngine.getLatestBP(); return bp ? bp.sbp+'/'+bp.dbp : '--/--'; })(), unit: 'mmHg', color: '#2196f3' },
@@ -9997,10 +9999,10 @@ function renderNACStationUI_() {
     ];
     for (var vi = 0; vi < vitals.length; vi++) {
       var v = vitals[vi];
-      html += '<div style="text-align:center;padding:8px;background:var(--bg);border-radius:8px">';
-      html += '<div style="font-size:11px;font-weight:600;color:' + v.color + ';text-transform:uppercase">' + v.label + '</div>';
-      html += '<div style="font-size:20px;font-weight:800;color:var(--text);margin:4px 0">' + v.val + '</div>';
-      if (v.unit) html += '<div style="font-size:10px;color:var(--text-light)">' + v.unit + '</div>';
+      html += '<div style="text-align:center;padding:10px;background:var(--bg);border-radius:8px">';
+      html += '<div style="font-size:13px;font-weight:600;color:' + v.color + ';text-transform:uppercase">' + v.label + '</div>';
+      html += '<div style="font-size:24px;font-weight:800;color:var(--text);margin:4px 0">' + v.val + '</div>';
+      if (v.unit) html += '<div style="font-size:12px;color:var(--text-light)">' + v.unit + '</div>';
       html += '</div>';
     }
     html += '</div></div>';
