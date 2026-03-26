@@ -5988,12 +5988,11 @@ function toggleHandsFree() {
 function stopHandsFree_() {
   App.pbHandsFree = false;
   _sttShouldRun = false;
-  _sttGen++; // invalidate any in-flight events
+  _sttGen++;
   if (_sttWatchdog) { clearTimeout(_sttWatchdog); _sttWatchdog = null; }
-  if (handsFreeRecognition) {
-    try { handsFreeRecognition.abort(); } catch(e) {}
-    handsFreeRecognition = null;
-  }
+  _cleanupStt();
+  // Also kill mic stream on full stop
+  if (_dgStream) { _dgStream.getTracks().forEach(function(t) { t.stop(); }); _dgStream = null; }
   App.pbMicActive = false;
   stopMicVisualizer_();
   var renderFn = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
@@ -6004,22 +6003,191 @@ function stopHandsFree_() {
 var _sttShouldRun = false;
 var _sttRestarting = false;
 var _sttRetryMs = 250;
-var _sttGen = 0; // generation token — ignore stale events from old instances
+var _sttGen = 0;
 var _sttWatchdog = null;
+var _dgSocket = null; // Deepgram WebSocket
+var _dgStream = null; // MediaStream from getUserMedia
+var _dgProcessor = null; // ScriptProcessorNode or AudioWorklet
 
 // Central restart scheduler — single path for all restarts
 function _scheduleSttRestart(delayMs) {
   if (_sttRestarting || !_sttShouldRun) return;
   _sttRestarting = true;
-  // Abort old instance first, then wait before creating new one
-  if (handsFreeRecognition) { try { handsFreeRecognition.abort(); } catch(e) {} handsFreeRecognition = null; }
+  _cleanupStt();
   setTimeout(function() {
     _sttRestarting = false;
     if (_sttShouldRun) _launchStt();
   }, delayMs);
 }
 
-function _launchStt() {
+function _cleanupStt() {
+  if (_dgSocket) { try { _dgSocket.close(); } catch(e) {} _dgSocket = null; }
+  if (_dgProcessor) { try { _dgProcessor.disconnect(); } catch(e) {} _dgProcessor = null; }
+  // Don't kill _dgStream here — reuse across restarts to avoid permission re-prompts
+  if (handsFreeRecognition) { try { handsFreeRecognition.abort(); } catch(e) {} handsFreeRecognition = null; }
+}
+
+// ── Common transcript handler — called by both Deepgram and Web Speech ──
+function _handleSttTranscript(text) {
+  if (!_sttShouldRun) return;
+  _sttRetryMs = 250;
+  var best = text.trim();
+  if (!best) return;
+
+  var ind = document.getElementById('hf-indicator');
+  if (ind) { ind.style.background = '#f9a825'; ind.textContent = 'Processing...'; }
+
+  if (handleVoiceCommand_(best)) {
+    setTimeout(function() {
+      var ind2 = document.getElementById('hf-indicator');
+      if (ind2) { ind2.style.background = '#c62828'; ind2.textContent = 'Listening...'; }
+    }, 500);
+    return;
+  }
+
+  var tl = best.toLowerCase();
+  if (tl === 'end case' || tl === 'stop' || tl === 'end session' || tl === 'hang up') {
+    stopHandsFree_();
+    return;
+  }
+
+  if (App.nacActive && !App.nacDoctorSpoke) {
+    App.nacDoctorSpoke = true;
+    if (App.nacIdleTimer) { clearTimeout(App.nacIdleTimer); App.nacIdleTimer = null; }
+  }
+  if (App._nacDirectMode && App.nacActive) {
+    sendNACMessageDirect_(best);
+    return;
+  }
+
+  App.pbHistory.push({ role: 'user', content: best });
+  var target = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
+  target();
+
+  var msgs = document.getElementById('pb-messages');
+  if (msgs) {
+    msgs.innerHTML += '<div class="chat-message assistant typing" id="pb-typing">Patient is responding...</div>';
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  stopMicForProcessing_();
+
+  serverCall('sendPatientBotMessage', App.pbCaseId, best, App.pbHistory.slice(-30)).then(function(result) {
+    removeEl('pb-typing');
+    if (result.expired) { App.pbCaseId = null; stopHandsFree_(); showPatientBotSetup(); return; }
+    if (result.blocked) {
+      App.pbHistory.push({ role: 'system', content: result.consequence, severity: 'prereq' });
+      if (result.vitals) App.pbVitals = result.vitals;
+      target();
+      resumeHandsFreeAfterSpeak_(result.consequence);
+      return;
+    }
+    if (result.fatal) {
+      if (result.consequence) App.pbHistory.push({ role: 'system', content: result.consequence, severity: 'fatal' });
+      App.pbVitals = result.vitals;
+      App.pbDiagResolved = true;
+      App.pbCaseScores.push({ specialty: App.pbSpecialty, caseNum: App.pbCurrentCase, correct: false, diagnosis: App.pbDiagnosis, fatal: true, causeOfDeath: result.causeOfDeath, points: 0 });
+      serverCall('saveProgress', 'pb_result', { correct: false, specialty: App.pbSpecialty, diagnosis: App.pbDiagnosis, fatal: true, causeOfDeath: result.causeOfDeath, points: 0 });
+      App.pbHistory.push({ role: 'death', content: result.causeOfDeath || 'The patient has died.' });
+      logPBConversation('fatal', { fatal: true, causeOfDeath: result.causeOfDeath });
+      stopHandsFree_();
+      target();
+      return;
+    }
+    if (result.consequence) App.pbHistory.push({ role: 'system', content: result.consequence, severity: result.severity || 'safe' });
+    if (result.testResults) App.pbHistory.push({ role: 'results', content: result.testResults });
+    if (result.vitals) { App.pbVitals = result.vitals; VitalsEngine.sync(result.vitals); }
+    VitalsEngine.detectAndApply(best);
+    App.pbHistory.push({ role: 'assistant', content: result.response });
+    target();
+  }).catch(function(e) {
+    removeEl('pb-typing');
+    App.pbHistory.push({ role: 'assistant', content: 'Error: ' + (e.message || String(e)) });
+    target();
+    resumeHandsFreeListening_();
+  });
+}
+
+// ── Deepgram WebSocket STT ──
+function _launchDeepgram() {
+  var dgKey = localStorage.getItem('mcc_deepgram_key');
+  if (!dgKey) return false;
+
+  _sttGen++;
+  var myGen = _sttGen;
+
+  var getMic = _dgStream
+    ? Promise.resolve(_dgStream)
+    : navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 } });
+
+  getMic.then(function(stream) {
+    if (myGen !== _sttGen) return;
+    _dgStream = stream;
+
+    var url = 'wss://api.deepgram.com/v1/listen?model=nova-2-medical&language=en&smart_format=true&interim_results=true&utterance_end_ms=1500&vad_events=true';
+    var ws = new WebSocket(url, ['token', dgKey]);
+    _dgSocket = ws;
+
+    ws.onopen = function() {
+      if (myGen !== _sttGen) { ws.close(); return; }
+      App.pbMicActive = true;
+      var ind = document.getElementById('hf-indicator');
+      if (ind) { ind.style.background = '#c62828'; ind.textContent = 'Listening...'; }
+
+      // Pipe mic audio to Deepgram
+      var ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      var source = ctx.createMediaStreamSource(stream);
+      var processor = ctx.createScriptProcessor(4096, 1, 1);
+      _dgProcessor = processor;
+      processor.onaudioprocess = function(e) {
+        if (ws.readyState !== 1 || myGen !== _sttGen) return;
+        var float32 = e.inputBuffer.getChannelData(0);
+        var int16 = new Int16Array(float32.length);
+        for (var i = 0; i < float32.length; i++) {
+          var s = Math.max(-1, Math.min(1, float32[i]));
+          int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+        ws.send(int16.buffer);
+      };
+      source.connect(processor);
+      processor.connect(ctx.destination);
+    };
+
+    ws.onmessage = function(evt) {
+      if (myGen !== _sttGen) return;
+      try {
+        var data = JSON.parse(evt.data);
+        if (data.type === 'Results' && data.channel && data.channel.alternatives && data.channel.alternatives[0]) {
+          var transcript = data.channel.alternatives[0].transcript;
+          if (data.is_final && transcript) {
+            _handleSttTranscript(transcript);
+          }
+        }
+      } catch(e) { console.warn('DG parse error:', e); }
+    };
+
+    ws.onerror = function(e) {
+      if (myGen !== _sttGen) return;
+      console.warn('Deepgram WS error:', e);
+    };
+
+    ws.onclose = function() {
+      if (myGen !== _sttGen) return;
+      App.pbMicActive = false;
+      if (_sttShouldRun) _scheduleSttRestart(_sttRetryMs);
+    };
+  }).catch(function(e) {
+    console.warn('Mic access failed:', e);
+    App.pbMicActive = false;
+    // Fall back to Web Speech
+    _launchWebSpeech();
+  });
+
+  return true;
+}
+
+// ── Web Speech API fallback ──
+function _launchWebSpeech() {
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR || !_sttShouldRun) return;
 
@@ -6033,10 +6201,9 @@ function _launchStt() {
   handsFreeRecognition.maxAlternatives = 3;
   App.pbMicActive = true;
 
-  // Watchdog: if no event fires within 2s, assume hung and force-recover
   if (_sttWatchdog) clearTimeout(_sttWatchdog);
   _sttWatchdog = setTimeout(function() {
-    if (myGen !== _sttGen) return; // stale
+    if (myGen !== _sttGen) return;
     console.warn('STT watchdog: no events in 2s, force-recovering');
     App.pbMicActive = false;
     _sttRetryMs = Math.min(_sttRetryMs * 2, 5000);
@@ -6048,124 +6215,33 @@ function _launchStt() {
   };
 
   handsFreeRecognition.onresult = function(e) {
-    if (myGen !== _sttGen) return; // stale instance
+    if (myGen !== _sttGen) return;
     clearWatchdog();
-    _sttRetryMs = 250; // reset backoff on healthy results
-    // Get the latest final result
     var lastIdx = e.results.length - 1;
     if (!e.results[lastIdx].isFinal) return;
-
     var best = e.results[lastIdx][0].transcript;
     for (var i = 1; i < e.results[lastIdx].length; i++) {
       var alt = e.results[lastIdx][i].transcript;
       if (scoreMedicalPhrase_(alt) > scoreMedicalPhrase_(best)) best = alt;
     }
-    best = best.trim();
-    if (!best) return;
-
-    // Pause listening while processing
-    var ind = document.getElementById('hf-indicator');
-    if (ind) { ind.style.background = '#f9a825'; ind.textContent = 'Processing...'; }
-
-    // Check for voice commands first
-    if (handleVoiceCommand_(best)) {
-      // Command handled, resume listening after a beat
-      setTimeout(function() {
-        var ind2 = document.getElementById('hf-indicator');
-        if (ind2) { ind2.style.background = '#c62828'; ind2.textContent = 'Listening...'; }
-      }, 500);
-      return;
-    }
-
-    // Check for end commands
-    var tl = best.toLowerCase();
-    if (tl === 'end case' || tl === 'stop' || tl === 'end session' || tl === 'hang up') {
-      stopHandsFree_();
-      return;
-    }
-
-    // Send as regular message
-    if (App.nacActive && !App.nacDoctorSpoke) {
-      App.nacDoctorSpoke = true;
-      if (App.nacIdleTimer) { clearTimeout(App.nacIdleTimer); App.nacIdleTimer = null; }
-    }
-    // NAC Direct Mode — skip GAS, call Anthropic directly
-    if (App._nacDirectMode && App.nacActive) {
-      sendNACMessageDirect_(best);
-      return;
-    }
-
-    App.pbHistory.push({ role: 'user', content: best });
-    var target = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
-    target();
-
-    var msgs = document.getElementById('pb-messages');
-    if (msgs) {
-      msgs.innerHTML += '<div class="chat-message assistant typing" id="pb-typing">Patient is responding...</div>';
-      msgs.scrollTop = msgs.scrollHeight;
-    }
-
-    // Temporarily stop recognition to prevent hearing its own TTS
-    try { handsFreeRecognition.stop(); } catch(e) {}
-    App.pbMicActive = false;
-
-    serverCall('sendPatientBotMessage', App.pbCaseId, best, App.pbHistory.slice(-30)).then(function(result) {
-      removeEl('pb-typing');
-      if (result.expired) { App.pbCaseId = null; stopHandsFree_(); showPatientBotSetup(); return; }
-
-      if (result.blocked) {
-        App.pbHistory.push({ role: 'system', content: result.consequence, severity: 'prereq' });
-        if (result.vitals) App.pbVitals = result.vitals;
-        target();
-        resumeHandsFreeAfterSpeak_(result.consequence);
-        return;
-      }
-
-      if (result.fatal) {
-        if (result.consequence) App.pbHistory.push({ role: 'system', content: result.consequence, severity: 'fatal' });
-        App.pbVitals = result.vitals;
-        App.pbDiagResolved = true;
-        App.pbCaseScores.push({ specialty: App.pbSpecialty, caseNum: App.pbCurrentCase, correct: false, diagnosis: App.pbDiagnosis, fatal: true, causeOfDeath: result.causeOfDeath, points: 0 });
-        serverCall('saveProgress', 'pb_result', { correct: false, specialty: App.pbSpecialty, diagnosis: App.pbDiagnosis, fatal: true, causeOfDeath: result.causeOfDeath, points: 0 });
-        App.pbHistory.push({ role: 'death', content: result.causeOfDeath || 'The patient has died.' });
-        logPBConversation('fatal', { fatal: true, causeOfDeath: result.causeOfDeath });
-        stopHandsFree_();
-        target();
-        return;
-      }
-
-      if (result.consequence) App.pbHistory.push({ role: 'system', content: result.consequence, severity: result.severity || 'safe' });
-      if (result.testResults) App.pbHistory.push({ role: 'results', content: result.testResults });
-      if (result.vitals) { App.pbVitals = result.vitals; VitalsEngine.sync(result.vitals); }
-      VitalsEngine.detectAndApply(best);
-      App.pbHistory.push({ role: 'assistant', content: result.response });
-      target();
-      // Speech + hands-free resume handled by pbSpeakLastMessage_ inside renderPBChat
-    }).catch(function(e) {
-      removeEl('pb-typing');
-      App.pbHistory.push({ role: 'assistant', content: 'Error: ' + (e.message || String(e)) });
-      target();
-      resumeHandsFreeListening_();
-    });
+    _handleSttTranscript(best);
   };
 
   handsFreeRecognition.onerror = function(e) {
-    if (myGen !== _sttGen) return; // stale
+    if (myGen !== _sttGen) return;
     clearWatchdog();
     if (e.error === 'no-speech' || e.error === 'aborted') return;
-    console.warn('HandsFree mic error:', e.error);
-    // onend fires after onerror — let it handle restart via single path
+    console.warn('WebSpeech error:', e.error);
   };
 
   handsFreeRecognition.onend = function() {
-    if (myGen !== _sttGen) return; // stale
+    if (myGen !== _sttGen) return;
     clearWatchdog();
     App.pbMicActive = false;
     _sttRetryMs = Math.min(_sttRetryMs * 2, 5000);
     _scheduleSttRestart(_sttRetryMs);
   };
 
-  // Catch synchronous start() failures
   try { handsFreeRecognition.start(); } catch(e) {
     clearWatchdog();
     App.pbMicActive = false;
@@ -6173,21 +6249,19 @@ function _launchStt() {
   }
 }
 
-// Public entry point — called by UI and other code
+// Router — tries Deepgram first, falls back to Web Speech
+function _launchStt() {
+  if (!_sttShouldRun) return;
+  if (!_launchDeepgram()) _launchWebSpeech();
+}
+
+// Public entry point
 function startHandsFreeListening_() {
   if (!App.pbHandsFree || App.pbDiagResolved) return;
-  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) return;
   _sttShouldRun = true;
   _sttRetryMs = 250;
-  // Abort any existing instance, wait, then launch fresh
-  if (handsFreeRecognition) {
-    try { handsFreeRecognition.abort(); } catch(e) {}
-    handsFreeRecognition = null;
-    setTimeout(function() { _launchStt(); }, 300);
-  } else {
-    _launchStt();
-  }
+  _cleanupStt();
+  setTimeout(function() { _launchStt(); }, 300);
 }
 
 function resumeHandsFreeAfterSpeak_(text) {
@@ -8827,6 +8901,8 @@ function showNACSetup() {
     html += '<div style="display:flex;flex-direction:column;gap:8px">';
     html += '<div style="display:flex;gap:8px;align-items:center"><input id="nac-anthropic-key" type="password" placeholder="Anthropic API Key (sk-ant-...)" value="' + (localStorage.getItem('mcc_anthropic_key') || '') + '" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text)">' + (hasAnthropicKey ? '<span style="color:#4caf50;font-size:18px">&#x2713;</span>' : '') + '</div>';
     html += '<div style="display:flex;gap:8px;align-items:center"><input id="nac-openai-key" type="password" placeholder="OpenAI API Key (sk-...)" value="' + (localStorage.getItem('mcc_openai_key') || '') + '" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text)">' + (hasOpenAIKey ? '<span style="color:#4caf50;font-size:18px">&#x2713;</span>' : '') + '</div>';
+    var hasDeepgramKey = !!localStorage.getItem('mcc_deepgram_key');
+    html += '<div style="display:flex;gap:8px;align-items:center"><input id="nac-deepgram-key" type="password" placeholder="Deepgram API Key (for voice input)" value="' + (localStorage.getItem('mcc_deepgram_key') || '') + '" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text)">' + (hasDeepgramKey ? '<span style="color:#4caf50;font-size:18px">&#x2713;</span>' : '') + '</div>';
     html += '<button class="btn btn-sm" onclick="saveNACKeys()" style="align-self:flex-start">Save Keys</button>';
     html += '</div></div>';
   }
@@ -8870,8 +8946,10 @@ function setNACDiff(diff, btn) {
 function saveNACKeys() {
   var ak = document.getElementById('nac-anthropic-key');
   var ok = document.getElementById('nac-openai-key');
+  var dk = document.getElementById('nac-deepgram-key');
   if (ak && ak.value.trim()) localStorage.setItem('mcc_anthropic_key', ak.value.trim());
   if (ok && ok.value.trim()) localStorage.setItem('mcc_openai_key', ok.value.trim());
+  if (dk && dk.value.trim()) localStorage.setItem('mcc_deepgram_key', dk.value.trim());
   showToast('API keys saved');
   showNACSetup(); // re-render to show checkmarks
 }
@@ -8998,15 +9076,12 @@ function nacDirectRespond_(text) {
   });
 }
 
-// Stop mic cleanly before processing
+// Stop mic cleanly before processing (keep stream alive for quick resume)
 function stopMicForProcessing_() {
   _sttShouldRun = false;
-  _sttGen++; // invalidate stale events
+  _sttGen++;
   if (_sttWatchdog) { clearTimeout(_sttWatchdog); _sttWatchdog = null; }
-  if (handsFreeRecognition) {
-    try { handsFreeRecognition.abort(); } catch(e) {}
-    handsFreeRecognition = null;
-  }
+  _cleanupStt();
   App.pbMicActive = false;
 }
 
