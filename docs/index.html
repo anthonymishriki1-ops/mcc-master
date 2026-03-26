@@ -8963,25 +8963,14 @@ function showNACReadingPeriod_(station) {
     // Door prompt
     html += '<div style="padding:20px 24px;flex:1;overflow-y:auto">';
     html += '<div style="background:var(--card);border:2px solid var(--primary);border-radius:12px;padding:20px;margin-bottom:16px">';
-    html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--primary);margin-bottom:12px">Door Prompt</div>';
-    html += '<div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:8px">' + escapeHtml(station.specialty) + ' — ' + escapeHtml(station.presentation) + '</div>';
-    html += '<div style="font-size:13px;color:var(--text-light);margin-bottom:12px">' + escapeHtml(station.focus) + '</div>';
     if (p) {
-      html += '<div style="border-top:1px solid var(--border);padding-top:12px;font-size:14px;color:var(--text)">';
-      html += 'You are about to see <strong>' + escapeHtml(p.name || 'a patient') + '</strong>';
-      if (p.age) html += ', <strong>' + p.age + ' years old</strong>';
-      if (p.sex) {
-        var sx = (p.sex === 'F' || p.sex === 'female' || p.sex === 'trans_f') ? 'female' : (p.sex === 'M' || p.sex === 'male' || p.sex === 'trans_m') ? 'male' : 'patient';
-        html += ', <strong>' + sx + '</strong>';
-      }
-      html += ', presenting with <strong>' + escapeHtml(station.presentation.toLowerCase()) + '</strong>.';
+      var sx = (p.sex === 'F' || p.sex === 'female' || p.sex === 'trans_f') ? 'female' : (p.sex === 'M' || p.sex === 'male' || p.sex === 'trans_m') ? 'male' : 'patient';
+      html += '<div style="font-size:15px;color:var(--text);line-height:1.7">';
+      html += '<strong>' + escapeHtml(p.name || 'A patient') + '</strong> is a <strong>' + (p.age || '?') + '-year-old ' + sx + '</strong> presenting with <strong>' + escapeHtml(station.presentation.toLowerCase()) + '</strong>.';
       html += '</div>';
-      if (p.appearance) {
-        html += '<div style="margin-top:10px;font-size:13px;color:var(--text);font-style:italic">"' + escapeHtml(p.appearance) + '"</div>';
-      }
     }
     html += '<div style="margin-top:14px;font-size:13px;color:var(--text)">';
-    html += '<strong>Instructions:</strong> Take a focused history, perform a relevant physical examination, order appropriate investigations, and provide your diagnosis and management plan.';
+    html += 'Take a focused history, perform a relevant physical examination, order appropriate investigations, and provide your diagnosis and management plan.';
     html += '</div>';
     html += '</div>';
 
