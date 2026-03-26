@@ -9102,7 +9102,25 @@ function startNextNACStation() {
   App.nacCaseError = null;
   showNACReadingPeriod_(station);
 
-  // Fire server call in background to set up AI conversation session
+  // DIRECT MODE: if we have pregen data + API keys, skip server entirely
+  if (station.nm && localStorage.getItem('mcc_anthropic_key')) {
+    App._nacDirectMode = true;
+    App._nacSystemPrompt = buildNACSystemPrompt_(station);
+    App.pbDiagnosing = false;
+    App.pbDiagAttempts = 0;
+    App.pbDiagResolved = false;
+    App.pbPartialUsed = false;
+    App.pbMonitorAttached = false;
+    App.pbHistory = [{ role: 'assistant', content: station.op || '' }];
+    App.nacStationMsg = station.op || '';
+    App.pbDiagnosis = station.dx;
+    VitalsEngine.init({ hr: station.hr, sbp: station.sbp, dbp: station.dbp, rr: station.rr, temp: station.tmp, spo2: station.o2 });
+    App.nacCaseReady = true;
+    return;
+  }
+
+  App._nacDirectMode = false;
+  // Fallback: fire server call in background to set up AI conversation session
   serverCall('startPatientBotCase', station.specialty, false, App.nacDifficulty, App.pbCustom).then(function(result) {
     App.pbCaseId = result.caseId;
     App.pbSpecialty = result.specialty;
