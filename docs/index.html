@@ -8963,20 +8963,9 @@ function showNACSetup() {
   html += '<button class="quiz-count-btn" onclick="setNACDiff(\'hard\',this)">Hard</button>';
   html += '</div></div>';
 
-  // API Keys for direct browser calls (only shown to dev users)
-  var currentProfile = (sessionStorage.getItem('mcc_profile') || '').toLowerCase();
-  if (DEV_USERS.indexOf(currentProfile) !== -1) {
-    var hasAnthropicKey = !!localStorage.getItem('mcc_anthropic_key');
-    var hasOpenAIKey = !!localStorage.getItem('mcc_openai_key');
-    html += '<div class="form-group" style="text-align:left;margin-top:16px"><label>API Keys <span style="font-weight:400;font-size:11px;color:var(--text-light)">(for fast direct mode — stored locally only)</span></label>';
-    html += '<div style="display:flex;flex-direction:column;gap:8px">';
-    html += '<div style="display:flex;gap:8px;align-items:center"><input id="nac-anthropic-key" type="password" placeholder="Anthropic API Key (sk-ant-...)" value="' + (localStorage.getItem('mcc_anthropic_key') || '') + '" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text)">' + (hasAnthropicKey ? '<span style="color:#4caf50;font-size:18px">&#x2713;</span>' : '') + '</div>';
-    html += '<div style="display:flex;gap:8px;align-items:center"><input id="nac-openai-key" type="password" placeholder="OpenAI API Key (sk-...)" value="' + (localStorage.getItem('mcc_openai_key') || '') + '" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text)">' + (hasOpenAIKey ? '<span style="color:#4caf50;font-size:18px">&#x2713;</span>' : '') + '</div>';
-    var hasDeepgramKey = !!localStorage.getItem('mcc_deepgram_key');
-    html += '<div style="display:flex;gap:8px;align-items:center"><input id="nac-deepgram-key" type="password" placeholder="Deepgram API Key (for voice input)" value="' + (localStorage.getItem('mcc_deepgram_key') || '') + '" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text)">' + (hasDeepgramKey ? '<span style="color:#4caf50;font-size:18px">&#x2713;</span>' : '') + '</div>';
-    html += '<button class="btn btn-sm" onclick="saveNACKeys()" style="align-self:flex-start">Save Keys</button>';
-    html += '</div></div>';
-  }
+  // API keys are stored in localStorage (set via Dev Panel) — no UI needed here
+  var hasAnthropicKey = !!localStorage.getItem('mcc_anthropic_key');
+  var hasOpenAIKey = !!localStorage.getItem('mcc_openai_key');
 
   html += '<div class="pb-how-to">';
   html += '<strong>How It Works:</strong><br>';
