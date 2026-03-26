@@ -5929,9 +5929,10 @@ function playBase64Audio_(base64, format, onDone) {
     var blob = new Blob([byteArray], { type: mime });
     var url = URL.createObjectURL(blob);
     var audio = new Audio(url);
-    audio.onended = function() { URL.revokeObjectURL(url); if (onDone) onDone(); };
-    audio.onerror = function() { URL.revokeObjectURL(url); if (onDone) onDone(); };
-    audio.play().catch(function() { if (onDone) onDone(); });
+    App._ttsAudio = audio;
+    audio.onended = function() { App._ttsAudio = null; URL.revokeObjectURL(url); if (onDone) onDone(); };
+    audio.onerror = function() { App._ttsAudio = null; URL.revokeObjectURL(url); if (onDone) onDone(); };
+    audio.play().catch(function() { App._ttsAudio = null; if (onDone) onDone(); });
   } catch(e) {
     console.warn('Audio play error:', e);
     if (onDone) onDone();
@@ -5943,12 +5944,16 @@ function pbSpeak_(text, onDone) {
   if (!App.pbTTS && !App.pbHandsFree) { if (onDone) onDone(); return; }
   // Cancel any browser speech in progress
   try { window.speechSynthesis.cancel(); } catch(e) {}
+  // Cancel any OpenAI TTS audio in progress
+  if (App._ttsAudio) { try { App._ttsAudio.pause(); App._ttsAudio.currentTime = 0; } catch(e) {} }
+  App._pbSpeaking = true;
 
+  var done = function() { App._pbSpeaking = false; if (onDone) onDone(); };
   if (App.pbOpenAITTS) {
-    speakOpenAI_(text, onDone);
+    speakOpenAI_(text, done);
   } else {
     speakText_(text, getPBVoiceParams_());
-    if (onDone) onDone();
+    done();
   }
 }
 
@@ -9325,6 +9330,14 @@ function sendPBDrDataMessage() {
 
 function renderPBChat() {
   var el = document.getElementById('patientbot-content');
+  // NAC-OSCE has its own UI — renders directly to DOM
+  if (App.nacActive) {
+    renderNACStationUI_();
+    startPBMonitorAnimation();
+    // Only speak if not already speaking (prevent overlapping TTS)
+    if (!App._pbSpeaking) pbSpeakLastMessage_();
+    return;
+  }
   el.innerHTML = renderPBChatInner();
   // Restore action palette collapsed state
   if (App.pbActionsHidden) {
@@ -9337,7 +9350,7 @@ function renderPBChat() {
   // Start live ECG animation
   startPBMonitorAnimation();
   // Speak last patient message if TTS is on
-  pbSpeakLastMessage_();
+  if (!App._pbSpeaking) pbSpeakLastMessage_();
 }
 
 // Live ECG + pleth waveform animation
@@ -9538,7 +9551,10 @@ function setNACTab(tab) {
 function renderNACStationUI_() {
   var el = document.getElementById('patientbot-content');
   if (!el) return;
-  if (!App.pbMonitorAttached) App.pbMonitorAttached = true;
+  if (!App.pbMonitorAttached) {
+    App.pbMonitorAttached = true;
+    VitalsEngine.start();
+  }
   var p = App.pbPatientInfo;
   var vd = VitalsEngine._display || {};
   var html = '';
@@ -9799,8 +9815,6 @@ function renderNACStationUI_() {
 }
 
 function renderPBChatInner() {
-  // NAC-OSCE gets a dedicated clinical workstation UI
-  if (App.nacActive) { renderNACStationUI_(); return; }
 
   var caseLabel = App.pbTotalCases > 1 ? ' (Case ' + App.pbCurrentCase + '/' + App.pbTotalCases + ')' : '';
   var p = App.pbPatientInfo;
