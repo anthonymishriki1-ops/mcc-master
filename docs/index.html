@@ -6022,7 +6022,12 @@ function _scheduleSttRestart(delayMs) {
 
 function _cleanupStt() {
   if (_dgSocket) { try { _dgSocket.close(); } catch(e) {} _dgSocket = null; }
-  if (_dgProcessor) { try { _dgProcessor.disconnect(); } catch(e) {} _dgProcessor = null; }
+  if (_dgProcessor) {
+    if (_dgProcessor._keepAlive) clearInterval(_dgProcessor._keepAlive);
+    if (_dgProcessor._ctx) { try { _dgProcessor._ctx.close(); } catch(e) {} }
+    try { _dgProcessor.disconnect(); } catch(e) {}
+    _dgProcessor = null;
+  }
   // Don't kill _dgStream here — reuse across restarts to avoid permission re-prompts
   if (handsFreeRecognition) { try { handsFreeRecognition.abort(); } catch(e) {} handsFreeRecognition = null; }
 }
@@ -6124,21 +6129,34 @@ function _launchDeepgram() {
     if (myGen !== _sttGen) return;
     _dgStream = stream;
 
-    var url = 'wss://api.deepgram.com/v1/listen?model=nova-2-medical&language=en&smart_format=true&interim_results=true&utterance_end_ms=1500&vad_events=true';
+    // Create AudioContext first to know the actual sample rate
+    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+    // Resume if suspended (Chrome autoplay policy)
+    if (ctx.state === 'suspended') ctx.resume();
+    var actualRate = ctx.sampleRate; // Usually 48000 on most systems
+
+    var url = 'wss://api.deepgram.com/v1/listen?model=nova-2-medical&language=en&encoding=linear16&sample_rate=' + actualRate + '&channels=1&smart_format=true&interim_results=true&utterance_end_ms=1500&vad_events=true';
     var ws = new WebSocket(url, ['token', dgKey]);
     _dgSocket = ws;
 
+    // Keep-alive: send empty buffer every 8s to prevent Deepgram closing idle connection
+    var keepAlive = setInterval(function() {
+      if (ws.readyState === 1) ws.send(new ArrayBuffer(0));
+      else clearInterval(keepAlive);
+    }, 8000);
+
     ws.onopen = function() {
-      if (myGen !== _sttGen) { ws.close(); return; }
+      if (myGen !== _sttGen) { ws.close(); clearInterval(keepAlive); return; }
       App.pbMicActive = true;
       var ind = document.getElementById('hf-indicator');
       if (ind) { ind.style.background = '#c62828'; ind.textContent = 'Listening...'; }
 
       // Pipe mic audio to Deepgram
-      var ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
       var source = ctx.createMediaStreamSource(stream);
       var processor = ctx.createScriptProcessor(4096, 1, 1);
       _dgProcessor = processor;
+      _dgProcessor._ctx = ctx;
+      _dgProcessor._keepAlive = keepAlive;
       processor.onaudioprocess = function(e) {
         if (ws.readyState !== 1 || myGen !== _sttGen) return;
         var float32 = e.inputBuffer.getChannelData(0);
@@ -6172,14 +6190,15 @@ function _launchDeepgram() {
     };
 
     ws.onclose = function() {
+      clearInterval(keepAlive);
       if (myGen !== _sttGen) return;
       App.pbMicActive = false;
+      _sttRetryMs = Math.min(_sttRetryMs * 2, 5000); // backoff on close
       if (_sttShouldRun) _scheduleSttRestart(_sttRetryMs);
     };
   }).catch(function(e) {
     console.warn('Mic access failed:', e);
     App.pbMicActive = false;
-    // Fall back to Web Speech
     _launchWebSpeech();
   });
 
