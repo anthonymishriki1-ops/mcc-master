@@ -8977,7 +8977,7 @@ function showNACReadingPeriod_(station) {
       var sx = (p.sex === 'F' || p.sex === 'female' || p.sex === 'trans_f') ? 'female' : (p.sex === 'M' || p.sex === 'male' || p.sex === 'trans_m') ? 'male' : 'patient';
       html += '<div style="font-size:16px;font-weight:800;color:var(--text);margin-bottom:10px">' + escapeHtml(p.name) + '</div>';
       html += '<div style="font-size:14px;color:var(--text);line-height:1.7;margin-bottom:12px">';
-      html += '<strong>' + (p.age || '?') + '-year-old ' + sx + '</strong> presenting to the <strong>' + escapeHtml(station.focus || 'ED') + '</strong> with <strong>' + escapeHtml(station.presentation.toLowerCase()) + '</strong>.';
+      html += '<strong>' + (p.age || '?') + '-year-old ' + sx + '</strong> presenting with <strong>' + escapeHtml(station.presentation.toLowerCase()) + '</strong>.';
       html += '</div>';
       // Vitals grid
       var hr = p.hr || '--'; var rr = p.rr || '--'; var tmp = p.temp || '--'; var o2 = p.spo2 || '--';
