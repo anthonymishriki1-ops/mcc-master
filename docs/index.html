@@ -9032,14 +9032,17 @@ function showNACReadingPeriod_(station) {
 
   // Poll for case load — re-render when patient data arrives, enable Enter button
   var nacReadingPatientShown = !!App.pbPatientInfo;
+  var nacReadingCaseShown = !!App.nacCaseReady;
   App.nacReadingInterval = setInterval(function() {
     // Save notes continuously
     var notesEl = document.getElementById('nac-notes-input');
     if (notesEl) App.nacNotes = notesEl.value;
 
-    // Re-render door prompt once patient data arrives from server
-    if (!nacReadingPatientShown && App.pbPatientInfo) {
-      nacReadingPatientShown = true;
+    // Re-render door prompt once patient data arrives from server, or case becomes ready
+    var needsRerender = (!nacReadingPatientShown && App.pbPatientInfo) || App.nacCaseReady;
+    if (needsRerender && (!nacReadingPatientShown || !nacReadingCaseShown)) {
+      if (App.pbPatientInfo) nacReadingPatientShown = true;
+      if (App.nacCaseReady) nacReadingCaseShown = true;
       renderReading();
       var nEl = document.getElementById('nac-notes-input');
       if (nEl) nEl.value = App.nacNotes || '';
