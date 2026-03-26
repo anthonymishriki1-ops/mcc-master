@@ -6131,17 +6131,20 @@ function _launchDeepgram() {
 
     // Create AudioContext first to know the actual sample rate
     var ctx = new (window.AudioContext || window.webkitAudioContext)();
-    // Resume if suspended (Chrome autoplay policy)
-    if (ctx.state === 'suspended') ctx.resume();
-    var actualRate = ctx.sampleRate; // Usually 48000 on most systems
+    var actualRate = ctx.sampleRate;
+
+    // Must await resume before connecting nodes — onaudioprocess won't fire if suspended
+    var ready = (ctx.state === 'suspended') ? ctx.resume() : Promise.resolve();
+    return ready.then(function() {
+    if (myGen !== _sttGen) return;
 
     var url = 'wss://api.deepgram.com/v1/listen?model=nova-2-medical&language=en&encoding=linear16&sample_rate=' + actualRate + '&channels=1&smart_format=true&interim_results=true&utterance_end_ms=1500&vad_events=true';
     var ws = new WebSocket(url, ['token', dgKey]);
     _dgSocket = ws;
 
-    // Keep-alive: send empty buffer every 8s to prevent Deepgram closing idle connection
+    // Keep-alive: send Deepgram KeepAlive message every 8s
     var keepAlive = setInterval(function() {
-      if (ws.readyState === 1) ws.send(new ArrayBuffer(0));
+      if (ws.readyState === 1) ws.send(JSON.stringify({type: 'KeepAlive'}));
       else clearInterval(keepAlive);
     }, 8000);
 
@@ -6196,6 +6199,7 @@ function _launchDeepgram() {
       _sttRetryMs = Math.min(_sttRetryMs * 2, 5000); // backoff on close
       if (_sttShouldRun) _scheduleSttRestart(_sttRetryMs);
     };
+    }); // end ready.then
   }).catch(function(e) {
     console.warn('Mic access failed:', e);
     App.pbMicActive = false;
