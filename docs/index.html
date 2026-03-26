@@ -2625,7 +2625,7 @@ body.kb-open #bottom-nav { display: none !important; }
     <!-- PATIENTBOT -->
     <div id="page-patientbot" class="page">
       <div class="page-header">
-        <h2>PatientBot</h2>
+        <h2 id="pb-page-title">PatientBot</h2>
         <div class="filter-bar">
           <button class="btn btn-sm" id="pb-library-btn" onclick="togglePBLibrary()">&#x1F4DA; Case Library</button>
         </div>
@@ -8899,6 +8899,8 @@ function startNextNACStation() {
   }
 
   navigateTo('patientbot');
+  var titleEl = document.getElementById('pb-page-title');
+  if (titleEl) titleEl.textContent = 'NAC-OSCE';
 
   // Use pregen case if available (instant), fall back to AI generation
   if (station.pregenId) {
