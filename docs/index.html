@@ -5993,8 +5993,9 @@ function stopHandsFree_() {
   _sttGen++;
   if (_sttWatchdog) { clearTimeout(_sttWatchdog); _sttWatchdog = null; }
   _cleanupStt();
-  // Also kill mic stream on full stop
+  // Full stop: kill mic stream AND AudioContext
   if (_dgStream) { _dgStream.getTracks().forEach(function(t) { t.stop(); }); _dgStream = null; }
+  if (_dgAudioCtx) { try { _dgAudioCtx.close(); } catch(e) {} _dgAudioCtx = null; }
   App.pbMicActive = false;
   stopMicVisualizer_();
   var renderFn = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
@@ -6010,6 +6011,7 @@ var _sttWatchdog = null;
 var _dgSocket = null; // Deepgram WebSocket
 var _dgStream = null; // MediaStream from getUserMedia
 var _dgProcessor = null; // ScriptProcessorNode or AudioWorklet
+var _dgAudioCtx = null; // Reuse one AudioContext across restarts (Chrome limits to ~6)
 
 // Central restart scheduler — single path for all restarts
 function _scheduleSttRestart(delayMs) {
@@ -6026,7 +6028,7 @@ function _cleanupStt() {
   if (_dgSocket) { try { _dgSocket.close(); } catch(e) {} _dgSocket = null; }
   if (_dgProcessor) {
     if (_dgProcessor._keepAlive) clearInterval(_dgProcessor._keepAlive);
-    if (_dgProcessor._ctx) { try { _dgProcessor._ctx.close(); } catch(e) {} }
+    // DON'T close AudioContext — reuse it (Chrome limits to ~6)
     try { _dgProcessor.disconnect(); } catch(e) {}
     _dgProcessor = null;
   }
@@ -6131,8 +6133,11 @@ function _launchDeepgram() {
     if (myGen !== _sttGen) return;
     _dgStream = stream;
 
-    // Create AudioContext first to know the actual sample rate
-    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+    // Reuse one AudioContext (Chrome limits to ~6 — creating new ones per restart causes flapping)
+    if (!_dgAudioCtx || _dgAudioCtx.state === 'closed') {
+      _dgAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    var ctx = _dgAudioCtx;
     var actualRate = ctx.sampleRate;
 
     // Must await resume before connecting nodes — onaudioprocess won't fire if suspended
