@@ -2935,8 +2935,13 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '3.8';
+var APP_VERSION = '3.9';
 var APP_CHANGELOG = [
+  { version: '3.9', date: 'Mar 25 2026', label: 'NAC-OSCE fix: station rendering, live vitals, TTS overlap', items: [
+    'Fixed NAC station showing "undefined" instead of clinical workstation UI',
+    'VitalsEngine now starts properly in NAC mode — live updating vitals',
+    'Fixed overlapping TTS audio when entering stations'
+  ]},
   { version: '3.8', date: 'Mar 25 2026', label: 'NAC-OSCE dedicated tutorial, clinical workstation UI', items: [
     'NAC-OSCE has its own first-time tutorial — no more PatientBot walkthrough',
     'Clinical workstation UI: vitals, results, doorway assessment — no chatbox',
