@@ -2943,8 +2943,13 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '3.7';
+var APP_VERSION = '3.8';
 var APP_CHANGELOG = [
+  { version: '3.8', date: 'Mar 25 2026', label: 'NAC-OSCE dedicated tutorial, clinical workstation UI', items: [
+    'NAC-OSCE has its own first-time tutorial — no more PatientBot walkthrough',
+    'Clinical workstation UI: vitals, results, doorway assessment — no chatbox',
+    'Version bump to 3.8'
+  ]},
   { version: '3.7', date: 'Mar 25 2026', label: 'NAC-OSCE: 7 practice tests, hands-free voice mode, scorecard popup', items: [
     'NAC-OSCE redesigned: 7 fixed practice tests (12 stations each, 84 total)',
     'Hands-free voice mode auto-enabled for NAC stations',
@@ -8780,7 +8785,78 @@ function setNACDiff(diff, btn) {
   btn.classList.add('active');
 }
 
+// ── NAC-OSCE TUTORIAL (unique, not PatientBot's) ──
+function showNACTutorial(callback) {
+  var seen = localStorage.getItem('mcc_nac_tutorial_done');
+  if (seen) { if (callback) callback(); return; }
+
+  var overlay = document.createElement('div');
+  overlay.id = 'nac-tutorial-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:100000;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn 0.3s';
+
+  var html = '<div style="background:var(--card);border-radius:16px;max-width:520px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.5)">';
+  html += '<div style="background:linear-gradient(135deg,#0d1442,#1a237e);padding:28px 24px 20px;border-radius:16px 16px 0 0;text-align:center">';
+  html += '<div style="font-size:48px;margin-bottom:8px">&#x1FA7A;</div>';
+  html += '<h2 style="color:white;margin:0;font-size:22px">NAC-OSCE Exam Simulator</h2>';
+  html += '<p style="color:rgba(255,255,255,0.7);margin:8px 0 0;font-size:14px">This is NOT PatientBot. This is a structured clinical exam.</p>';
+  html += '</div>';
+
+  html += '<div style="padding:20px 24px">';
+
+  html += '<div style="margin-bottom:16px">';
+  html += '<div style="font-weight:700;font-size:15px;margin-bottom:6px;color:var(--text)">&#x1F4DE; It\'s a Phone Call</div>';
+  html += '<div style="font-size:13px;color:var(--text-light);line-height:1.5">Your mic activates automatically. Speak naturally to your patient like a real encounter. No typing, no chatbox — just talk.</div>';
+  html += '</div>';
+
+  html += '<div style="margin-bottom:16px">';
+  html += '<div style="font-weight:700;font-size:15px;margin-bottom:6px;color:var(--text)">&#x23F1; Timed Stations</div>';
+  html += '<div style="font-size:13px;color:var(--text-light);line-height:1.5">Each station has a countdown timer (default 11 min, real NAC pace). When time runs out, the station ends — just like the real exam.</div>';
+  html += '</div>';
+
+  html += '<div style="margin-bottom:16px">';
+  html += '<div style="font-weight:700;font-size:15px;margin-bottom:6px;color:var(--text)">&#x1F3E5; Clinical Workstation</div>';
+  html += '<div style="font-size:13px;color:var(--text-light);line-height:1.5">You\'ll see a patient chart, live vitals monitor, and clinical results — not a chat window. Lab and imaging results appear as they\'re ordered.</div>';
+  html += '</div>';
+
+  html += '<div style="margin-bottom:16px">';
+  html += '<div style="font-weight:700;font-size:15px;margin-bottom:6px;color:var(--text)">&#x1F50A; Voice Commands</div>';
+  html += '<div style="font-size:13px;color:var(--text-light);line-height:1.5">Say <strong>"my diagnosis is..."</strong> to give your diagnosis. Say <strong>"order CBC"</strong> or <strong>"order chest X-ray"</strong> to get results. Say <strong>"examine the abdomen"</strong> for physical exam findings.</div>';
+  html += '</div>';
+
+  html += '<div style="margin-bottom:16px">';
+  html += '<div style="font-weight:700;font-size:15px;margin-bottom:6px;color:var(--text)">&#x1F4CB; OSCE Scorecard</div>';
+  html += '<div style="font-size:13px;color:var(--text-light);line-height:1.5">After each station you get a real MCC-format scorecard: history, physical exam, investigations, communication, diagnosis, and management — each scored individually.</div>';
+  html += '</div>';
+
+  html += '<div style="background:rgba(255,152,0,0.1);border-left:3px solid #ff9800;padding:10px 14px;border-radius:6px;margin-bottom:20px;font-size:13px;color:var(--text)">';
+  html += '<strong>Tip:</strong> Treat this like the real thing. Introduce yourself, wash your hands, ask open-ended questions first, then focused ones. The AI scores your approach, not just your answer.';
+  html += '</div>';
+
+  html += '<button onclick="dismissNACTutorial()" style="width:100%;padding:14px;font-size:16px;font-weight:700;background:linear-gradient(135deg,#1a237e,#3949ab);color:white;border:none;border-radius:10px;cursor:pointer">Got It — Start My Exam</button>';
+  html += '</div></div>';
+
+  overlay.innerHTML = html;
+  document.body.appendChild(overlay);
+
+  window._nacTutorialCallback = callback;
+}
+
+function dismissNACTutorial() {
+  localStorage.setItem('mcc_nac_tutorial_done', '1');
+  var ov = document.getElementById('nac-tutorial-overlay');
+  if (ov) ov.remove();
+  if (window._nacTutorialCallback) {
+    window._nacTutorialCallback();
+    window._nacTutorialCallback = null;
+  }
+}
+
 function startNACExam() {
+  // Show NAC tutorial on first use, then proceed
+  showNACTutorial(function() { startNACExamInner_(); });
+}
+
+function startNACExamInner_() {
   var testNum = parseInt(document.getElementById('nac-test-num').value) || 1;
   testNum = Math.max(1, Math.min(testNum, NAC_PRACTICE_TESTS.length));
   var stations = NAC_PRACTICE_TESTS[testNum - 1];
