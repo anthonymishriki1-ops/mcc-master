@@ -3712,17 +3712,19 @@ var VitalsEngine = {
 
   init: function(serverVitals) {
     var v = serverVitals || {};
+    var sbp = v.sbp || v.systolic || 120;
+    var dbp = v.dbp || v.diastolic || 80;
     this._base = {
       hr:   v.hr || v.heartRate || 80,
-      sbp:  v.systolic || 120,
-      dbp:  v.diastolic || 80,
+      sbp:  sbp,
+      dbp:  dbp,
       spo2: v.spo2 || v.o2sat || 98,
       rr:   v.rr || v.respiratoryRate || 16,
       temp: v.temp || v.temperature || 37.0,
     };
     this._display = Object.assign({}, this._base);
     this._effects = [];
-    this._bpReadings = [];
+    this._bpReadings = [{ sbp: sbp, dbp: dbp, time: Date.now() }]; // initial reading
     this._bpMeasuring = false;
     this._cumulativeDoses = {};       // cumulative drug doses (mcg) per drug, reset each case
     this._drugClassLog = [];          // drug classes administered this case (for interaction checking)
@@ -9339,7 +9341,8 @@ function startNextNACStation() {
     } else if (station.dx) {
       App.pbDiagnosis = station.dx;
     }
-    App.pbHistory = [{ role: 'assistant', content: msg }];
+    App.pbHistory = []; // doctor speaks first — don't pre-load opening line
+    App._nacPregenOpening = msg; // saved for when doctor speaks
     App.nacStationMsg = msg;
     App.nacCaseReady = true;
   }).catch(function(e) { App.nacCaseError = e.message || String(e); });
@@ -10099,6 +10102,9 @@ function setNACTab(tab) {
 function renderNACStationUI_() {
   var el = document.getElementById('patientbot-content');
   if (!el) return;
+  // Ensure login screen is hidden
+  var profilePage = document.getElementById('profile-select-page');
+  if (profilePage) profilePage.style.display = 'none';
   if (!App.pbMonitorAttached) {
     App.pbMonitorAttached = true;
     VitalsEngine.start();
