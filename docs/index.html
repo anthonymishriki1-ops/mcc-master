@@ -6053,6 +6053,14 @@ function startHandsFreeListening_() {
       App.nacDoctorSpoke = true;
       if (App.nacIdleTimer) { clearTimeout(App.nacIdleTimer); App.nacIdleTimer = null; }
     }
+    // NAC Direct Mode — skip GAS, call Anthropic directly
+    if (App._nacDirectMode && App.nacActive) {
+      try { handsFreeRecognition.stop(); } catch(e) {}
+      App.pbMicActive = false;
+      sendNACMessageDirect_(best);
+      return;
+    }
+
     App.pbHistory.push({ role: 'user', content: best });
     var target = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
     target();
@@ -7531,6 +7539,14 @@ function sendPBMessage() {
     App.nacDoctorSpoke = true;
     if (App.nacIdleTimer) { clearTimeout(App.nacIdleTimer); App.nacIdleTimer = null; }
   }
+
+  // NAC Direct Mode — skip GAS
+  if (App._nacDirectMode && App.nacActive) {
+    input.value = '';
+    sendNACMessageDirect_(message);
+    return;
+  }
+
   input.value = ''; App.pbHistory.push({ role: 'user', content: message });
 
   var target = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
@@ -8749,6 +8765,16 @@ function showNACSetup() {
   html += '<button class="quiz-count-btn" onclick="setNACDiff(\'hard\',this)">Hard</button>';
   html += '</div></div>';
 
+  // API Keys for direct browser calls (stored in localStorage)
+  var hasAnthropicKey = !!localStorage.getItem('mcc_anthropic_key');
+  var hasOpenAIKey = !!localStorage.getItem('mcc_openai_key');
+  html += '<div class="form-group" style="text-align:left;margin-top:16px"><label>API Keys <span style="font-weight:400;font-size:11px;color:var(--text-light)">(for fast direct mode — stored locally only)</span></label>';
+  html += '<div style="display:flex;flex-direction:column;gap:8px">';
+  html += '<div style="display:flex;gap:8px;align-items:center"><input id="nac-anthropic-key" type="password" placeholder="Anthropic API Key (sk-ant-...)" value="' + (localStorage.getItem('mcc_anthropic_key') || '') + '" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text)">' + (hasAnthropicKey ? '<span style="color:#4caf50;font-size:18px">&#x2713;</span>' : '') + '</div>';
+  html += '<div style="display:flex;gap:8px;align-items:center"><input id="nac-openai-key" type="password" placeholder="OpenAI API Key (sk-...)" value="' + (localStorage.getItem('mcc_openai_key') || '') + '" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text)">' + (hasOpenAIKey ? '<span style="color:#4caf50;font-size:18px">&#x2713;</span>' : '') + '</div>';
+  html += '<button class="btn btn-sm" onclick="saveNACKeys()" style="align-self:flex-start">Save Keys</button>';
+  html += '</div></div>';
+
   html += '<div class="pb-how-to">';
   html += '<strong>How It Works:</strong><br>';
   html += '&#x1F3E5; Each station is a PatientBot encounter with a specific clinical presentation<br>';
@@ -8756,6 +8782,7 @@ function showNACSetup() {
   html += '&#x1F4CB; Full OSCE scorecard after each station<br>';
   html += '&#x1F4CA; Blueprint follows real NAC distribution: Medicine, Surgery, OB/GYN, Peds, Psych, EM, FM<br>';
   html += '&#x1FA7A; 7 unique practice tests &mdash; 84 stations total<br>';
+  if (hasAnthropicKey && hasOpenAIKey) html += '&#x26A1; <strong>Direct mode active</strong> — fast responses, no server middleman<br>';
   html += '</div>';
 
   html += '<button class="btn btn-success" style="width:100%;padding:14px;font-size:16px" onclick="startNACExam()">&#x1F4DE; Start NAC-OSCE Exam (Hands-Free)</button>';
@@ -8782,6 +8809,153 @@ function setNACDiff(diff, btn) {
   var btns = btn.parentElement.querySelectorAll('.quiz-count-btn');
   for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
   btn.classList.add('active');
+}
+
+function saveNACKeys() {
+  var ak = document.getElementById('nac-anthropic-key');
+  var ok = document.getElementById('nac-openai-key');
+  if (ak && ak.value.trim()) localStorage.setItem('mcc_anthropic_key', ak.value.trim());
+  if (ok && ok.value.trim()) localStorage.setItem('mcc_openai_key', ok.value.trim());
+  showToast('API keys saved');
+  showNACSetup(); // re-render to show checkmarks
+}
+
+// ── Direct Anthropic API call (browser → Anthropic, no GAS middleman) ──
+function callAnthropicDirect_(systemPrompt, messages) {
+  var key = localStorage.getItem('mcc_anthropic_key');
+  if (!key) return Promise.reject(new Error('No Anthropic API key'));
+  return fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6-20260320',
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: messages
+    })
+  }).then(function(r) {
+    if (!r.ok) return r.text().then(function(t) { throw new Error('Anthropic error: ' + t.substring(0, 200)); });
+    return r.json();
+  }).then(function(data) {
+    return data.content[0].text;
+  });
+}
+
+// ── Direct OpenAI TTS call (browser → OpenAI, no GAS middleman) ──
+function callTTSDirect_(text, voice, speed) {
+  var key = localStorage.getItem('mcc_openai_key');
+  if (!key) return Promise.reject(new Error('No OpenAI API key'));
+  var clean = text.replace(/\*[^*]+\*/g, '').replace(/\[.*?\]/g, '').replace(/[*_~`#]/g, '').trim();
+  if (!clean || clean.length < 2) return Promise.resolve(null);
+  if (clean.length > 4000) clean = clean.substring(0, 4000);
+  return fetch('https://api.openai.com/v1/audio/speech', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + key
+    },
+    body: JSON.stringify({
+      model: 'tts-1-hd',
+      input: clean,
+      voice: voice || 'alloy',
+      speed: speed || 1.0,
+      response_format: 'mp3'
+    })
+  }).then(function(r) {
+    if (!r.ok) return r.text().then(function(t) { throw new Error('OpenAI TTS error: ' + t.substring(0, 200)); });
+    return r.blob();
+  }).then(function(blob) {
+    var url = URL.createObjectURL(blob);
+    return new Promise(function(resolve) {
+      var audio = new Audio(url);
+      App._ttsAudio = audio;
+      App._pbSpeaking = true;
+      audio.onended = function() { App._ttsAudio = null; App._pbSpeaking = false; URL.revokeObjectURL(url); resolve(); };
+      audio.onerror = function() { App._ttsAudio = null; App._pbSpeaking = false; URL.revokeObjectURL(url); resolve(); };
+      audio.play().catch(function() { App._pbSpeaking = false; resolve(); });
+    });
+  });
+}
+
+// ── NAC Direct Mode: send message without GAS ──
+function sendNACMessageDirect_(userMessage) {
+  if (!App.nacActive || !App._nacSystemPrompt) return;
+
+  // Cancel any in-progress TTS
+  if (App._ttsAudio) { try { App._ttsAudio.pause(); } catch(e) {} App._ttsAudio = null; }
+  try { window.speechSynthesis.cancel(); } catch(e) {}
+  App._pbSpeaking = false;
+
+  // Add user message to history
+  App.pbHistory.push({ role: 'user', content: userMessage });
+  renderPBChat();
+
+  // Build messages array for Anthropic
+  var apiMessages = [];
+  for (var i = 0; i < App.pbHistory.length; i++) {
+    var m = App.pbHistory[i];
+    if (m.role === 'user' || m.role === 'assistant') {
+      apiMessages.push({ role: m.role, content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) });
+    }
+  }
+
+  callAnthropicDirect_(App._nacSystemPrompt, apiMessages).then(function(response) {
+    // Strip any JSON leaks
+    response = response.replace(/```[\s\S]*?```/g, '').replace(/\[SYSTEM[^\]]*\]/gi, '').trim();
+    App.pbHistory.push({ role: 'assistant', content: response });
+    App.nacDoctorSpoke = true;
+    renderPBChat();
+
+    // Speak the response via direct TTS
+    var voice = getOpenAIVoice_();
+    var speed = getOpenAISpeed_();
+    callTTSDirect_(response, voice, speed).then(function() {
+      if (App.pbHandsFree) resumeHandsFreeListening_();
+    });
+  }).catch(function(e) {
+    App.pbHistory.push({ role: 'system', content: 'Error: ' + (e.message || String(e)) });
+    renderPBChat();
+    if (App.pbHandsFree) resumeHandsFreeListening_();
+  });
+}
+
+// Build NAC system prompt from pregen station data (client-side, no server needed)
+function buildNACSystemPrompt_(station) {
+  var sx = station.sx === 'F' ? 'female' : station.sx === 'M' ? 'male' : 'non-binary';
+  var pronouns = station.sx === 'F' ? 'she/her' : station.sx === 'M' ? 'he/him' : 'they/them';
+  return 'You are PatientBot, a clinical scenario simulator for the NAC-OSCE.\n\n' +
+    'YOU ARE ROLEPLAYING AS A SPECIFIC PATIENT. ALL DETAILS ARE LOCKED:\n' +
+    '- Name: ' + station.nm + '\n' +
+    '- Age: ' + station.age + '\n' +
+    '- Sex: ' + sx + ' (' + pronouns + ')\n' +
+    '- Ethnicity: ' + station.eth + '\n' +
+    '- Appearance: ' + station.ap + '\n' +
+    '- Chief complaint: ' + station.presentation + '\n' +
+    '- Diagnosis (HIDDEN from student): ' + station.dx + '\n' +
+    '- Vitals: HR=' + station.hr + ' BP=' + station.sbp + '/' + station.dbp + ' RR=' + station.rr + ' Temp=' + station.tmp + ' SpO2=' + station.o2 + '\n\n' +
+    'ABSOLUTE RULES:\n' +
+    '1. NEVER break character. You are ALWAYS the patient.\n' +
+    '2. NEVER use medical terminology a real patient wouldn\'t know.\n' +
+    '3. NEVER give the diagnosis or hint at it.\n' +
+    '4. Keep ALL responses to 1-3 sentences max.\n' +
+    '5. NEVER output JSON, code blocks, scores, or system messages.\n' +
+    '6. ONLY answer what is asked. Do NOT volunteer extra symptoms.\n' +
+    '7. NEVER apologize for being sick, for taking up the doctor\'s time, or for the doctor\'s behavior. If someone is rude to you, react like a real person — confused, offended, hurt, angry. NEVER say "I\'m sorry" to rudeness.\n\n' +
+    'PATIENT REALISM:\n' +
+    '- Sound like a REAL person. Use casual language: "yeah", "nah", "I dunno", "kinda".\n' +
+    '- Use filler words: "uhm", "uh", "like", "y\'know".\n' +
+    '- Use hesitations (dashes, ellipses). Trail off and restart.\n' +
+    '- Be an imperfect historian. Forget exact dates.\n' +
+    '- NEVER say "I appreciate the question" or "That\'s a good question."\n' +
+    '- STOP ANSWERING QUESTIONS WITH QUESTIONS. Just answer directly.\n' +
+    '- Vary response length. Some "Yeah." some longer.\n\n' +
+    'ACTIONS: When the student performs an ACTION (examines, orders tests, gives medication), it HAPPENS. React to the EFFECTS.\n\n' +
+    'EMOTIONAL STATES: Show REAL emotions — anger when frustrated, fear when scared, pain that is primal not articulate. Emotions BUILD over the encounter.\n';
 }
 
 // ── NAC-OSCE TUTORIAL (unique, not PatientBot's) ──
@@ -9098,6 +9272,18 @@ function enterNACStation_() {
   }
   // Doctor speaks first — don't auto-play patient's opening line
   App.nacDoctorSpoke = false;
+  // Build system prompt for direct mode if keys available
+  var station = App.nacStations[App.nacCurrentStation - 1];
+  if (station && station.nm && localStorage.getItem('mcc_anthropic_key')) {
+    App._nacDirectMode = true;
+    App._nacSystemPrompt = buildNACSystemPrompt_(station);
+    // Use pregen opening line as first assistant message
+    if (station.op && App.pbHistory.length <= 1) {
+      App.pbHistory = [{ role: 'assistant', content: station.op }];
+    }
+  } else {
+    App._nacDirectMode = false;
+  }
   // Render the station UI (no TTS until doctor speaks)
   renderPBChat();
   // Start 30-second idle nudge — if doctor doesn't speak, patient prompts them
@@ -9798,6 +9984,27 @@ function renderNACStationUI_() {
       html += '<div style="background:#b71c1c;color:white;padding:16px;border-radius:8px;margin-top:12px;text-align:center">';
       html += '<strong>&#x1F480; Patient Deceased</strong><br>' + escapeHtml(deathMsgs[deathMsgs.length-1].content);
       html += '</div>';
+    }
+
+    // Conversation transcript
+    var convMsgs = App.pbHistory.filter(function(m) { return m.role === 'user' || m.role === 'assistant'; });
+    if (convMsgs.length > 0) {
+      html += '<div style="background:var(--card);border-radius:10px;padding:16px;margin-top:12px;border:1px solid var(--border)">';
+      html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-light);margin-bottom:10px">Conversation</div>';
+      html += '<div style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:8px">';
+      for (var ci = 0; ci < convMsgs.length; ci++) {
+        var cm = convMsgs[ci];
+        var isDoc = cm.role === 'user';
+        var align = isDoc ? 'flex-end' : 'flex-start';
+        var bg = isDoc ? 'var(--primary)' : 'var(--bg)';
+        var color = isDoc ? 'white' : 'var(--text)';
+        var label = isDoc ? 'You' : (App.pbPatientInfo ? App.pbPatientInfo.name : 'Patient');
+        html += '<div style="align-self:' + align + ';max-width:80%">';
+        html += '<div style="font-size:10px;color:var(--text-light);margin-bottom:2px;text-align:' + (isDoc ? 'right' : 'left') + '">' + escapeHtml(label) + '</div>';
+        html += '<div style="background:' + bg + ';color:' + color + ';padding:8px 12px;border-radius:12px;font-size:13px;line-height:1.4">' + escapeHtml(typeof cm.content === 'string' ? cm.content : '') + '</div>';
+        html += '</div>';
+      }
+      html += '</div></div>';
     }
 
   } else if (nacActiveTab === 'vitals') {
