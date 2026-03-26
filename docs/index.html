@@ -5987,6 +5987,7 @@ function toggleHandsFree() {
 
 function stopHandsFree_() {
   App.pbHandsFree = false;
+  _sttShouldRun = false;
   if (handsFreeRecognition) {
     try { handsFreeRecognition.abort(); } catch(e) {}
     handsFreeRecognition = null;
@@ -5998,23 +5999,30 @@ function stopHandsFree_() {
   showToast_('Hands-free mode OFF');
 }
 
+var _sttShouldRun = false;
+var _sttRestarting = false;
+var _sttRetryMs = 250;
+
 function startHandsFreeListening_() {
   if (!App.pbHandsFree || App.pbDiagResolved) return;
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) return;
 
+  _sttShouldRun = true;
+  _sttRestarting = false;
+  _sttRetryMs = 250;
+
+  // Always create a fresh instance (Chrome is more reliable this way)
+  if (handsFreeRecognition) { try { handsFreeRecognition.abort(); } catch(e) {} }
   handsFreeRecognition = new SR();
   handsFreeRecognition.lang = 'en-US';
   handsFreeRecognition.continuous = true;
-  handsFreeRecognition.interimResults = false;
+  handsFreeRecognition.interimResults = true;
   handsFreeRecognition.maxAlternatives = 3;
   App.pbMicActive = true;
 
-  // Update mic indicator
-  var indicator = document.getElementById('hf-indicator');
-  if (indicator) { indicator.style.background = '#c62828'; indicator.textContent = 'Listening...'; }
-
   handsFreeRecognition.onresult = function(e) {
+    _sttRetryMs = 250; // reset backoff on healthy results
     // Get the latest final result
     var lastIdx = e.results.length - 1;
     if (!e.results[lastIdx].isFinal) return;
@@ -6123,25 +6131,21 @@ function startHandsFreeListening_() {
   };
 
   handsFreeRecognition.onend = function() {
-    // Auto-restart if still in hands-free mode — reuse same object
     App.pbMicActive = false;
-    if (App.pbHandsFree && !App.pbDiagResolved) {
-      setTimeout(function() {
-        try {
-          if (handsFreeRecognition) {
-            handsFreeRecognition.start();
-            App.pbMicActive = true;
-          }
-        } catch(e) {
-          // If start fails, create fresh instance
-          setTimeout(function() { startHandsFreeListening_(); }, 500);
-        }
-      }, 300);
-    }
+    if (!_sttShouldRun || _sttRestarting) return;
+    _sttRestarting = true;
+    setTimeout(function() {
+      _sttRestarting = false;
+      if (_sttShouldRun) {
+        _sttRetryMs = Math.min(_sttRetryMs * 2, 5000);
+        startHandsFreeListening_(); // fresh instance every time
+      }
+    }, _sttRetryMs);
   };
 
   try { handsFreeRecognition.start(); } catch(e) {
-    // Already started — ignore
+    // Start failed — retry after delay
+    setTimeout(function() { if (_sttShouldRun) startHandsFreeListening_(); }, 1000);
   }
 }
 
@@ -8953,10 +8957,12 @@ function nacDirectRespond_(text) {
   });
 }
 
-// Stop mic cleanly before processing (don't null it — just stop)
+// Stop mic cleanly before processing
 function stopMicForProcessing_() {
+  _sttShouldRun = false; // prevent auto-restart during processing
   if (handsFreeRecognition) {
-    try { handsFreeRecognition.stop(); } catch(e) {}
+    try { handsFreeRecognition.abort(); } catch(e) {}
+    handsFreeRecognition = null;
   }
   App.pbMicActive = false;
 }
@@ -8965,13 +8971,7 @@ function stopMicForProcessing_() {
 function restartMicAfterResponse_() {
   if (!App.pbHandsFree || !App.nacActive || App.pbDiagResolved) return;
   setTimeout(function() {
-    if (handsFreeRecognition) {
-      try { handsFreeRecognition.start(); App.pbMicActive = true; } catch(e) {
-        startHandsFreeListening_();
-      }
-    } else {
-      startHandsFreeListening_();
-    }
+    startHandsFreeListening_(); // always fresh instance
   }, 300);
 }
 
