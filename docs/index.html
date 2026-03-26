@@ -8914,76 +8914,41 @@ function startNextNACStation() {
     App.pbSpecialty = station.specialty;
   }
 
-  // Use pregen case if available (instant), fall back to AI generation
-  if (station.pregenId) {
-    App.nacCaseReady = false;
-    App.nacCaseError = null;
-    // Show reading period immediately with patient data from station
-    showNACReadingPeriod_(station);
-    // Load pregen case in background (much faster than AI generation)
-    serverCall('startPregenCase', station.pregenId).then(function(result) {
-      if (result.error) { App.nacCaseError = result.error; return; }
-      App.pbCaseId = result.caseId;
-      App.pbSpecialty = result.specialty;
-      App.pbPresentation = result.presentation;
-      App.pbDiagnosis = null;
+  // Show reading period immediately — door prompt uses embedded station data
+  App.nacCaseReady = false;
+  App.nacCaseError = null;
+  showNACReadingPeriod_(station);
+
+  // Fire server call in background to set up AI conversation session
+  serverCall('startPatientBotCase', station.specialty, false, App.nacDifficulty, App.pbCustom).then(function(result) {
+    App.pbCaseId = result.caseId;
+    App.pbSpecialty = result.specialty;
+    App.pbPresentation = station.presentation;
+    App.pbDiagnosing = false;
+    App.pbDiagAttempts = 0;
+    App.pbDiagResolved = false;
+    App.pbPartialUsed = false;
+    App.pbScorecard = null;
+    App.pbScorecardLoading = false;
+    App.pbScorecardError = false;
+    App.pbDrDataEval = null;
+    App.pbDrDataEvalLoading = false;
+    App.pbDrDataEvalError = false;
+    App.pbDrDataConvHistory = [];
+    App.pbMonitorAttached = false;
+    VitalsEngine.init(result.vitals || result.patient || {});
+    // Use pregen opening line if available, otherwise use AI-generated
+    var msg = station.op ? station.op : stripPatientJSON(result.initialMessage);
+    if (result.patientInfo) {
       App.pbPatientInfo = result.patientInfo;
       App.pbDiagnosis = result.patientInfo.diagnosis;
-      App.pbDiagnosing = false;
-      App.pbDiagAttempts = 0;
-      App.pbDiagResolved = false;
-      App.pbPartialUsed = false;
-      App.pbScorecard = null;
-      App.pbScorecardLoading = false;
-      App.pbScorecardError = false;
-      App.pbDrDataEval = null;
-      App.pbDrDataEvalLoading = false;
-      App.pbDrDataEvalError = false;
-      App.pbDrDataConvHistory = [];
-      App.pbMonitorAttached = false;
-      VitalsEngine.init(result.vitals || result.patientInfo || {});
-      var msg = stripPatientJSON(result.initialMessage);
-      App.pbHistory = [{ role: 'assistant', content: msg }];
-      App.nacStationMsg = msg;
-      App.nacCaseReady = true;
-    }).catch(function(e) { App.nacCaseError = e.message || String(e); });
-  } else {
-    // Fallback: AI-generated case
-    App.nacCaseReady = false;
-    App.nacCaseError = null;
-    showNACReadingPeriod_(station);
-    serverCall('startPatientBotCase', station.specialty, false, App.nacDifficulty, App.pbCustom).then(function(result) {
-      App.pbCaseId = result.caseId;
-      App.pbSpecialty = result.specialty;
-      App.pbPresentation = station.presentation;
-      App.pbDiagnosis = null;
-      App.pbPatientInfo = null;
-      App.pbDiagnosing = false;
-      App.pbDiagAttempts = 0;
-      App.pbDiagResolved = false;
-      App.pbPartialUsed = false;
-      App.pbScorecard = null;
-      App.pbScorecardLoading = false;
-      App.pbScorecardError = false;
-      App.pbDrDataEval = null;
-      App.pbDrDataEvalLoading = false;
-      App.pbDrDataEvalError = false;
-      App.pbDrDataConvHistory = [];
-      App.pbMonitorAttached = false;
-      VitalsEngine.init(result.vitals || result.patient || {});
-      var msg = stripPatientJSON(result.initialMessage);
-      if (result.patientInfo) {
-        App.pbPatientInfo = result.patientInfo;
-        App.pbDiagnosis = result.patientInfo.diagnosis;
-      } else {
-        var jsonStr = extractPatientJSON(result.initialMessage);
-        if (jsonStr) { try { App.pbPatientInfo = JSON.parse(jsonStr); App.pbDiagnosis = App.pbPatientInfo.diagnosis; } catch(e) {} }
-      }
-      App.pbHistory = [{ role: 'assistant', content: msg }];
-      App.nacStationMsg = msg;
-      App.nacCaseReady = true;
-    }).catch(function(e) { App.nacCaseError = e.message || String(e); });
-  }
+    } else if (station.dx) {
+      App.pbDiagnosis = station.dx;
+    }
+    App.pbHistory = [{ role: 'assistant', content: msg }];
+    App.nacStationMsg = msg;
+    App.nacCaseReady = true;
+  }).catch(function(e) { App.nacCaseError = e.message || String(e); });
 }
 
 // ── NAC Reading Period (2 min door prompt + notepad) ──
