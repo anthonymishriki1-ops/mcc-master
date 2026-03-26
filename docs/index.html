@@ -8603,18 +8603,18 @@ function logPBConversation(outcome, extraData) {
 var NAC_PRACTICE_TESTS = [
   // ─── Practice Test 1 ───
   [
-    { pregenId: 1, presentation: 'Chest Pain', specialty: 'Cardiology', focus: 'ACS workup' },
-    { pregenId: 4, presentation: 'Dyspnea', specialty: 'Respirology', focus: 'PE vs CHF vs pneumonia' },
-    { pregenId: 19, presentation: 'Abdominal Pain', specialty: 'Surgery', focus: 'Surgical abdomen assessment' },
-    { pregenId: 25, presentation: 'Trauma/Injury', specialty: 'Emergency Medicine', focus: 'ATLS primary survey' },
-    { pregenId: 31, presentation: 'Vaginal Bleeding', specialty: 'OB/GYN', focus: 'Early pregnancy bleeding' },
-    { pregenId: 32, presentation: 'Pelvic Pain', specialty: 'OB/GYN', focus: 'Ectopic vs PID vs torsion' },
-    { pregenId: 43, presentation: 'Pediatric Fever', specialty: 'Pediatrics', focus: 'Febrile child workup' },
-    { pregenId: 44, presentation: 'Crying/Irritable Child', specialty: 'Pediatrics', focus: 'Infant assessment' },
-    { pregenId: 55, presentation: 'Depressed Mood', specialty: 'Psychiatry', focus: 'MDD + safety assessment' },
-    { pregenId: 56, presentation: 'Anxiety', specialty: 'Psychiatry', focus: 'GAD vs panic vs medical cause' },
-    { pregenId: 73, presentation: 'Hypertension', specialty: 'Family Medicine', focus: 'New HTN workup + counseling' },
-    { pregenId: 9, presentation: 'Headache', specialty: 'Neurology', focus: 'Red flags, SAH rule-out' }
+    { pregenId: 1, presentation: 'Chest Pain', specialty: 'Cardiology', focus: 'ACS workup', nm:'Marcus Thompson',age:54,sx:'M',eth:'African-Canadian',ap:'Diaphoretic middle-aged man clutching his chest, appears anxious',hr:105,sbp:158,dbp:94,rr:22,tmp:37.1,o2:96,op:"Uh... hey doc, I\u2014 ...my chest, it's like something's squeezing it real hard. Started maybe an hour ago? I was just watching TV and then\u2014 ugh.",dx:'ST-elevation myocardial infarction (STEMI)' },
+    { pregenId: 4, presentation: 'Dyspnea', specialty: 'Respirology', focus: 'PE vs CHF vs pneumonia', nm:'Janet Williams',age:45,sx:'F',eth:'Anglo-Canadian',ap:'Anxious woman, tachypneic, clutching her left calf',hr:118,sbp:110,dbp:72,rr:28,tmp:37.3,o2:89,op:"I can't\u2014 I can't catch my breath. It just\u2014 it started like two hours ago out of nowhere and\u2014 ...my leg's been hurting too, I dunno if that matters. I just got off a long flight yesterday.",dx:'Pulmonary embolism' },
+    { pregenId: 19, presentation: 'Abdominal Pain', specialty: 'Surgery', focus: 'Surgical abdomen assessment', nm:'Tyler Jenkins',age:24,sx:'M',eth:'Anglo-Canadian',ap:'Young man lying rigid on stretcher, knees drawn up, refusing to move',hr:96,sbp:128,dbp:78,rr:18,tmp:38.3,o2:99,op:"It started around my belly button yesterday? Like a dull ache. But now it's moved down here to the right side and it's way worse. Walking makes it awful. I puked twice this morning.",dx:'Acute appendicitis' },
+    { pregenId: 25, presentation: 'Trauma/Injury', specialty: 'Emergency Medicine', focus: 'ATLS primary survey', nm:'Brandon Wells',age:22,sx:'M',eth:'Anglo-Canadian',ap:'Young man on backboard, C-collar, left chest bruising, tachypneic',hr:128,sbp:82,dbp:50,rr:34,tmp:36.5,o2:82,op:"Got hit by a car... can't breathe... my chest\u2014 something's wrong\u2014 ...help me please\u2014",dx:'Left tension pneumothorax' },
+    { pregenId: 31, presentation: 'Vaginal Bleeding', specialty: 'OB/GYN', focus: 'Early pregnancy bleeding', nm:'Sarah Chen',age:28,sx:'F',eth:'Chinese-Canadian',ap:'Anxious young woman, clutching her abdomen, appears pale',hr:108,sbp:102,dbp:64,rr:20,tmp:37.0,o2:99,op:"I'm\u2014 I'm bleeding. I'm like six weeks pregnant and it just started an hour ago. It's not heavy but I have this sharp pain on my right side that won't go away. I'm really scared.",dx:'Ectopic pregnancy' },
+    { pregenId: 32, presentation: 'Pelvic Pain', specialty: 'OB/GYN', focus: 'Ectopic vs PID vs torsion', nm:'Destiny Williams',age:22,sx:'F',eth:'Black-Canadian',ap:'Young woman doubled over on the stretcher, appears in significant pain',hr:112,sbp:128,dbp:78,rr:22,tmp:37.2,o2:99,op:"Oh my God it hurts so bad! It came on like\u2014 all of a sudden? I was just at work and ...my left side, it's like stabbing. I threw up twice already.",dx:'Ovarian torsion' },
+    { pregenId: 43, presentation: 'Pediatric Fever', specialty: 'Pediatrics', focus: 'Febrile child workup', nm:'Liam (mother: Kate Morrison)',age:2,sx:'M',eth:'Caucasian-Canadian',ap:'Fussy toddler in mother\'s arms, flushed cheeks, intermittently crying',hr:142,sbp:90,dbp:55,rr:28,tmp:39.2,o2:99,op:"[Mother speaking] He's been pulling at his right ear all day and crying. His temperature was 39 at home. He barely slept last night and won't eat anything.",dx:'Acute otitis media' },
+    { pregenId: 44, presentation: 'Crying/Irritable Child', specialty: 'Pediatrics', focus: 'Infant assessment', nm:'Baby Emma (mother: Rachel Nguyen)',age:0.5,sx:'F',eth:'Vietnamese-Canadian',ap:'Inconsolable 6-month-old with intermittent high-pitched screaming episodes',hr:168,sbp:78,dbp:48,rr:36,tmp:37.4,o2:98,op:"[Mother speaking] She won't stop screaming! She was fine this morning, then she just started screaming and pulling her legs up. It comes and goes. She threw up twice and I think her poop looked like... jelly? Red jelly.",dx:'Intussusception' },
+    { pregenId: 55, presentation: 'Depressed Mood', specialty: 'Psychiatry', focus: 'MDD + safety assessment', nm:'David Chen',age:42,sx:'M',eth:'Chinese-Canadian',ap:'Disheveled man, poor eye contact, speaking slowly, flat affect',hr:64,sbp:118,dbp:74,rr:14,tmp:36.7,o2:99,op:"I... I don't really know why I'm here. My wife made the appointment. I just... nothing matters anymore? I can't sleep, I can't eat. I lost my job two months ago and I just... I've been thinking maybe everyone would be better off without me.",dx:'Major depressive disorder, severe, with suicidal ideation' },
+    { pregenId: 56, presentation: 'Anxiety', specialty: 'Psychiatry', focus: 'GAD vs panic vs medical cause', nm:'Samantha Miller',age:34,sx:'F',eth:'Caucasian-Canadian',ap:'Restless woman, fidgeting with her hands, appears tense',hr:92,sbp:132,dbp:84,rr:18,tmp:36.8,o2:99,op:"I keep having these... attacks? My heart starts pounding, I can't breathe, my hands go tingly, and I honestly think I'm dying every time. It happened at the grocery store twice so now I\u2014 I don't go there anymore.",dx:'Panic disorder with agoraphobia' },
+    { pregenId: 73, presentation: 'Hypertension', specialty: 'Family Medicine', focus: 'New HTN workup + counseling', nm:'Raj Gundappa',age:52,sx:'M',eth:'South Asian-Canadian',ap:'Overweight man, appears well, surprised by blood pressure reading',hr:78,sbp:164,dbp:98,rr:14,tmp:36.8,o2:99,op:"High blood pressure? But I feel fine! My wife's been on me about my diet and I know I've put on some weight but... I eat normal food. Well, maybe a lot of salt. My father had a heart attack at 58 \u2014 is that related?",dx:'Essential (primary) hypertension, stage 2' },
+    { pregenId: 9, presentation: 'Headache', specialty: 'Neurology', focus: 'Red flags, SAH rule-out', nm:'Sarah Chen',age:38,sx:'F',eth:'Chinese-Canadian',ap:'Woman lying in dark room, eyes closed, holding head, photophobic',hr:94,sbp:172,dbp:98,rr:16,tmp:37.0,o2:99,op:"This is the worst headache of my entire life. It just\u2014 it hit me like a thunderclap while I was at work. Like someone hit me with a bat in the back of my head.",dx:'Subarachnoid hemorrhage' }
   ],
   // ─── Practice Test 2 ───
   [
@@ -8902,11 +8902,23 @@ function startNextNACStation() {
   var titleEl = document.getElementById('pb-page-title');
   if (titleEl) titleEl.textContent = 'NAC-OSCE';
 
+  // If station has embedded patient data, populate patientInfo for instant door prompt
+  if (station.nm) {
+    App.pbPatientInfo = {
+      name: station.nm, age: station.age, sex: station.sx, ethnicity: station.eth,
+      appearance: station.ap, hr: station.hr, bp: station.sbp + '/' + station.dbp,
+      sbp: station.sbp, dbp: station.dbp, rr: station.rr, temp: station.tmp, spo2: station.o2,
+      diagnosis: station.dx
+    };
+    App.pbPresentation = station.presentation;
+    App.pbSpecialty = station.specialty;
+  }
+
   // Use pregen case if available (instant), fall back to AI generation
   if (station.pregenId) {
     App.nacCaseReady = false;
     App.nacCaseError = null;
-    // Show reading period immediately with blueprint data
+    // Show reading period immediately with patient data from station
     showNACReadingPeriod_(station);
     // Load pregen case in background (much faster than AI generation)
     serverCall('startPregenCase', station.pregenId).then(function(result) {
