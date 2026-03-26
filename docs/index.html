@@ -273,8 +273,6 @@ body {
 }
 .med-inline-trans { font-weight: 700; color: var(--text); }
 .med-inline-trans.ltr-t { direction: ltr; }
-.med-auto-trans { display:none; font-size:0.7em; color:var(--primary); opacity:0.85; margin-left:3px; font-style:italic; pointer-events:none; }
-body.auto-translate .med-auto-trans { display:inline; }
 #auto-translate-toggle { display:flex; }
 .med-inline-btn {
   background: none; border: none; cursor: pointer;
@@ -2494,11 +2492,6 @@ body.kb-open #bottom-nav { display: none !important; }
       <option value="ur">&#x1F1F5;&#x1F1F0; Urdu</option>
       <option value="tl">&#x1F1F5;&#x1F1ED; Filipino</option>
     </select>
-    <div onclick="toggleAutoTranslate()" title="Show all term translations inline" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding-top:2px;border-top:1px solid var(--border)">
-      <span id="auto-trans-icon" style="font-size:13px">&#x1F310;</span>
-      <span id="auto-trans-label" style="color:var(--text-light);font-weight:600">Auto</span>
-      <span id="auto-trans-dot" style="width:20px;height:12px;background:var(--border);border-radius:6px;display:inline-block;vertical-align:middle;position:relative;transition:background 0.2s"><span id="auto-trans-knob" style="position:absolute;top:2px;left:2px;width:8px;height:8px;background:#fff;border-radius:50%;transition:left 0.15s"></span></span>
-    </div>
   </div>
   <!-- Refresh button -->
   <button id="refresh-btn" onclick="refreshCurrentView_()" title="Refresh" style="position:fixed;top:10px;right:10px;z-index:9999;background:var(--card);border:1px solid var(--border);border-radius:50%;width:36px;height:36px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.15);opacity:0.85;transition:opacity 0.2s,transform 0.3s" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.85'">&#x21BB;</button>
@@ -2902,7 +2895,6 @@ var App = {
   glossary: null,
   glossaryLang: '',
   glossaryRegex: null,
-  autoTranslate: false,
 
   // Daily Challenge
   dailyData: null,
@@ -3542,7 +3534,7 @@ function startTutorial() {
     },
     {
       title: 'Translations',
-      text: 'Pick French, Farsi, or Arabic from the sidebar. The translation shows inline next to the term. That\'s it.',
+      text: 'Pick a language from the sidebar. Medical terms appear in blue. Tap or double-click any blue term for its translation.',
       target: null
     }
   ];
@@ -4251,17 +4243,6 @@ function finishInit() {
   if (!App.glossaryLang) App.glossaryLang = 'en';
   // Only load glossary if not already loaded during login
   if (!App.glossary || !App.glossary.length) loadGlossary();
-  // Restore auto-translate state
-  if (localStorage.getItem('mcc_auto_translate') === '1' && savedLang) {
-    App.autoTranslate = true;
-    document.body.classList.add('auto-translate');
-    var dot2 = document.getElementById('auto-trans-dot');
-    var knob2 = document.getElementById('auto-trans-knob');
-    var label2 = document.getElementById('auto-trans-label');
-    if (dot2) dot2.style.background = 'var(--primary)';
-    if (knob2) knob2.style.left = '10px';
-    if (label2) label2.style.color = 'var(--primary)';
-  }
 
   // Check for shared flashcard link (?fc=123&spec=Cardiology)
   var urlParams = new URLSearchParams(window.location.search);
@@ -10365,8 +10346,6 @@ function setLanguage(lang) {
     if (!App.glossary) loadGlossary();
   } else {
     document.body.classList.remove('has-lang');
-    // Turn off auto-translate when switching to English only
-    if (App.autoTranslate) toggleAutoTranslate();
   }
 }
 
@@ -10949,9 +10928,7 @@ function highlightMedTerms(html) {
   var result = html.replace(App.glossaryRegex, function(match) {
     var entry = App.glossary[match.toLowerCase()];
     if (!entry) return match;
-    var translation = (lang && lang !== 'en') ? (entry[lang] || '') : '';
-    var transSpan = translation ? '<span class="med-auto-trans">' + escapeHtml(translation) + '</span>' : '';
-    return '<span class="med-term" data-term="' + match.toLowerCase() + '" onclick="toggleMedPanel(event)">' + match + transSpan + '</span>';
+    return '<span class="med-term" data-term="' + match.toLowerCase() + '" onclick="toggleMedPanel(event)">' + match + '</span>';
   });
   return highlightPatternTerms_(result);
 }
@@ -11235,18 +11212,6 @@ function expandMedAbbrev_(term) {
   return term;
 }
 
-function toggleAutoTranslate() {
-  App.autoTranslate = !App.autoTranslate;
-  localStorage.setItem('mcc_auto_translate', App.autoTranslate ? '1' : '');
-  document.body.classList.toggle('auto-translate', App.autoTranslate);
-  var dot = document.getElementById('auto-trans-dot');
-  var knob = document.getElementById('auto-trans-knob');
-  var label = document.getElementById('auto-trans-label');
-  if (dot) dot.style.background = App.autoTranslate ? 'var(--primary)' : 'var(--border)';
-  if (knob) knob.style.left = App.autoTranslate ? '10px' : '2px';
-  if (label) label.style.color = App.autoTranslate ? 'var(--primary)' : 'var(--text-light)';
-  showToast(App.autoTranslate ? 'Auto-translate ON' : 'Auto-translate OFF');
-}
 
 function refreshCurrentView_() {
   var btn = document.getElementById('refresh-btn');
