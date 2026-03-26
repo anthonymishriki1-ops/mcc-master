@@ -6055,8 +6055,6 @@ function startHandsFreeListening_() {
     }
     // NAC Direct Mode — skip GAS, call Anthropic directly
     if (App._nacDirectMode && App.nacActive) {
-      try { handsFreeRecognition.stop(); } catch(e) {}
-      App.pbMicActive = false;
       sendNACMessageDirect_(best);
       return;
     }
@@ -8889,29 +8887,27 @@ function callTTSDirect_(text, voice, speed) {
 function sendNACMessageDirect_(userMessage) {
   if (!App.nacActive || !App._nacSystemPrompt) return;
 
+  // Stop mic while processing (prevent hearing TTS playback)
+  stopMicForProcessing_();
+
   // Cancel any in-progress TTS
-  if (App._ttsAudio) { try { App._ttsAudio.pause(); } catch(e) {} App._ttsAudio = null; }
+  if (App._ttsAudio) { try { App._ttsAudio.pause(); App._ttsAudio.currentTime = 0; } catch(e) {} App._ttsAudio = null; }
   try { window.speechSynthesis.cancel(); } catch(e) {}
   App._pbSpeaking = false;
 
-  // Add user message to history
-  App.pbHistory.push({ role: 'user', content: userMessage });
+  // Mark doctor spoke, clear idle nudge
   App.nacDoctorSpoke = true;
   if (App.nacIdleTimer) { clearTimeout(App.nacIdleTimer); App.nacIdleTimer = null; }
+
+  // Add user message to history and render
+  App.pbHistory.push({ role: 'user', content: userMessage });
   renderPBChat();
 
-  // First message from doctor — use pregen opening line instead of API call
-  if (App._nacPregenOpening && App.pbHistory.filter(function(m){return m.role==='user';}).length === 1) {
+  // First message from doctor — use pregen opening line (instant, no API call)
+  if (App._nacPregenOpening) {
     var opening = App._nacPregenOpening;
-    App._nacPregenOpening = null; // use only once
-    App.pbHistory.push({ role: 'assistant', content: opening });
-    renderPBChat();
-    // Speak it
-    var voice = getOpenAIVoice_();
-    var speed = getOpenAISpeed_();
-    callTTSDirect_(opening, voice, speed).then(function() {
-      if (App.pbHandsFree) resumeHandsFreeListening_();
-    });
+    App._nacPregenOpening = null;
+    nacDirectRespond_(opening);
     return;
   }
 
@@ -8925,23 +8921,42 @@ function sendNACMessageDirect_(userMessage) {
   }
 
   callAnthropicDirect_(App._nacSystemPrompt, apiMessages).then(function(response) {
-    // Strip any JSON leaks
     response = response.replace(/```[\s\S]*?```/g, '').replace(/\[SYSTEM[^\]]*\]/gi, '').trim();
-    App.pbHistory.push({ role: 'assistant', content: response });
-    App.nacDoctorSpoke = true;
-    renderPBChat();
-
-    // Speak the response via direct TTS
-    var voice = getOpenAIVoice_();
-    var speed = getOpenAISpeed_();
-    callTTSDirect_(response, voice, speed).then(function() {
-      if (App.pbHandsFree) resumeHandsFreeListening_();
-    });
+    nacDirectRespond_(response);
   }).catch(function(e) {
     App.pbHistory.push({ role: 'system', content: 'Error: ' + (e.message || String(e)) });
     renderPBChat();
-    if (App.pbHandsFree) resumeHandsFreeListening_();
+    restartMicAfterResponse_();
   });
+}
+
+// Shared response handler: add to history, render, speak, restart mic
+function nacDirectRespond_(text) {
+  App.pbHistory.push({ role: 'assistant', content: text });
+  renderPBChat();
+  var voice = getOpenAIVoice_();
+  var speed = getOpenAISpeed_();
+  callTTSDirect_(text, voice, speed).then(function() {
+    restartMicAfterResponse_();
+  }).catch(function() {
+    restartMicAfterResponse_();
+  });
+}
+
+// Stop mic cleanly before processing
+function stopMicForProcessing_() {
+  if (handsFreeRecognition) {
+    try { handsFreeRecognition.abort(); } catch(e) {}
+    handsFreeRecognition = null;
+  }
+  App.pbMicActive = false;
+}
+
+// Restart mic after TTS finishes
+function restartMicAfterResponse_() {
+  if (App.pbHandsFree && App.nacActive && !App.pbDiagResolved) {
+    setTimeout(function() { startHandsFreeListening_(); }, 300);
+  }
 }
 
 // Build NAC system prompt from pregen station data (client-side, no server needed)
@@ -9339,9 +9354,14 @@ function enterNACStation_() {
         "...are you the doctor? Should I be worried that you're just standing there?"
       ];
       var nudge = nudges[Math.floor(Math.random() * nudges.length)];
-      App.pbHistory.push({ role: 'assistant', content: nudge });
       App.nacDoctorSpoke = true; // treat nudge as breaking the ice
-      renderPBChat();
+      // Use direct respond if in direct mode (speaks + restarts mic)
+      if (App._nacDirectMode) {
+        nacDirectRespond_(nudge);
+      } else {
+        App.pbHistory.push({ role: 'assistant', content: nudge });
+        renderPBChat();
+      }
     }
   }, 30000);
 }
@@ -10164,6 +10184,18 @@ function renderNACStationUI_() {
   }
 
   html += '</div>'; // end tab content
+
+  // ── Diagnose overlay ──
+  if (App.pbDiagnosing && !App.pbDiagResolved) {
+    html += '<div style="padding:20px;background:var(--card);border-top:2px solid var(--warning);text-align:center">';
+    html += '<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:12px">What is your diagnosis?</div>';
+    html += '<div style="display:flex;gap:8px;max-width:500px;margin:0 auto">';
+    html += '<input type="text" id="pb-diag-input" class="search-bar" placeholder="e.g., Acute appendicitis" autofocus style="flex:1;font-size:15px;padding:12px" onkeydown="if(event.key===\'Enter\')submitPBDiagnosis()">';
+    html += '<button class="btn btn-warning" onclick="submitPBDiagnosis()" style="font-size:15px;padding:12px 20px">Submit</button>';
+    html += '</div>';
+    html += '<button class="btn btn-sm btn-outline" onclick="closeDiagnoseModal()" style="margin-top:10px">Cancel</button>';
+    html += '</div>';
+  }
 
   // ── Bottom: Voice controls ──
   if (!App.pbDiagResolved) {
