@@ -2936,8 +2936,16 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '3.9';
+var APP_VERSION = '4.0';
 var APP_CHANGELOG = [
+  { version: '4.0', date: 'Mar 26 2026', label: 'NAC-OSCE: Deepgram STT, direct Anthropic calls, doctor-speaks-first flow', items: [
+    'Deepgram WebSocket STT — real-time voice input, works cross-browser',
+    'Direct browser→Anthropic API calls — no GAS middleman, faster responses',
+    'Doctor speaks first — patient waits for you to introduce yourself',
+    'BP vitals display fixed from pregen data',
+    'Door prompt redesigned — no countdown timer, proper clinical info',
+    'API keys removed from settings page — managed via Dev Panel',
+  ]},
   { version: '3.9', date: 'Mar 25 2026', label: 'NAC-OSCE fix: station rendering, live vitals, TTS overlap', items: [
     'Fixed NAC station showing "undefined" instead of clinical workstation UI',
     'VitalsEngine now starts properly in NAC mode — live updating vitals',
