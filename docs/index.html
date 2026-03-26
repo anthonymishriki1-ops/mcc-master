@@ -8603,108 +8603,108 @@ function logPBConversation(outcome, extraData) {
 var NAC_PRACTICE_TESTS = [
   // ─── Practice Test 1 ───
   [
-    { presentation: 'Chest Pain', specialty: 'Cardiology', focus: 'ACS workup' },
-    { presentation: 'Dyspnea', specialty: 'Respirology', focus: 'PE vs CHF vs pneumonia' },
-    { presentation: 'Abdominal Pain', specialty: 'Surgery', focus: 'Surgical abdomen assessment' },
-    { presentation: 'Trauma/Injury', specialty: 'Emergency Medicine', focus: 'ATLS primary survey' },
-    { presentation: 'Vaginal Bleeding', specialty: 'OB/GYN', focus: 'Early pregnancy bleeding' },
-    { presentation: 'Pelvic Pain', specialty: 'OB/GYN', focus: 'Ectopic vs PID vs torsion' },
-    { presentation: 'Pediatric Fever', specialty: 'Pediatrics', focus: 'Febrile child workup' },
-    { presentation: 'Crying/Irritable Child', specialty: 'Pediatrics', focus: 'Infant assessment' },
-    { presentation: 'Depressed Mood', specialty: 'Psychiatry', focus: 'MDD + safety assessment' },
-    { presentation: 'Anxiety', specialty: 'Psychiatry', focus: 'GAD vs panic vs medical cause' },
-    { presentation: 'Hypertension', specialty: 'Family Medicine', focus: 'New HTN workup + counseling' },
-    { presentation: 'Headache', specialty: 'Neurology', focus: 'Red flags, SAH rule-out' }
+    { pregenId: 1, presentation: 'Chest Pain', specialty: 'Cardiology', focus: 'ACS workup' },
+    { pregenId: 4, presentation: 'Dyspnea', specialty: 'Respirology', focus: 'PE vs CHF vs pneumonia' },
+    { pregenId: 19, presentation: 'Abdominal Pain', specialty: 'Surgery', focus: 'Surgical abdomen assessment' },
+    { pregenId: 25, presentation: 'Trauma/Injury', specialty: 'Emergency Medicine', focus: 'ATLS primary survey' },
+    { pregenId: 31, presentation: 'Vaginal Bleeding', specialty: 'OB/GYN', focus: 'Early pregnancy bleeding' },
+    { pregenId: 32, presentation: 'Pelvic Pain', specialty: 'OB/GYN', focus: 'Ectopic vs PID vs torsion' },
+    { pregenId: 43, presentation: 'Pediatric Fever', specialty: 'Pediatrics', focus: 'Febrile child workup' },
+    { pregenId: 44, presentation: 'Crying/Irritable Child', specialty: 'Pediatrics', focus: 'Infant assessment' },
+    { pregenId: 55, presentation: 'Depressed Mood', specialty: 'Psychiatry', focus: 'MDD + safety assessment' },
+    { pregenId: 56, presentation: 'Anxiety', specialty: 'Psychiatry', focus: 'GAD vs panic vs medical cause' },
+    { pregenId: 73, presentation: 'Hypertension', specialty: 'Family Medicine', focus: 'New HTN workup + counseling' },
+    { pregenId: 9, presentation: 'Headache', specialty: 'Neurology', focus: 'Red flags, SAH rule-out' }
   ],
   // ─── Practice Test 2 ───
   [
-    { presentation: 'Peripheral Edema', specialty: 'Cardiology', focus: 'CHF assessment' },
-    { presentation: 'Jaundice', specialty: 'GI / Hepatology', focus: 'Obstructive vs hepatic' },
-    { presentation: 'GI Bleeding', specialty: 'Surgery', focus: 'Upper vs lower GI bleed' },
-    { presentation: 'Poisoning/Overdose', specialty: 'Emergency Medicine', focus: 'Toxidrome recognition' },
-    { presentation: 'Amenorrhea', specialty: 'OB/GYN', focus: 'Primary vs secondary amenorrhea' },
-    { presentation: 'Pregnancy Concern', specialty: 'OB/GYN', focus: 'Prenatal visit or complication' },
-    { presentation: 'Rash in a Child', specialty: 'Pediatrics', focus: 'Viral exanthem vs serious' },
-    { presentation: 'Developmental Delay', specialty: 'Pediatrics', focus: 'Milestone assessment' },
-    { presentation: 'Psychosis', specialty: 'Psychiatry', focus: 'First-episode psychosis' },
-    { presentation: 'Suicidal Ideation', specialty: 'Psychiatry', focus: 'Risk assessment + safety plan' },
-    { presentation: 'Back Pain', specialty: 'Family Medicine', focus: 'Red flags + conservative management' },
-    { presentation: 'Polyuria/Polydipsia', specialty: 'Endocrinology', focus: 'New-onset DM or DKA' }
+    { pregenId: 17, presentation: 'Peripheral Edema', specialty: 'Cardiology', focus: 'CHF assessment' },
+    { pregenId: 18, presentation: 'Jaundice', specialty: 'GI / Hepatology', focus: 'Obstructive vs hepatic' },
+    { pregenId: 21, presentation: 'GI Bleeding', specialty: 'Surgery', focus: 'Upper vs lower GI bleed' },
+    { pregenId: 68, presentation: 'Poisoning/Overdose', specialty: 'Emergency Medicine', focus: 'Toxidrome recognition' },
+    { pregenId: 33, presentation: 'Amenorrhea', specialty: 'OB/GYN', focus: 'Primary vs secondary amenorrhea' },
+    { pregenId: 34, presentation: 'Pregnancy Concern', specialty: 'OB/GYN', focus: 'Prenatal visit or complication' },
+    { pregenId: 45, presentation: 'Rash in a Child', specialty: 'Pediatrics', focus: 'Viral exanthem vs serious' },
+    { pregenId: 46, presentation: 'Developmental Delay', specialty: 'Pediatrics', focus: 'Milestone assessment' },
+    { pregenId: 57, presentation: 'Psychosis', specialty: 'Psychiatry', focus: 'First-episode psychosis' },
+    { pregenId: 58, presentation: 'Suicidal Ideation', specialty: 'Psychiatry', focus: 'Risk assessment + safety plan' },
+    { pregenId: 74, presentation: 'Back Pain', specialty: 'Family Medicine', focus: 'Red flags + conservative management' },
+    { pregenId: 11, presentation: 'Polyuria/Polydipsia', specialty: 'Endocrinology', focus: 'New-onset DM or DKA' }
   ],
   // ─── Practice Test 3 ───
   [
-    { presentation: 'Abdominal Pain', specialty: 'GI / Hepatology', focus: 'Acute abdomen DDx' },
-    { presentation: 'Anemia', specialty: 'Hematology / Oncology', focus: 'Iron deficiency vs chronic disease' },
-    { presentation: 'Palpable Mass', specialty: 'Surgery', focus: 'Breast or thyroid mass workup' },
-    { presentation: 'Allergic Reaction', specialty: 'Emergency Medicine', focus: 'Anaphylaxis management' },
-    { presentation: 'Breast Lump', specialty: 'OB/GYN', focus: 'Triple assessment' },
-    { presentation: 'Vaginal Bleeding', specialty: 'OB/GYN', focus: 'Postmenopausal bleeding' },
-    { presentation: 'Failure to Thrive', specialty: 'Pediatrics', focus: 'Growth faltering workup' },
-    { presentation: 'Wheezing', specialty: 'Pediatrics', focus: 'Asthma vs bronchiolitis' },
-    { presentation: 'Substance Abuse', specialty: 'Psychiatry', focus: 'Alcohol use disorder' },
-    { presentation: 'Insomnia', specialty: 'Psychiatry', focus: 'Sleep hygiene + DDx' },
-    { presentation: 'Skin Rash', specialty: 'Family Medicine', focus: 'Dermatology DDx' },
-    { presentation: 'Fever', specialty: 'Infectious Disease', focus: 'Fever workup, sepsis screen' }
+    { pregenId: 7, presentation: 'Abdominal Pain', specialty: 'GI / Hepatology', focus: 'Acute abdomen DDx' },
+    { pregenId: 79, presentation: 'Anemia', specialty: 'Hematology / Oncology', focus: 'Iron deficiency vs chronic disease' },
+    { pregenId: 23, presentation: 'Palpable Mass', specialty: 'Surgery', focus: 'Breast or thyroid mass workup' },
+    { pregenId: 69, presentation: 'Allergic Reaction', specialty: 'Emergency Medicine', focus: 'Anaphylaxis management' },
+    { pregenId: 36, presentation: 'Breast Lump', specialty: 'OB/GYN', focus: 'Triple assessment' },
+    { pregenId: 35, presentation: 'Vaginal Bleeding', specialty: 'OB/GYN', focus: 'Postmenopausal bleeding' },
+    { pregenId: 49, presentation: 'Failure to Thrive', specialty: 'Pediatrics', focus: 'Growth faltering workup' },
+    { pregenId: 50, presentation: 'Wheezing', specialty: 'Pediatrics', focus: 'Asthma vs bronchiolitis' },
+    { pregenId: 59, presentation: 'Substance Abuse', specialty: 'Psychiatry', focus: 'Alcohol use disorder' },
+    { pregenId: 60, presentation: 'Insomnia', specialty: 'Psychiatry', focus: 'Sleep hygiene + DDx' },
+    { pregenId: 75, presentation: 'Skin Rash', specialty: 'Family Medicine', focus: 'Dermatology DDx' },
+    { pregenId: 16, presentation: 'Fever', specialty: 'Infectious Disease', focus: 'Fever workup, sepsis screen' }
   ],
   // ─── Practice Test 4 ───
   [
-    { presentation: 'Palpitations', specialty: 'Cardiology', focus: 'Arrhythmia workup' },
-    { presentation: 'Dizziness/Vertigo', specialty: 'Neurology', focus: 'Central vs peripheral vertigo' },
-    { presentation: 'Fracture/Trauma', specialty: 'Surgery', focus: 'MSK injury management' },
-    { presentation: 'Altered Mental Status', specialty: 'Emergency Medicine', focus: 'AMS workup' },
-    { presentation: 'Pelvic Pain', specialty: 'OB/GYN', focus: 'Ovarian torsion vs cyst rupture' },
-    { presentation: 'Pregnancy Concern', specialty: 'OB/GYN', focus: 'Gestational diabetes screening' },
-    { presentation: 'Pediatric Fever', specialty: 'Pediatrics', focus: 'Meningitis rule-out' },
-    { presentation: 'Rash in a Child', specialty: 'Pediatrics', focus: 'Kawasaki vs scarlet fever' },
-    { presentation: 'Depressed Mood', specialty: 'Psychiatry', focus: 'Postpartum depression' },
-    { presentation: 'Anxiety', specialty: 'Psychiatry', focus: 'PTSD assessment' },
-    { presentation: 'Fatigue', specialty: 'Family Medicine', focus: 'Broad DDx + screening' },
-    { presentation: 'Hematuria', specialty: 'Nephrology / Urology', focus: 'Glomerular vs urologic' }
+    { pregenId: 3, presentation: 'Chest Pain', specialty: 'Cardiology', focus: 'Non-cardiac DDx' },
+    { pregenId: 10, presentation: 'Headache', specialty: 'Neurology', focus: 'Migraine assessment' },
+    { pregenId: 27, presentation: 'Fracture/Trauma', specialty: 'Surgery', focus: 'MSK injury management' },
+    { pregenId: 81, presentation: 'Altered Mental Status', specialty: 'Emergency Medicine', focus: 'AMS workup' },
+    { pregenId: 38, presentation: 'Pelvic Pain', specialty: 'OB/GYN', focus: 'Endometriosis workup' },
+    { pregenId: 39, presentation: 'Pregnancy Concern', specialty: 'OB/GYN', focus: 'Gestational diabetes screening' },
+    { pregenId: 47, presentation: 'Pediatric Fever', specialty: 'Pediatrics', focus: 'Meningitis rule-out' },
+    { pregenId: 48, presentation: 'Rash in a Child', specialty: 'Pediatrics', focus: 'Kawasaki vs scarlet fever' },
+    { pregenId: 61, presentation: 'Depressed Mood', specialty: 'Psychiatry', focus: 'Postpartum depression' },
+    { pregenId: 62, presentation: 'Anxiety', specialty: 'Psychiatry', focus: 'PTSD assessment' },
+    { pregenId: 76, presentation: 'Fatigue', specialty: 'Family Medicine', focus: 'Broad DDx + screening' },
+    { pregenId: 15, presentation: 'Hematuria', specialty: 'Nephrology / Urology', focus: 'Renal calculi' }
   ],
   // ─── Practice Test 5 ───
   [
-    { presentation: 'Dyspnea', specialty: 'Respirology', focus: 'Asthma exacerbation vs COPD' },
-    { presentation: 'Joint Pain', specialty: 'MSK / Rheumatology', focus: 'Septic vs crystal arthropathy' },
-    { presentation: 'Wound/Ulcer', specialty: 'Surgery', focus: 'Wound assessment, I&D' },
-    { presentation: 'Burns', specialty: 'Emergency Medicine', focus: 'Burn assessment + fluid resuscitation' },
-    { presentation: 'Vaginal Bleeding', specialty: 'OB/GYN', focus: 'Placenta previa vs abruption' },
-    { presentation: 'Amenorrhea', specialty: 'OB/GYN', focus: 'PCOS workup' },
-    { presentation: 'Crying/Irritable Child', specialty: 'Pediatrics', focus: 'Colic vs intussusception' },
-    { presentation: 'Developmental Delay', specialty: 'Pediatrics', focus: 'Autism screening' },
-    { presentation: 'Psychosis', specialty: 'Psychiatry', focus: 'Substance-induced psychosis' },
-    { presentation: 'Suicidal Ideation', specialty: 'Psychiatry', focus: 'Adolescent self-harm' },
-    { presentation: 'Weight Loss', specialty: 'Family Medicine', focus: 'Unintentional weight loss' },
-    { presentation: 'Syncope', specialty: 'Emergency Medicine', focus: 'Cardiac vs vasovagal vs neuro' }
+    { pregenId: 5, presentation: 'Dyspnea', specialty: 'Respirology', focus: 'COPD exacerbation' },
+    { pregenId: 13, presentation: 'Joint Pain', specialty: 'MSK / Rheumatology', focus: 'Septic vs crystal arthropathy' },
+    { pregenId: 29, presentation: 'Wound/Ulcer', specialty: 'Surgery', focus: 'Wound assessment, I&D' },
+    { pregenId: 70, presentation: 'Burns', specialty: 'Emergency Medicine', focus: 'Burn assessment + fluid resuscitation' },
+    { pregenId: 37, presentation: 'Vaginal Bleeding', specialty: 'OB/GYN', focus: 'Placenta previa vs abruption' },
+    { pregenId: 40, presentation: 'Amenorrhea', specialty: 'OB/GYN', focus: 'PCOS workup' },
+    { pregenId: 53, presentation: 'Crying/Irritable Child', specialty: 'Pediatrics', focus: 'Non-accidental injury screening' },
+    { pregenId: 54, presentation: 'Developmental Delay', specialty: 'Pediatrics', focus: 'Autism screening' },
+    { pregenId: 63, presentation: 'Psychosis', specialty: 'Psychiatry', focus: 'Substance-induced psychosis' },
+    { pregenId: 64, presentation: 'Suicidal Ideation', specialty: 'Psychiatry', focus: 'Adolescent self-harm' },
+    { pregenId: 77, presentation: 'Weight Loss', specialty: 'Family Medicine', focus: 'Unintentional weight loss' },
+    { pregenId: 72, presentation: 'Syncope', specialty: 'Emergency Medicine', focus: 'Cardiac vs vasovagal vs neuro' }
   ],
   // ─── Practice Test 6 ───
   [
-    { presentation: 'Chest Pain', specialty: 'Cardiology', focus: 'Pericarditis vs aortic dissection' },
-    { presentation: 'Seizures', specialty: 'Neurology', focus: 'New-onset seizure workup' },
-    { presentation: 'Abdominal Pain', specialty: 'Surgery', focus: 'Appendicitis vs cholecystitis' },
-    { presentation: 'Cardiac Arrest', specialty: 'Emergency Medicine', focus: 'ACLS algorithm' },
-    { presentation: 'Breast Lump', specialty: 'OB/GYN', focus: 'Fibroadenoma vs carcinoma' },
-    { presentation: 'Pelvic Pain', specialty: 'OB/GYN', focus: 'Endometriosis workup' },
-    { presentation: 'Failure to Thrive', specialty: 'Pediatrics', focus: 'Neglect vs organic cause' },
-    { presentation: 'Wheezing', specialty: 'Pediatrics', focus: 'Foreign body aspiration' },
-    { presentation: 'Substance Abuse', specialty: 'Psychiatry', focus: 'Opioid use disorder + harm reduction' },
-    { presentation: 'Insomnia', specialty: 'Psychiatry', focus: 'Insomnia with comorbid anxiety' },
-    { presentation: 'Cough', specialty: 'Family Medicine', focus: 'Chronic cough workup' },
-    { presentation: 'Lymphadenopathy', specialty: 'Hematology / Oncology', focus: 'Lymphoma vs reactive' }
+    { pregenId: 2, presentation: 'Chest Pain', specialty: 'Cardiology', focus: 'ACS workup (atypical)' },
+    { pregenId: 83, presentation: 'Seizures', specialty: 'Neurology', focus: 'New-onset seizure workup' },
+    { pregenId: 20, presentation: 'Abdominal Pain', specialty: 'Surgery', focus: 'Bowel obstruction' },
+    { pregenId: 82, presentation: 'Cardiac Arrest', specialty: 'Emergency Medicine', focus: 'ACLS algorithm' },
+    { pregenId: 41, presentation: 'Breast Lump', specialty: 'OB/GYN', focus: 'Fibroadenoma vs carcinoma' },
+    { pregenId: 32, presentation: 'Pelvic Pain', specialty: 'OB/GYN', focus: 'Ectopic vs PID vs torsion' },
+    { pregenId: 49, presentation: 'Failure to Thrive', specialty: 'Pediatrics', focus: 'Growth faltering workup' },
+    { pregenId: 51, presentation: 'Wheezing', specialty: 'Pediatrics', focus: 'Foreign body aspiration' },
+    { pregenId: 65, presentation: 'Substance Abuse', specialty: 'Psychiatry', focus: 'Opioid use disorder + harm reduction' },
+    { pregenId: 60, presentation: 'Insomnia', specialty: 'Psychiatry', focus: 'Sleep hygiene + DDx' },
+    { pregenId: 78, presentation: 'Cough', specialty: 'Family Medicine', focus: 'Chronic cough workup' },
+    { pregenId: 80, presentation: 'Lymphadenopathy', specialty: 'Hematology / Oncology', focus: 'Lymphoma vs reactive' }
   ],
   // ─── Practice Test 7 ───
   [
-    { presentation: 'Peripheral Edema', specialty: 'Cardiology', focus: 'Nephrotic syndrome vs CHF' },
-    { presentation: 'Memory Loss', specialty: 'Neurology', focus: 'Dementia vs delirium' },
-    { presentation: 'GI Bleeding', specialty: 'Surgery', focus: 'Variceal bleed management' },
-    { presentation: 'Poisoning/Overdose', specialty: 'Emergency Medicine', focus: 'Acetaminophen overdose' },
-    { presentation: 'Vaginal Bleeding', specialty: 'OB/GYN', focus: 'Miscarriage management' },
-    { presentation: 'Pregnancy Concern', specialty: 'OB/GYN', focus: 'Pre-eclampsia assessment' },
-    { presentation: 'Pediatric Fever', specialty: 'Pediatrics', focus: 'UTI in a child' },
-    { presentation: 'Crying/Irritable Child', specialty: 'Pediatrics', focus: 'Non-accidental injury screening' },
-    { presentation: 'Depressed Mood', specialty: 'Psychiatry', focus: 'Bipolar vs unipolar depression' },
-    { presentation: 'Anxiety', specialty: 'Psychiatry', focus: 'OCD assessment' },
-    { presentation: 'Hypertension', specialty: 'Family Medicine', focus: 'Secondary HTN workup' },
-    { presentation: 'Thyroid Enlargement', specialty: 'Endocrinology', focus: 'Thyroid nodule workup' }
+    { pregenId: 6, presentation: 'Dyspnea', specialty: 'Respirology', focus: 'Decompensated CHF' },
+    { pregenId: 10, presentation: 'Memory Loss', specialty: 'Neurology', focus: 'Migraine assessment' },
+    { pregenId: 22, presentation: 'GI Bleeding', specialty: 'Surgery', focus: 'Lower GI bleed' },
+    { pregenId: 71, presentation: 'Poisoning/Overdose', specialty: 'Emergency Medicine', focus: 'Acetaminophen overdose' },
+    { pregenId: 42, presentation: 'Vaginal Bleeding', specialty: 'OB/GYN', focus: 'Miscarriage management' },
+    { pregenId: 34, presentation: 'Pregnancy Concern', specialty: 'OB/GYN', focus: 'Prenatal visit or complication' },
+    { pregenId: 52, presentation: 'Pediatric Fever', specialty: 'Pediatrics', focus: 'UTI in a child' },
+    { pregenId: 53, presentation: 'Crying/Irritable Child', specialty: 'Pediatrics', focus: 'Non-accidental injury screening' },
+    { pregenId: 66, presentation: 'Depressed Mood', specialty: 'Psychiatry', focus: 'Bipolar vs unipolar depression' },
+    { pregenId: 62, presentation: 'Anxiety', specialty: 'Psychiatry', focus: 'PTSD assessment' },
+    { pregenId: 73, presentation: 'Hypertension', specialty: 'Family Medicine', focus: 'New HTN workup + counseling' },
+    { pregenId: 84, presentation: 'Thyroid Enlargement', specialty: 'Endocrinology', focus: 'Thyroid nodule workup' }
   ]
 ];
 
@@ -8900,47 +8900,76 @@ function startNextNACStation() {
 
   navigateTo('patientbot');
 
-  // Show reading period IMMEDIATELY with blueprint data — no waiting for server
-  App.nacCaseReady = false;
-  App.nacCaseError = null;
-  showNACReadingPeriod_(station);
-
-  // Fire server call in the background — case loads while user reads door prompt
-  serverCall('startPatientBotCase', station.specialty, false, App.nacDifficulty, App.pbCustom).then(function(result) {
-    App.pbCaseId = result.caseId;
-    App.pbSpecialty = result.specialty;
-    App.pbPresentation = station.presentation;
-    App.pbDiagnosis = null;
-    App.pbPatientInfo = null;
-    App.pbDiagnosing = false;
-    App.pbDiagAttempts = 0;
-    App.pbDiagResolved = false;
-    App.pbPartialUsed = false;
-    App.pbScorecard = null;
-    App.pbScorecardLoading = false;
-    App.pbScorecardError = false;
-    App.pbDrDataEval = null;
-    App.pbDrDataEvalLoading = false;
-    App.pbDrDataEvalError = false;
-    App.pbDrDataConvHistory = [];
-    App.pbMonitorAttached = false;
-    VitalsEngine.init(result.vitals || result.patient || {});
-
-    var msg = stripPatientJSON(result.initialMessage);
-    if (result.patientInfo) {
+  // Use pregen case if available (instant), fall back to AI generation
+  if (station.pregenId) {
+    App.nacCaseReady = false;
+    App.nacCaseError = null;
+    // Show reading period immediately with blueprint data
+    showNACReadingPeriod_(station);
+    // Load pregen case in background (much faster than AI generation)
+    serverCall('startPregenCase', station.pregenId).then(function(result) {
+      if (result.error) { App.nacCaseError = result.error; return; }
+      App.pbCaseId = result.caseId;
+      App.pbSpecialty = result.specialty;
+      App.pbPresentation = result.presentation;
+      App.pbDiagnosis = null;
       App.pbPatientInfo = result.patientInfo;
       App.pbDiagnosis = result.patientInfo.diagnosis;
-    } else {
-      var jsonStr = extractPatientJSON(result.initialMessage);
-      if (jsonStr) { try { App.pbPatientInfo = JSON.parse(jsonStr); App.pbDiagnosis = App.pbPatientInfo.diagnosis; } catch(e) {} }
-    }
-
-    App.pbHistory = [{ role: 'assistant', content: msg }];
-    App.nacStationMsg = msg;
-    App.nacCaseReady = true;
-  }).catch(function(e) {
-    App.nacCaseError = e.message || String(e);
-  });
+      App.pbDiagnosing = false;
+      App.pbDiagAttempts = 0;
+      App.pbDiagResolved = false;
+      App.pbPartialUsed = false;
+      App.pbScorecard = null;
+      App.pbScorecardLoading = false;
+      App.pbScorecardError = false;
+      App.pbDrDataEval = null;
+      App.pbDrDataEvalLoading = false;
+      App.pbDrDataEvalError = false;
+      App.pbDrDataConvHistory = [];
+      App.pbMonitorAttached = false;
+      VitalsEngine.init(result.vitals || result.patientInfo || {});
+      var msg = stripPatientJSON(result.initialMessage);
+      App.pbHistory = [{ role: 'assistant', content: msg }];
+      App.nacStationMsg = msg;
+      App.nacCaseReady = true;
+    }).catch(function(e) { App.nacCaseError = e.message || String(e); });
+  } else {
+    // Fallback: AI-generated case
+    App.nacCaseReady = false;
+    App.nacCaseError = null;
+    showNACReadingPeriod_(station);
+    serverCall('startPatientBotCase', station.specialty, false, App.nacDifficulty, App.pbCustom).then(function(result) {
+      App.pbCaseId = result.caseId;
+      App.pbSpecialty = result.specialty;
+      App.pbPresentation = station.presentation;
+      App.pbDiagnosis = null;
+      App.pbPatientInfo = null;
+      App.pbDiagnosing = false;
+      App.pbDiagAttempts = 0;
+      App.pbDiagResolved = false;
+      App.pbPartialUsed = false;
+      App.pbScorecard = null;
+      App.pbScorecardLoading = false;
+      App.pbScorecardError = false;
+      App.pbDrDataEval = null;
+      App.pbDrDataEvalLoading = false;
+      App.pbDrDataEvalError = false;
+      App.pbDrDataConvHistory = [];
+      App.pbMonitorAttached = false;
+      VitalsEngine.init(result.vitals || result.patient || {});
+      var msg = stripPatientJSON(result.initialMessage);
+      if (result.patientInfo) {
+        App.pbPatientInfo = result.patientInfo;
+        App.pbDiagnosis = result.patientInfo.diagnosis;
+      } else {
+        var jsonStr = extractPatientJSON(result.initialMessage);
+        if (jsonStr) { try { App.pbPatientInfo = JSON.parse(jsonStr); App.pbDiagnosis = App.pbPatientInfo.diagnosis; } catch(e) {} }
+      }
+      App.pbHistory = [{ role: 'assistant', content: msg }];
+      App.nacStationMsg = msg;
+      App.nacCaseReady = true;
+    }).catch(function(e) { App.nacCaseError = e.message || String(e); });
+  }
 }
 
 // ── NAC Reading Period (2 min door prompt + notepad) ──
@@ -8952,35 +8981,52 @@ function showNACReadingPeriod_(station) {
   App.nacReadingTimer = readingSec;
 
   function renderReading() {
-    var m = Math.floor(App.nacReadingTimer / 60);
-    var s = App.nacReadingTimer % 60;
-    var timerColor = App.nacReadingTimer <= 30 ? '#c62828' : App.nacReadingTimer <= 60 ? '#e65100' : '#4facfe';
     var p = App.pbPatientInfo;
     var html = '<div style="display:flex;flex-direction:column;height:100%;background:var(--bg)">';
 
     // Header
-    html += '<div style="background:linear-gradient(135deg,#0d1442,#1a237e);padding:20px 24px;text-align:center">';
-    html += '<div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,0.5);margin-bottom:4px">Reading Period</div>';
-    html += '<div style="font-size:32px;font-weight:900;font-family:monospace;color:' + timerColor + '" id="nac-reading-timer">' + m + ':' + (s < 10 ? '0' : '') + s + '</div>';
-    html += '<div style="font-size:13px;color:rgba(255,255,255,0.6);margin-top:4px">Station ' + App.nacCurrentStation + ' of ' + App.nacTotalStations + '</div>';
+    html += '<div style="background:linear-gradient(135deg,#0d1442,#1a237e);padding:16px 24px;text-align:center">';
+    html += '<div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,0.5);margin-bottom:4px">Door Prompt</div>';
+    html += '<div style="font-size:18px;font-weight:700;color:white">Station ' + App.nacCurrentStation + ' of ' + App.nacTotalStations + '</div>';
+    html += '<div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:2px">' + escapeHtml(station.specialty) + ' &mdash; ' + escapeHtml(station.focus || '') + '</div>';
     html += '</div>';
 
-    // Door prompt — uses blueprint data (available instantly), patient details if loaded
+    // Door prompt — patient info + vitals (like real NAC)
     html += '<div style="padding:20px 24px;flex:1;overflow-y:auto">';
     html += '<div style="background:var(--card);border:2px solid var(--primary);border-radius:12px;padding:20px;margin-bottom:16px">';
     if (p) {
       var sx = (p.sex === 'F' || p.sex === 'female' || p.sex === 'trans_f') ? 'female' : (p.sex === 'M' || p.sex === 'male' || p.sex === 'trans_m') ? 'male' : 'patient';
-      html += '<div style="font-size:15px;color:var(--text);line-height:1.7">';
-      html += '<strong>' + escapeHtml(p.name || 'A patient') + '</strong> is a <strong>' + (p.age || '?') + '-year-old ' + sx + '</strong> presenting with <strong>' + escapeHtml(station.presentation.toLowerCase()) + '</strong>.';
+      html += '<div style="font-size:16px;font-weight:800;color:var(--text);margin-bottom:10px">' + escapeHtml(p.name) + '</div>';
+      html += '<div style="font-size:14px;color:var(--text);line-height:1.7;margin-bottom:12px">';
+      html += '<strong>' + (p.age || '?') + '-year-old ' + sx + '</strong> presenting to the <strong>' + escapeHtml(station.focus || 'ED') + '</strong> with <strong>' + escapeHtml(station.presentation.toLowerCase()) + '</strong>.';
       html += '</div>';
+      // Vitals grid
+      var hr = p.hr || '--'; var rr = p.rr || '--'; var tmp = p.temp || '--'; var o2 = p.spo2 || '--';
+      var bpStr = p.bp || (p.sbp ? p.sbp + '/' + p.dbp : '--/--');
+      html += '<div style="background:var(--bg);border-radius:8px;padding:12px;margin-bottom:12px">';
+      html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light);margin-bottom:8px">Vital Signs</div>';
+      html += '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;text-align:center">';
+      var vitals = [{l:'HR',v:hr,u:'bpm'},{l:'BP',v:bpStr,u:'mmHg'},{l:'RR',v:rr,u:'/min'},{l:'Temp',v:tmp,u:'\u00B0C'},{l:'SpO2',v:o2+'%',u:''}];
+      for (var vi=0;vi<vitals.length;vi++) {
+        html += '<div><div style="font-size:10px;font-weight:600;color:var(--text-light)">' + vitals[vi].l + '</div>';
+        html += '<div style="font-size:18px;font-weight:800;color:var(--text)">' + vitals[vi].v + '</div>';
+        if (vitals[vi].u) html += '<div style="font-size:9px;color:var(--text-light)">' + vitals[vi].u + '</div>';
+        html += '</div>';
+      }
+      html += '</div></div>';
+      // Appearance
+      if (p.appearance) {
+        html += '<div style="font-size:13px;color:var(--text);border-top:1px solid var(--border);padding-top:10px">';
+        html += '<strong>Doorway:</strong> ' + escapeHtml(p.appearance) + '</div>';
+      }
     } else {
       // Patient not loaded yet — show what we know from the blueprint
       html += '<div style="font-size:15px;color:var(--text);line-height:1.7">';
       html += 'A patient is presenting with <strong>' + escapeHtml(station.presentation.toLowerCase()) + '</strong>.';
       html += '</div>';
-      html += '<div style="margin-top:8px;font-size:12px;color:var(--text-light);font-style:italic">Patient details loading...</div>';
+      html += '<div style="margin-top:8px;font-size:12px;color:var(--text-light);font-style:italic">Loading patient details...</div>';
     }
-    html += '<div style="margin-top:14px;font-size:13px;color:var(--text)">';
+    html += '<div style="margin-top:14px;font-size:13px;color:var(--text);border-top:1px solid var(--border);padding-top:10px">';
     html += 'Take a focused history, perform a relevant physical examination, order appropriate investigations, and provide your diagnosis and management plan.';
     html += '</div>';
     html += '</div>';
@@ -8995,8 +9041,8 @@ function showNACReadingPeriod_(station) {
 
     // Bottom button
     html += '<div style="padding:16px 24px;border-top:1px solid var(--border);background:var(--card);text-align:center">';
-    html += '<button onclick="endNACReadingPeriod_()" class="btn btn-success" style="width:100%;padding:14px;font-size:16px;font-weight:700">Enter Station</button>';
-    html += '<div style="font-size:11px;color:var(--text-light);margin-top:6px">Station will auto-start when reading time expires</div>';
+    html += '<button onclick="endNACReadingPeriod_()" class="btn btn-success" style="width:100%;padding:14px;font-size:16px;font-weight:700"' + (App.nacCaseReady ? '' : ' disabled') + '>' + (App.nacCaseReady ? 'Enter Station' : 'Loading case...') + '</button>';
+    html += '<div style="font-size:11px;color:var(--text-light);margin-top:6px">Take your time — the 11-minute timer starts when you enter</div>';
     html += '</div>';
 
     html += '</div>';
@@ -9005,6 +9051,7 @@ function showNACReadingPeriod_(station) {
 
   renderReading();
 
+  // Poll for case load — re-render when patient data arrives, enable Enter button
   var nacReadingPatientShown = !!App.pbPatientInfo;
   App.nacReadingInterval = setInterval(function() {
     // Save notes continuously
@@ -9015,24 +9062,17 @@ function showNACReadingPeriod_(station) {
     if (!nacReadingPatientShown && App.pbPatientInfo) {
       nacReadingPatientShown = true;
       renderReading();
-      // Restore notes
       var nEl = document.getElementById('nac-notes-input');
       if (nEl) nEl.value = App.nacNotes || '';
     }
-
-    App.nacReadingTimer--;
-    var timerEl = document.getElementById('nac-reading-timer');
-    if (timerEl) {
-      var m = Math.floor(App.nacReadingTimer / 60);
-      var s = App.nacReadingTimer % 60;
-      timerEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
-      if (App.nacReadingTimer <= 30) timerEl.style.color = '#c62828';
-      else if (App.nacReadingTimer <= 60) timerEl.style.color = '#e65100';
+    // Show error if case failed
+    if (App.nacCaseError) {
+      clearInterval(App.nacReadingInterval);
+      var el2 = document.getElementById('patientbot-content');
+      if (el2) el2.innerHTML = '<div class="card"><p>Error loading case: ' + escapeHtml(App.nacCaseError) + '</p>' +
+        '<button class="btn btn-primary" onclick="App.nacCurrentStation--;startNextNACStation()" style="margin-top:12px">Retry</button></div>';
     }
-    if (App.nacReadingTimer <= 0) {
-      endNACReadingPeriod_();
-    }
-  }, 1000);
+  }, 500);
 }
 
 function endNACReadingPeriod_() {

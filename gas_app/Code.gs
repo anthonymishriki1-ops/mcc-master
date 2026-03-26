@@ -44,6 +44,7 @@ function doGet(e) {
         'getChapterImages': getChapterImages,
         'askDrData': askDrData,
         'startPatientBotCase': startPatientBotCase,
+        'startPregenCase': startPregenCase,
         'sendPatientBotMessage': sendPatientBotMessage,
         'submitDiagnosis': submitDiagnosis,
         'debriefPatientBot': debriefPatientBot,
@@ -162,6 +163,7 @@ function doPost(e) {
       'getChapterImages': getChapterImages,
       'askDrData': askDrData,
       'startPatientBotCase': startPatientBotCase,
+      'startPregenCase': startPregenCase,
       'sendPatientBotMessage': sendPatientBotMessage,
       'submitDiagnosis': submitDiagnosis,
       'debriefPatientBot': debriefPatientBot,
@@ -2315,7 +2317,7 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
   }), 7200);
 
   var messages = [{ role: 'user', content: 'Start the case.' }];
-  var response = callAnthropic_(systemPrompt, messages);
+  var response = callAnthropic_(systemPrompt, messages, 'claude-sonnet-4-6-20260320');
 
   // Extract patient info JSON and strip from displayed message
   var patientInfo = null;
@@ -2410,6 +2412,105 @@ function startPatientBotCase(specialty, cheatMode, difficulty, customOpts) {
     presentation: presentation || '',
     initialMessage: response,
     patientInfo: patientInfo
+  };
+}
+
+// =============================================
+// START PREGEN CASE — uses pre-generated NAC case data, no AI generation needed
+// =============================================
+function startPregenCase(pregenId) {
+  pregenId = parseInt(pregenId);
+  var c = null;
+  for (var i = 0; i < PREGEN_CASES_.length; i++) {
+    if (PREGEN_CASES_[i].id === pregenId) { c = PREGEN_CASES_[i]; break; }
+  }
+  if (!c) return { error: 'Pregen case not found: ' + pregenId };
+
+  var caseId = Utilities.getUuid();
+  var sexLabel = c.sx === 'F' ? 'female' : c.sx === 'M' ? 'male' : 'non-binary';
+  var pronounStr = c.sx === 'F' ? 'she/her' : c.sx === 'M' ? 'he/him' : 'they/them';
+
+  // Build system prompt with predetermined patient data baked in
+  var systemPrompt = 'You are PatientBot, a clinical scenario simulator for MCCQE Part I preparation.\n\n' +
+    'YOU ARE ROLEPLAYING AS A SPECIFIC PRE-DETERMINED PATIENT. ALL DETAILS ARE LOCKED:\n' +
+    '- Name: ' + c.nm + '\n' +
+    '- Age: ' + c.age + '\n' +
+    '- Sex: ' + sexLabel + ' (' + pronounStr + ')\n' +
+    '- Ethnicity: ' + c.eth + '\n' +
+    '- Appearance: ' + c.ap + '\n' +
+    '- Chief complaint: ' + c.pres + '\n' +
+    '- Diagnosis (HIDDEN from student): ' + c.dx + '\n' +
+    '- Setting: ' + (c.set || 'ED') + '\n' +
+    '- Vitals: HR=' + c.hr + ' BP=' + c.sbp + '/' + c.dbp + ' RR=' + c.rr + ' Temp=' + c.tmp + ' SpO2=' + c.o2 + '\n\n' +
+
+    'ABSOLUTE RULES - NEVER BREAK THESE:\n' +
+    '1. NEVER break character. You are ALWAYS the patient.\n' +
+    '2. NEVER use medical terminology a real patient wouldn\'t know.\n' +
+    '3. NEVER give the diagnosis or hint at it.\n' +
+    '4. Keep ALL responses to 1-3 sentences max. Real patients give BRIEF answers.\n' +
+    '5. NEVER output JSON, code blocks, scores, feedback, or system messages.\n' +
+    '6. ONLY answer what is asked. Do NOT volunteer extra symptoms.\n\n' +
+
+    'PATIENT REALISM:\n' +
+    '- Sound like a REAL person. Use casual language: "yeah", "nah", "I dunno", "kinda".\n' +
+    '- Use filler words: "uhm", "uh", "like", "y\'know".\n' +
+    '- Use hesitations (dashes, ellipses). Real patients trail off and restart.\n' +
+    '- Be an imperfect historian. Forget exact dates, mix up details.\n' +
+    '- NEVER say "I appreciate the question" or "That\'s a good question."\n' +
+    '- STOP ANSWERING QUESTIONS WITH QUESTIONS. Just answer directly.\n' +
+    '- Vary response length: some "Yeah." some longer.\n\n' +
+
+    'ACTIONS vs CONVERSATION:\n' +
+    '- When the student performs an ACTION (administers medication, examines, orders a test), it HAPPENS. React to the EFFECTS.\n' +
+    '- Respond realistically to exam maneuvers (e.g., "OW! Yeah that\'s tender right there.")\n\n' +
+
+    'EMOTIONAL STATES: Show REAL emotions — anger when frustrated, fear when scared, pain that is primal not articulate, relief when treated. Emotions BUILD over the encounter.\n\n' +
+
+    (c.dm && c.dm.length > 0 ? 'CLINICAL DONT-MISS ITEMS (for scoring, NOT revealed to student):\n' + c.dm.join('\n') + '\n\n' : '');
+
+  // Store case context server-side
+  CacheService.getUserCache().put('pb_' + caseId, JSON.stringify({
+    systemPrompt: systemPrompt,
+    specialty: c.spec,
+    diagnosis: c.dx,
+    cheatMode: false,
+    pregen: true,
+    pregenId: pregenId,
+    pregenResults: c.rs || {},
+    vitals: {
+      hr: c.hr,
+      bp: c.sbp + '/' + c.dbp,
+      rr: c.rr,
+      temp: c.tmp,
+      spo2: c.o2
+    }
+  }), 7200);
+
+  // Build patientInfo matching the format startPatientBotCase returns
+  var patientInfo = {
+    name: c.nm,
+    age: c.age,
+    sex: c.sx,
+    ethnicity: c.eth,
+    appearance: c.ap,
+    diagnosis: c.dx,
+    hr: c.hr,
+    bp: c.sbp + '/' + c.dbp,
+    rr: c.rr,
+    temp: c.tmp,
+    spo2: c.o2
+  };
+
+  return {
+    caseId: caseId,
+    specialty: c.spec,
+    presentation: c.pres,
+    initialMessage: c.op,
+    patientInfo: patientInfo,
+    vitals: {
+      hr: c.hr, sbp: c.sbp, dbp: c.dbp, rr: c.rr, temp: c.tmp, spo2: c.o2
+    },
+    pregenResults: c.rs || {}
   };
 }
 
@@ -2764,7 +2865,7 @@ function sendPatientBotMessage(caseId, message, history) {
   if (systemNote) userMsg += systemNote;
   messages.push({ role: 'user', content: userMsg });
 
-  var response = callAnthropic_(caseData.systemPrompt, messages);
+  var response = callAnthropic_(caseData.systemPrompt, messages, 'claude-sonnet-4-6-20260320');
 
   // Strip any accidental JSON from follow-up messages
   response = response.replace(/`{1,3}\s*patient\s*\n?[\s\S]*?\n?\s*`{1,3}\s*/gi, '');
@@ -3034,7 +3135,7 @@ function textToSpeech(text, voice, speed) {
   speed = Math.max(0.25, Math.min(4.0, parseFloat(speed) || 1.0));
 
   var payload = {
-    model: 'tts-1',
+    model: 'tts-1-hd',
     input: text,
     voice: voice,
     speed: speed,
