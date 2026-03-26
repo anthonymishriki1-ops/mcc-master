@@ -9459,10 +9459,19 @@ function startPBMonitorAnimation() {
 // =============================================
 // NAC-OSCE CLINICAL WORKSTATION UI
 // =============================================
+var nacActiveTab = 'overview';
+
+function setNACTab(tab) {
+  nacActiveTab = tab;
+  renderNACStationUI_();
+}
+
 function renderNACStationUI_() {
   var el = document.getElementById('patientbot-content');
   if (!el) return;
+  if (!App.pbMonitorAttached) App.pbMonitorAttached = true;
   var p = App.pbPatientInfo;
+  var vd = VitalsEngine._display || {};
   var html = '';
 
   // ── Top bar: Station info + timer + controls ──
@@ -9480,95 +9489,197 @@ function renderNACStationUI_() {
   html += '<button class="btn btn-sm" onclick="finishNACStation()" style="background:rgba(255,255,255,0.15);color:white;border:1px solid rgba(255,255,255,0.3)">End Station</button>';
   html += '</div></div>';
 
-  // ── Patient chart header ──
-  if (p) {
-    var sexLabel = (p.sex === 'nonbinary' || p.sex === 'NB') ? 'NB' : ((p.sex === 'female' || p.sex === 'F' || p.sex === 'trans_f') ? 'F' : ((p.sex === 'trans_m') ? 'M (trans)' : 'M'));
-    html += '<div style="background:var(--card);border-bottom:2px solid var(--border);padding:14px 18px 12px">';
-    html += '<div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:6px">' + escapeHtml(p.name || 'Unknown Patient') + '</div>';
-    html += '<div style="display:flex;flex-wrap:wrap;gap:6px 20px;font-size:13px;color:var(--text-light)">';
-    html += '<span><strong>Age/Sex:</strong> ' + (p.age || '?') + ' &middot; ' + sexLabel + '</span>';
-    if (p.ethnicity) html += '<span><strong>Ethnicity:</strong> ' + escapeHtml(p.ethnicity) + '</span>';
-    html += '</div>';
-    if (p.appearance) {
-      html += '<div style="margin-top:8px;font-size:13px;color:var(--text);border-top:1px solid var(--border);padding-top:8px">';
-      html += '<strong>Doorway Assessment:</strong> ' + escapeHtml(p.appearance) + '</div>';
-    }
-    html += '</div>';
+  // ── Count results for badge indicators ──
+  var labResults = App.pbHistory.filter(function(m) { return m.role === 'results' && m.content && !/(x.ray|ct\b|mri|ultrasound|echo|radio|scan|imaging)/i.test(m.content.testName || ''); });
+  var diResults = App.pbHistory.filter(function(m) { return m.role === 'results' && m.content && /(x.ray|ct\b|mri|ultrasound|echo|radio|scan|imaging)/i.test(m.content.testName || ''); });
+  var examMsgs = App.pbHistory.filter(function(m) { return m.role === 'partial'; });
+
+  // ── Tab bar ──
+  var tabs = [
+    { id: 'overview', icon: '&#x1F4CB;', label: 'Overview', count: 0 },
+    { id: 'vitals', icon: '&#x1FA7A;', label: 'Vitals', count: 0 },
+    { id: 'labs', icon: '&#x1F9EA;', label: 'Labs', count: labResults.length },
+    { id: 'imaging', icon: '&#x1FA7B;', label: 'Imaging', count: diResults.length },
+    { id: 'exam', icon: '&#x1FA78;', label: 'Exam', count: examMsgs.length }
+  ];
+  html += '<div style="display:flex;background:var(--card);border-bottom:2px solid var(--border);overflow-x:auto">';
+  for (var ti = 0; ti < tabs.length; ti++) {
+    var t = tabs[ti];
+    var isActive = nacActiveTab === t.id;
+    var badge = t.count > 0 ? ' <span style="background:var(--primary);color:white;border-radius:50%;font-size:10px;padding:1px 5px;margin-left:3px;font-weight:700">' + t.count + '</span>' : '';
+    html += '<button onclick="setNACTab(\'' + t.id + '\')" style="flex:1;padding:10px 8px;font-size:13px;font-weight:' + (isActive ? '700' : '500') + ';border:none;border-bottom:3px solid ' + (isActive ? 'var(--primary)' : 'transparent') + ';background:' + (isActive ? 'rgba(63,81,181,0.08)' : 'transparent') + ';color:' + (isActive ? 'var(--primary)' : 'var(--text-light)') + ';cursor:pointer;white-space:nowrap">' + t.icon + ' ' + t.label + badge + '</button>';
   }
+  html += '</div>';
 
-  // ── Vitals monitor (auto-attached in NAC mode) ──
-  if (!App.pbMonitorAttached) { App.pbMonitorAttached = true; }
-  var vd = VitalsEngine._display || {};
-  var isFlatline = vd.hr === 0 || vd.spo2 === 0;
-  var beatInterval = vd.hr > 0 ? (60 / vd.hr) : 0;
-  if (!App.pbMRN) App.pbMRN = Math.floor(Math.random()*900000+100000);
-  html += '<div class="pb-monitor' + (isFlatline ? ' pb-mon-flatline' : '') + '" id="pb-live-monitor">';
-  html += '<div class="pb-mon-header"><span class="pb-mon-title"><span class="pb-mon-live"></span>BEDSIDE MONITOR</span><span class="pb-mon-id">MRN ' + App.pbMRN + '</span></div>';
-  html += '<div class="pb-mon-ecg"><canvas class="pb-ecg-canvas" id="pb-ecg-canvas" data-hr="' + (vd.hr || 0) + '"></canvas></div>';
-  html += '<div style="padding:0 8px;height:20px;overflow:hidden;background:#0a0a0a;border-bottom:1px solid #1a1a1a"><canvas class="pb-ecg-canvas" id="pb-pleth-canvas" data-hr="' + (vd.hr || 0) + '" style="height:20px"></canvas></div>';
-  html += '<div class="pb-mon-grid">';
-  html += '<div class="pb-mon-cell pb-mon-hr" id="ve-hr-cell"><div class="pb-mon-cell-label">HR <span class="pb-mon-unit">bpm</span></div>';
-  html += '<div class="pb-mon-cell-value"><span id="ve-hr">' + (vd.hr || '--') + '</span><span class="pb-mon-hr-dot' + (vd.hr > 0 ? ' beating' : '') + '" id="ve-hr-dot" style="--beat-interval:' + (beatInterval > 0 ? beatInterval.toFixed(2) : 1) + 's"></span></div></div>';
-  var latBP = VitalsEngine.getLatestBP();
-  var bpHTML = VitalsEngine._bpMeasuring ? '<span style="font-size:10px">Measuring...</span>' : (latBP ? latBP.sbp+'/'+latBP.dbp : '--/--');
-  html += '<div class="pb-mon-cell pb-mon-bp" id="ve-bp-cell"><div class="pb-mon-cell-label">NIBP <span class="pb-mon-unit">mmHg</span></div>';
-  html += '<div class="pb-mon-cell-value" id="ve-bp">' + bpHTML + '</div></div>';
-  html += '<div class="pb-mon-cell pb-mon-spo2" id="ve-spo2-cell"><div class="pb-mon-cell-label">SpO2 <span class="pb-mon-unit">%</span></div>';
-  html += '<div class="pb-mon-cell-value"><span id="ve-spo2">' + (vd.spo2 || '--') + '</span>%</div></div>';
-  html += '<div class="pb-mon-cell pb-mon-rr" id="ve-rr-cell"><div class="pb-mon-cell-label">RR <span class="pb-mon-unit">/min</span></div>';
-  html += '<div class="pb-mon-cell-value"><span id="ve-rr">' + (vd.rr || '--') + '</span></div></div>';
-  html += '<div class="pb-mon-cell pb-mon-temp" id="ve-temp-cell"><div class="pb-mon-cell-label">TEMP <span class="pb-mon-unit">&deg;C</span></div>';
-  html += '<div class="pb-mon-cell-value"><span id="ve-temp">' + (vd.temp || '--') + '</span></div></div>';
-  html += '</div></div>';
+  // ── Tab content ──
+  html += '<div style="flex:1;overflow-y:auto;padding:16px">';
 
-  // ── Results panel: lab/imaging results from the encounter ──
-  var results = App.pbHistory.filter(function(m) { return m.role === 'results' || m.role === 'death' || m.role === 'diagnosis_result' || m.role === 'partial'; });
-  if (results.length > 0) {
-    html += '<div style="padding:12px 16px;background:var(--bg);border-bottom:1px solid var(--border)">';
-    html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-light);margin-bottom:8px">Clinical Results</div>';
-    for (var ri = 0; ri < results.length; ri++) {
-      var rm = results[ri];
-      if (rm.role === 'results') {
-        var tr = rm.content;
-        var abBg = tr.abnormal ? 'rgba(244,67,54,0.08)' : 'rgba(76,175,80,0.08)';
-        var abBorder = tr.abnormal ? '#f44336' : '#4caf50';
-        html += '<div style="background:' + abBg + ';border-left:4px solid ' + abBorder + ';border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:13px">';
-        html += '<strong>' + escapeHtml(tr.testName || 'Results') + '</strong>';
-        html += '<span style="float:right;font-size:11px;font-weight:700;color:' + abBorder + '">' + (tr.abnormal ? 'ABNORMAL' : 'NORMAL') + '</span>';
-        html += '<div style="margin-top:6px;white-space:pre-wrap;color:var(--text);line-height:1.6">' + escapeHtml(tr.results || '') + '</div>';
+  if (nacActiveTab === 'overview') {
+    // Patient demographics + doorway assessment
+    if (p) {
+      var sexLabel = (p.sex === 'nonbinary' || p.sex === 'NB') ? 'NB' : ((p.sex === 'female' || p.sex === 'F' || p.sex === 'trans_f') ? 'F' : ((p.sex === 'trans_m') ? 'M (trans)' : 'M'));
+      html += '<div style="background:var(--card);border-radius:10px;padding:16px;margin-bottom:12px;border:1px solid var(--border)">';
+      html += '<div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:8px">' + escapeHtml(p.name || 'Unknown Patient') + '</div>';
+      html += '<div style="display:flex;flex-wrap:wrap;gap:6px 20px;font-size:13px;color:var(--text-light)">';
+      html += '<span><strong>Age/Sex:</strong> ' + (p.age || '?') + ' &middot; ' + sexLabel + '</span>';
+      if (p.ethnicity) html += '<span><strong>Ethnicity:</strong> ' + escapeHtml(p.ethnicity) + '</span>';
+      html += '</div>';
+      if (p.appearance) {
+        html += '<div style="margin-top:10px;font-size:13px;color:var(--text);border-top:1px solid var(--border);padding-top:10px">';
+        html += '<strong>Doorway Assessment:</strong> ' + escapeHtml(p.appearance) + '</div>';
+      }
+      html += '</div>';
+    }
+    // Quick vitals summary (no ECG, just numbers)
+    html += '<div style="background:var(--card);border-radius:10px;padding:16px;margin-bottom:12px;border:1px solid var(--border)">';
+    html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-light);margin-bottom:10px">Current Vitals</div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px">';
+    var vitals = [
+      { label: 'HR', val: vd.hr || '--', unit: 'bpm', color: '#4caf50' },
+      { label: 'BP', val: (function(){ var bp = VitalsEngine.getLatestBP(); return bp ? bp.sbp+'/'+bp.dbp : '--/--'; })(), unit: 'mmHg', color: '#2196f3' },
+      { label: 'SpO2', val: vd.spo2 ? vd.spo2 + '%' : '--%', unit: '', color: '#00bcd4' },
+      { label: 'RR', val: vd.rr || '--', unit: '/min', color: '#ff9800' },
+      { label: 'Temp', val: vd.temp || '--', unit: '\u00B0C', color: '#f44336' }
+    ];
+    for (var vi = 0; vi < vitals.length; vi++) {
+      var v = vitals[vi];
+      html += '<div style="text-align:center;padding:8px;background:var(--bg);border-radius:8px">';
+      html += '<div style="font-size:11px;font-weight:600;color:' + v.color + ';text-transform:uppercase">' + v.label + '</div>';
+      html += '<div style="font-size:20px;font-weight:800;color:var(--text);margin:4px 0">' + v.val + '</div>';
+      if (v.unit) html += '<div style="font-size:10px;color:var(--text-light)">' + v.unit + '</div>';
+      html += '</div>';
+    }
+    html += '</div></div>';
+    // Consequence alerts
+    var consequences = App.pbHistory.filter(function(m) { return m.role === 'system'; });
+    if (consequences.length > 0) {
+      var lastCons = consequences[consequences.length - 1];
+      var sev = lastCons.severity || 'safe';
+      var sevColors = { 'safe': '#4caf50', 'caution': '#ff9800', 'danger': '#f44336', 'critical': '#b71c1c' };
+      var sevColor = sevColors[sev] || '#4caf50';
+      html += '<div style="background:rgba(' + (sev === 'safe' ? '76,175,80' : sev === 'caution' ? '255,152,0' : '244,67,54') + ',0.08);border-left:4px solid ' + sevColor + ';border-radius:8px;padding:12px 14px;font-size:13px;color:var(--text)">';
+      html += escapeHtml(lastCons.content || '');
+      html += '</div>';
+    }
+    // Death alert
+    var deathMsgs = App.pbHistory.filter(function(m) { return m.role === 'death'; });
+    if (deathMsgs.length > 0) {
+      html += '<div style="background:#b71c1c;color:white;padding:16px;border-radius:8px;margin-top:12px;text-align:center">';
+      html += '<strong>&#x1F480; Patient Deceased</strong><br>' + escapeHtml(deathMsgs[deathMsgs.length-1].content);
+      html += '</div>';
+    }
+
+  } else if (nacActiveTab === 'vitals') {
+    // Full vitals detail view — numbers only, no ECG
+    html += '<div style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--text)">Vital Signs</div>';
+    var vitalRows = [
+      { label: 'Heart Rate', val: (vd.hr || '--') + ' bpm', flag: vd.hr && (vd.hr < 60 || vd.hr > 100) },
+      { label: 'Blood Pressure', val: (function(){ var bp = VitalsEngine.getLatestBP(); return bp ? bp.sbp+'/'+bp.dbp + ' mmHg' : 'Not measured'; })(), flag: (function(){ var bp = VitalsEngine.getLatestBP(); return bp && (bp.sbp > 140 || bp.sbp < 90 || bp.dbp > 90 || bp.dbp < 60); })() },
+      { label: 'SpO2', val: (vd.spo2 || '--') + '%', flag: vd.spo2 && vd.spo2 < 94 },
+      { label: 'Respiratory Rate', val: (vd.rr || '--') + ' /min', flag: vd.rr && (vd.rr < 12 || vd.rr > 20) },
+      { label: 'Temperature', val: (vd.temp || '--') + ' \u00B0C', flag: vd.temp && (vd.temp < 36.0 || vd.temp > 38.0) }
+    ];
+    for (var vri = 0; vri < vitalRows.length; vri++) {
+      var vr = vitalRows[vri];
+      var vBg = vr.flag ? 'rgba(244,67,54,0.06)' : 'var(--card)';
+      var vBorder = vr.flag ? '#f44336' : 'var(--border)';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;margin-bottom:8px;background:' + vBg + ';border:1px solid ' + vBorder + ';border-radius:8px">';
+      html += '<span style="font-weight:600;color:var(--text)">' + vr.label + '</span>';
+      html += '<span style="font-size:18px;font-weight:800;color:' + (vr.flag ? '#f44336' : 'var(--text)') + '">' + vr.val + (vr.flag ? ' &#x26A0;' : '') + '</span>';
+      html += '</div>';
+    }
+    // BP history
+    var bpHist = VitalsEngine._bpHistory || [];
+    if (bpHist.length > 1) {
+      html += '<div style="margin-top:16px;font-size:13px;font-weight:700;color:var(--text-light);margin-bottom:8px">BP History</div>';
+      for (var bi = bpHist.length - 1; bi >= 0; bi--) {
+        var bpe = bpHist[bi];
+        html += '<div style="font-size:13px;color:var(--text);padding:4px 0">' + bpe.sbp + '/' + bpe.dbp + ' mmHg</div>';
+      }
+    }
+
+  } else if (nacActiveTab === 'labs') {
+    // Lab results from encounter (uses pre-computed labResults)
+    if (labResults.length === 0) {
+      html += '<div style="text-align:center;padding:40px 20px;color:var(--text-light)">';
+      html += '<div style="font-size:36px;margin-bottom:12px">&#x1F9EA;</div>';
+      html += '<div style="font-size:15px;font-weight:600">No lab results yet</div>';
+      html += '<div style="font-size:13px;margin-top:6px">Say <strong>"order CBC"</strong> or <strong>"order BMP"</strong> to request labs</div>';
+      html += '</div>';
+    } else {
+      for (var li = 0; li < labResults.length; li++) {
+        var lr = labResults[li].content;
+        var lBg = lr.abnormal ? 'rgba(244,67,54,0.06)' : 'rgba(76,175,80,0.06)';
+        var lBorder = lr.abnormal ? '#f44336' : '#4caf50';
+        html += '<div style="background:' + lBg + ';border-left:4px solid ' + lBorder + ';border-radius:8px;padding:12px 16px;margin-bottom:10px">';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+        html += '<strong style="font-size:14px;color:var(--text)">' + escapeHtml(lr.testName || 'Lab') + '</strong>';
+        html += '<span style="font-size:11px;font-weight:700;color:' + lBorder + ';padding:2px 8px;border-radius:10px;background:' + lBg + '">' + (lr.abnormal ? 'ABNORMAL' : 'NORMAL') + '</span>';
         html += '</div>';
-      } else if (rm.role === 'death') {
-        html += '<div style="background:#b71c1c;color:white;padding:16px;border-radius:8px;margin-bottom:8px;text-align:center">';
-        html += '<strong>&#x1F480; Patient Deceased</strong><br>' + escapeHtml(rm.content);
-        html += '</div>';
-      } else if (rm.role === 'diagnosis_result') {
-        var dr = rm.content;
-        var drBorder = dr.correct ? '#4caf50' : '#f44336';
-        html += '<div style="background:' + (dr.correct ? 'rgba(76,175,80,0.12)' : 'rgba(244,67,54,0.1)') + ';border:2px solid ' + drBorder + ';border-radius:8px;padding:14px;margin-bottom:8px;font-size:14px">';
-        html += '<strong style="color:' + drBorder + '">' + (dr.correct ? '&#x2705; Correct' : '&#x274C; Incorrect') + '</strong>';
-        if (dr.feedback) html += '<div style="margin-top:6px">' + escapeHtml(dr.feedback) + '</div>';
-        if (!dr.correct) html += '<div style="margin-top:6px"><strong>Answer:</strong> ' + escapeHtml(dr.answer || '?') + '</div>';
+        html += '<div style="white-space:pre-wrap;font-size:13px;color:var(--text);line-height:1.6">' + escapeHtml(lr.results || '') + '</div>';
         html += '</div>';
       }
     }
+
+  } else if (nacActiveTab === 'imaging') {
+    // Imaging/DI results (uses pre-computed diResults)
+    if (diResults.length === 0) {
+      html += '<div style="text-align:center;padding:40px 20px;color:var(--text-light)">';
+      html += '<div style="font-size:36px;margin-bottom:12px">&#x1FA7B;</div>';
+      html += '<div style="font-size:15px;font-weight:600">No imaging results yet</div>';
+      html += '<div style="font-size:13px;margin-top:6px">Say <strong>"order chest X-ray"</strong> or <strong>"order CT head"</strong> to request imaging</div>';
+      html += '</div>';
+    } else {
+      for (var di = 0; di < diResults.length; di++) {
+        var dr = diResults[di].content;
+        var dBg = dr.abnormal ? 'rgba(244,67,54,0.06)' : 'rgba(76,175,80,0.06)';
+        var dBorder = dr.abnormal ? '#f44336' : '#4caf50';
+        html += '<div style="background:' + dBg + ';border-left:4px solid ' + dBorder + ';border-radius:8px;padding:12px 16px;margin-bottom:10px">';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+        html += '<strong style="font-size:14px;color:var(--text)">' + escapeHtml(dr.testName || 'Imaging') + '</strong>';
+        html += '<span style="font-size:11px;font-weight:700;color:' + dBorder + '">' + (dr.abnormal ? 'ABNORMAL' : 'NORMAL') + '</span>';
+        html += '</div>';
+        html += '<div style="white-space:pre-wrap;font-size:13px;color:var(--text);line-height:1.6">' + escapeHtml(dr.results || '') + '</div>';
+        html += '</div>';
+      }
+    }
+
+  } else if (nacActiveTab === 'exam') {
+    // Physical exam findings (uses pre-computed examMsgs)
+    if (examMsgs.length === 0) {
+      html += '<div style="text-align:center;padding:40px 20px;color:var(--text-light)">';
+      html += '<div style="font-size:36px;margin-bottom:12px">&#x1FA78;</div>';
+      html += '<div style="font-size:15px;font-weight:600">No exam findings yet</div>';
+      html += '<div style="font-size:13px;margin-top:6px">Say <strong>"examine the abdomen"</strong> or <strong>"auscultate the lungs"</strong></div>';
+      html += '</div>';
+    } else {
+      for (var ei = 0; ei < examMsgs.length; ei++) {
+        var em = examMsgs[ei];
+        var content = typeof em.content === 'string' ? em.content : (em.content.results || em.content.testName || JSON.stringify(em.content));
+        html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:10px">';
+        html += '<div style="white-space:pre-wrap;font-size:13px;color:var(--text);line-height:1.6">' + escapeHtml(content) + '</div>';
+        html += '</div>';
+      }
+    }
+
+  }
+
+  // Diagnosis result (show on any tab)
+  var diagResults = App.pbHistory.filter(function(m) { return m.role === 'diagnosis_result'; });
+  if (diagResults.length > 0) {
+    var lastDr = diagResults[diagResults.length - 1].content;
+    var drBorder = lastDr.correct ? '#4caf50' : '#f44336';
+    html += '<div style="background:' + (lastDr.correct ? 'rgba(76,175,80,0.12)' : 'rgba(244,67,54,0.1)') + ';border:2px solid ' + drBorder + ';border-radius:8px;padding:14px;margin-top:12px;font-size:14px">';
+    html += '<strong style="color:' + drBorder + '">' + (lastDr.correct ? '&#x2705; Correct' : '&#x274C; Incorrect') + '</strong>';
+    if (lastDr.feedback) html += '<div style="margin-top:6px">' + escapeHtml(lastDr.feedback) + '</div>';
+    if (!lastDr.correct) html += '<div style="margin-top:6px"><strong>Answer:</strong> ' + escapeHtml(lastDr.answer || '?') + '</div>';
     html += '</div>';
   }
 
-  // ── Consequence messages (system messages from clinical engine) ──
-  var consequences = App.pbHistory.filter(function(m) { return m.role === 'system'; });
-  if (consequences.length > 0) {
-    var lastCons = consequences[consequences.length - 1];
-    var sev = lastCons.severity || 'safe';
-    var sevColors = { 'safe': '#4caf50', 'caution': '#ff9800', 'danger': '#f44336', 'critical': '#b71c1c' };
-    var sevColor = sevColors[sev] || '#4caf50';
-    html += '<div style="padding:8px 16px;background:rgba(' + (sev === 'safe' ? '76,175,80' : sev === 'caution' ? '255,152,0' : '244,67,54') + ',0.08);border-left:4px solid ' + sevColor + ';font-size:13px;color:var(--text)">';
-    html += escapeHtml(lastCons.content || '');
-    html += '</div>';
-  }
+  html += '</div>'; // end tab content
 
   // ── Bottom: Voice controls ──
   if (!App.pbDiagResolved) {
-    html += '<div style="flex:1"></div>'; // push controls to bottom
     html += '<div style="padding:16px 20px;border-top:1px solid var(--border);background:var(--card);display:flex;flex-direction:column;align-items:center;gap:12px">';
     if (App.pbHandsFree) {
       html += '<div style="display:flex;align-items:center;gap:12px;width:100%;justify-content:center">';
@@ -9578,7 +9689,6 @@ function renderNACStationUI_() {
       html += '</div>';
       html += '<div style="font-size:11px;color:var(--text-light);text-align:center">Speak naturally &bull; <strong>"my diagnosis is..."</strong> to diagnose &bull; <strong>"order..."</strong> for orders</div>';
     } else {
-      // Fallback text input for NAC if hands-free not available
       html += '<div style="display:flex;gap:8px;width:100%">';
       html += '<textarea id="pb-input" placeholder="Talk to the patient..." rows="2" style="flex:1" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendPBMessage()}"></textarea>';
       html += '<button class="btn btn-primary" onclick="sendPBMessage()">Send</button>';
@@ -9587,16 +9697,12 @@ function renderNACStationUI_() {
     }
     html += '</div>';
   } else {
-    // Case resolved — show next station / scorecard
-    html += '<div style="flex:1"></div>';
     html += '<div style="padding:16px 20px;border-top:1px solid var(--border);background:var(--card);display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap">';
     html += '<span style="color:var(--text-light);font-size:14px">Station complete.</span>';
     html += '<button class="btn btn-success" onclick="finishNACStation()">' + (App.nacCurrentStation >= App.nacTotalStations ? 'View Results' : 'Next Station') + '</button>';
     html += '<button class="btn btn-primary" onclick="showScorecardModal_()">View Scorecard</button>';
     html += '<button class="btn btn-outline" onclick="if(confirm(\'End entire NAC exam?\')){showNACSummary();}">End Exam</button>';
     html += '</div>';
-
-    // Auto-load scorecard
     if (!App.pbScorecard && !App.pbScorecardLoading && !App.pbScorecardError) {
       App.pbScorecardLoading = true;
       setTimeout(function() { loadOSCEScorecard(); }, 500);
@@ -9614,7 +9720,6 @@ function renderNACStationUI_() {
   }
 
   el.innerHTML = '<div style="display:flex;flex-direction:column;height:100%">' + html + '</div>';
-  startECGAnimation_();
 }
 
 function renderPBChatInner() {
