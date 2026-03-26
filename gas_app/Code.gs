@@ -2777,7 +2777,7 @@ function sendPatientBotMessage(caseId, message, history) {
   if (systemNote) userMsg += systemNote;
   messages.push({ role: 'user', content: userMsg });
 
-  var response = callAnthropic_(caseData.systemPrompt, messages);
+  var response = callAnthropic_(caseData.systemPrompt, messages, 'claude-sonnet-4-6-20260320');
 
   // Strip any accidental JSON from follow-up messages
   response = response.replace(/`{1,3}\s*patient\s*\n?[\s\S]*?\n?\s*`{1,3}\s*/gi, '');
@@ -3047,7 +3047,7 @@ function textToSpeech(text, voice, speed) {
   speed = Math.max(0.25, Math.min(4.0, parseFloat(speed) || 1.0));
 
   var payload = {
-    model: 'tts-1-hd',
+    model: 'tts-1',
     input: text,
     voice: voice,
     speed: speed,
