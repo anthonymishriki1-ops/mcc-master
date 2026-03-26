@@ -2881,6 +2881,7 @@ var App = {
   pbCurrentCase: 0,
   pbCaseScores: [],
   pbPatientInfo: null,
+  pbInterimTranscript: '',
   pbDiagnosis: null,
   pbActionsHidden: false,
   pbDiagnosing: false,
@@ -4799,6 +4800,7 @@ function startDailyPBCase() {
     '<div class="loading-overlay"><div class="spinner"></div><p style="margin-top:12px;color:var(--text-light)">Generating case...</p></div>';
 
   serverCall('startPatientBotCase', specs[App.dailyPBIndex], false, 'medium').then(function(result) {
+    if (App.nacActive) return; // ignore stale callback if user switched to NAC
     App.pbCaseId = result.caseId;
     App.pbSpecialty = result.specialty;
     App.pbDiagnosis = null;
@@ -5997,6 +5999,7 @@ function stopHandsFree_() {
   if (_dgStream) { _dgStream.getTracks().forEach(function(t) { t.stop(); }); _dgStream = null; }
   if (_dgAudioCtx) { try { _dgAudioCtx.close(); } catch(e) {} _dgAudioCtx = null; }
   App.pbMicActive = false;
+  _setInterimCaption_('');
   stopMicVisualizer_();
   var renderFn = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
   renderFn();
@@ -6041,6 +6044,22 @@ function _cleanupStt() {
   if (handsFreeRecognition) { try { handsFreeRecognition.abort(); } catch(e) {} handsFreeRecognition = null; }
 }
 
+function _setInterimCaption_(text) {
+  App.pbInterimTranscript = text || '';
+  var cap = document.getElementById('hf-interim-caption');
+  if (cap) cap.textContent = App.pbInterimTranscript;
+}
+
+function _setHFIndicatorState_(label, bg, color) {
+  var ind = document.getElementById('hf-indicator');
+  if (ind) {
+    if (bg) ind.style.background = bg;
+    if (color) ind.style.color = color;
+  }
+  var status = document.getElementById('hf-indicator-status');
+  if (status) status.textContent = label || 'Listening...';
+}
+
 // ── Common transcript handler — called by both Deepgram and Web Speech ──
 function _handleSttTranscript(text) {
   if (!_sttShouldRun) return;
@@ -6048,13 +6067,12 @@ function _handleSttTranscript(text) {
   var best = text.trim();
   if (!best) return;
 
-  var ind = document.getElementById('hf-indicator');
-  if (ind) { ind.style.background = '#f9a825'; ind.textContent = 'Processing...'; }
+  _setHFIndicatorState_('Processing...', '#f9a825', '#111');
+  _setInterimCaption_('');
 
   if (handleVoiceCommand_(best)) {
     setTimeout(function() {
-      var ind2 = document.getElementById('hf-indicator');
-      if (ind2) { ind2.style.background = '#c62828'; ind2.textContent = 'Listening...'; }
+      _setHFIndicatorState_('Listening...', '#c62828', '#fff');
     }, 500);
     return;
   }
@@ -6167,8 +6185,8 @@ function _launchDeepgram() {
       _audioPipelineConnected = true;
       if (myGen !== _sttGen) { ws.close(); clearInterval(keepAlive); return; }
       App.pbMicActive = true;
-      var ind = document.getElementById('hf-indicator');
-      if (ind) { ind.style.background = '#c62828'; ind.textContent = 'Listening...'; }
+      _setHFIndicatorState_('Listening...', '#c62828', '#fff');
+      _setInterimCaption_('');
 
       // Pipe mic audio to Deepgram
       var source = ctx.createMediaStreamSource(stream);
@@ -6202,18 +6220,9 @@ function _launchDeepgram() {
         var data = JSON.parse(evt.data);
         if (data.type === 'Results' && data.channel && data.channel.alternatives && data.channel.alternatives[0]) {
           var transcript = data.channel.alternatives[0].transcript;
-          // Show interim (partial) transcript as live caption
-          var captionEl = document.getElementById('stt-live-caption');
-          if (captionEl) {
-            if (transcript) {
-              captionEl.textContent = transcript;
-              captionEl.style.opacity = data.is_final ? '0' : '1';
-            } else if (!data.is_final) {
-              // Empty interim — still listening
-            }
-          }
+          _setInterimCaption_((transcript || '').trim());
           if (data.is_final && transcript) {
-            if (captionEl) { captionEl.textContent = ''; captionEl.style.opacity = '0'; }
+            _setInterimCaption_('');
             _handleSttTranscript(transcript);
           }
         }
@@ -6274,12 +6283,16 @@ function _launchWebSpeech() {
     if (myGen !== _sttGen) return;
     clearWatchdog();
     var lastIdx = e.results.length - 1;
-    if (!e.results[lastIdx].isFinal) return;
+    if (!e.results[lastIdx].isFinal) {
+      _setInterimCaption_((e.results[lastIdx][0] && e.results[lastIdx][0].transcript ? e.results[lastIdx][0].transcript : '').trim());
+      return;
+    }
     var best = e.results[lastIdx][0].transcript;
     for (var i = 1; i < e.results[lastIdx].length; i++) {
       var alt = e.results[lastIdx][i].transcript;
       if (scoreMedicalPhrase_(alt) > scoreMedicalPhrase_(best)) best = alt;
     }
+    _setInterimCaption_('');
     _handleSttTranscript(best);
   };
 
@@ -6316,6 +6329,7 @@ function startHandsFreeListening_() {
   if (!App.pbHandsFree || App.pbDiagResolved) return;
   _sttShouldRun = true;
   _sttRetryMs = 250;
+  _setInterimCaption_('');
   _cleanupStt();
   setTimeout(function() { _launchStt(); }, 300);
 }
@@ -7662,6 +7676,7 @@ function startNextPBCase() {
   }
 
   serverCall('startPatientBotCase', App.pbSetupSpecialty, App.pbCheatMode, App.pbDifficulty, App.pbCustom || {}).then(function(result) {
+    if (App.nacActive) return; // ignore stale callback if user switched to NAC
     App.pbCaseId = result.caseId; App.pbSpecialty = result.specialty; App.pbPresentation = result.presentation || '';
     App.pbDiagnosis = null; App.pbPatientInfo = null; App.pbDiagnosing = false; App.pbDiagAttempts = 0; App.pbDiagResolved = false;
     App.pbPartialUsed = false; App.pbScorecard = null; App.pbScorecardLoading = false; App.pbScorecardError = false; App.pbScorecardShown = false;
@@ -9518,6 +9533,9 @@ function enterNACStation_() {
   if (App.nacTimerMinutes > 0) {
     startNACTimer(App.nacTimerMinutes * 60);
   }
+  // Hard reset at station entry so doctor always speaks first
+  App.pbHistory = [];
+  _setInterimCaption_('');
   // Doctor speaks first — don't auto-play patient's opening line
   App.nacDoctorSpoke = false;
   // Build system prompt for direct mode if keys available
@@ -9535,6 +9553,7 @@ function enterNACStation_() {
   // Start hands-free listening (slight delay to ensure DOM is ready for mic permission)
   if (App.pbHandsFree) setTimeout(function() { startHandsFreeListening_(); }, 500);
   // Start 30-second idle nudge — if doctor doesn't speak, patient prompts them
+  if (App.nacIdleTimer) { clearTimeout(App.nacIdleTimer); App.nacIdleTimer = null; }
   App.nacIdleTimer = setTimeout(function() {
     if (!App.nacDoctorSpoke && App.nacActive && !App.pbDiagResolved) {
       var nudges = [
@@ -10395,11 +10414,12 @@ function renderNACStationUI_() {
       html += '<div style="display:flex;align-items:center;gap:12px;width:100%;justify-content:center">';
       html += '<div id="hf-indicator" style="display:inline-flex;align-items:center;gap:8px;padding:8px 20px;border-radius:24px;background:rgba(198,40,40,0.1);border:2px solid #c62828;animation:pulse 1.5s infinite">';
       html += '<span style="display:inline-block;width:10px;height:10px;background:#c62828;border-radius:50%;animation:pulse 1.5s infinite"></span>';
-      html += '<span style="color:#c62828;font-size:13px;font-weight:700">Listening</span>';
+      html += '<span id="hf-indicator-status" style="color:#c62828;font-size:13px;font-weight:700">Listening...</span>';
       html += '</div>';
       html += '<button class="btn btn-warning" onclick="showDiagnoseModal()" style="font-size:13px;padding:8px 16px">Diagnose</button>';
       html += '<button class="btn" onclick="stopHandsFree_()" style="background:#c62828;color:white;font-size:13px;padding:8px 16px;border-radius:20px">&#x1F4F5; Hang Up</button>';
       html += '</div>';
+      html += '<div id="hf-interim-caption" style="min-height:18px;max-width:90%;font-size:12px;color:var(--text-light);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(App.pbInterimTranscript || '') + '</div>';
       html += '<div style="font-size:11px;color:var(--text-light);text-align:center">Speak naturally &bull; <strong>"my diagnosis is..."</strong> to diagnose &bull; <strong>"order..."</strong> for orders</div>';
     } else {
       html += '<div style="display:flex;gap:8px;width:100%">';
@@ -10819,10 +10839,11 @@ function renderPBChatInner() {
       // ── Hands-free phone-call UI ──
       html += '<div class="chat-input-area" style="flex-direction:column;align-items:center;padding:16px 20px;gap:12px">';
       html += '<div style="display:flex;align-items:center;gap:12px;width:100%;justify-content:center">';
-      html += '<div id="hf-indicator" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:20px;background:#c62828;color:white;font-size:13px;font-weight:700;animation:pulse 1.5s infinite">&#x1F534; Listening...</div>';
+      html += '<div id="hf-indicator" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:20px;background:#c62828;color:white;font-size:13px;font-weight:700;animation:pulse 1.5s infinite"><span style="font-size:12px">&#x1F534;</span><span id="hf-indicator-status">Listening...</span></div>';
       html += '<button class="btn btn-warning pb-diagnose-btn" onclick="showDiagnoseModal()" style="font-size:13px">Diagnose</button>';
       html += '<button class="btn" onclick="stopHandsFree_()" style="background:#c62828;color:white;font-size:13px;padding:8px 16px;border-radius:20px" title="End hands-free">&#x1F4F5; Hang Up</button>';
       html += '</div>';
+      html += '<div id="hf-interim-caption" style="min-height:18px;max-width:90%;font-size:12px;color:var(--text-light);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(App.pbInterimTranscript || '') + '</div>';
       html += '<div style="font-size:11px;color:var(--text-light);text-align:center">Speak naturally &bull; Say <strong>"my diagnosis is..."</strong> to diagnose &bull; <strong>"order..."</strong> for orders &bull; <strong>"hang up"</strong> to end</div>';
       html += '</div>';
     } else {
