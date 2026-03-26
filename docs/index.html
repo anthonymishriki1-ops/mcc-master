@@ -8890,6 +8890,8 @@ function startNACExamInner_() {
 function startNextNACStation() {
   App.nacCurrentStation++;
   App.pbCurrentCase = App.nacCurrentStation;
+  App.nacNotes = ''; // fresh notepad each station
+  nacActiveTab = 'overview'; // reset to overview tab
   var station = App.nacStations[App.nacCurrentStation - 1];
 
   // Set PB specialty to the station's specialty
@@ -8945,20 +8947,116 @@ function startNextNACStation() {
 
     App.pbHistory = [{ role: 'assistant', content: msg }];
 
-    // Start timer if configured
-    if (App.nacTimerMinutes > 0) {
-      startNACTimer(App.nacTimerMinutes * 60);
-    }
-
-    renderPBChat();
-    // Hands-free: speak the opening line then start listening
-    if (App.pbHandsFree) {
-      resumeHandsFreeAfterSpeak_(msg);
-    }
+    // Show reading period before starting the station
+    App.nacStationMsg = msg;
+    showNACReadingPeriod_(station);
   }).catch(function(e) {
     el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(e.message || String(e)) + '</p>' +
       '<button class="btn btn-primary" onclick="startNextNACStation()" style="margin-top:12px">Retry Station</button></div>';
   });
+}
+
+// ── NAC Reading Period (2 min door prompt + notepad) ──
+function showNACReadingPeriod_(station) {
+  var el = document.getElementById('patientbot-content');
+  if (!el) return;
+  App.nacNotes = App.nacNotes || '';
+  var readingSec = 120; // 2 minutes
+  App.nacReadingTimer = readingSec;
+
+  function renderReading() {
+    var m = Math.floor(App.nacReadingTimer / 60);
+    var s = App.nacReadingTimer % 60;
+    var timerColor = App.nacReadingTimer <= 30 ? '#c62828' : App.nacReadingTimer <= 60 ? '#e65100' : '#4facfe';
+    var p = App.pbPatientInfo;
+    var html = '<div style="display:flex;flex-direction:column;height:100%;background:var(--bg)">';
+
+    // Header
+    html += '<div style="background:linear-gradient(135deg,#0d1442,#1a237e);padding:20px 24px;text-align:center">';
+    html += '<div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,0.5);margin-bottom:4px">Reading Period</div>';
+    html += '<div style="font-size:32px;font-weight:900;font-family:monospace;color:' + timerColor + '" id="nac-reading-timer">' + m + ':' + (s < 10 ? '0' : '') + s + '</div>';
+    html += '<div style="font-size:13px;color:rgba(255,255,255,0.6);margin-top:4px">Station ' + App.nacCurrentStation + ' of ' + App.nacTotalStations + '</div>';
+    html += '</div>';
+
+    // Door prompt
+    html += '<div style="padding:20px 24px;flex:1;overflow-y:auto">';
+    html += '<div style="background:var(--card);border:2px solid var(--primary);border-radius:12px;padding:20px;margin-bottom:16px">';
+    html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--primary);margin-bottom:12px">Door Prompt</div>';
+    html += '<div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:8px">' + escapeHtml(station.specialty) + ' — ' + escapeHtml(station.presentation) + '</div>';
+    html += '<div style="font-size:13px;color:var(--text-light);margin-bottom:12px">' + escapeHtml(station.focus) + '</div>';
+    if (p) {
+      html += '<div style="border-top:1px solid var(--border);padding-top:12px;font-size:14px;color:var(--text)">';
+      html += 'You are about to see <strong>' + escapeHtml(p.name || 'a patient') + '</strong>';
+      if (p.age) html += ', <strong>' + p.age + ' years old</strong>';
+      if (p.sex) {
+        var sx = (p.sex === 'F' || p.sex === 'female' || p.sex === 'trans_f') ? 'female' : (p.sex === 'M' || p.sex === 'male' || p.sex === 'trans_m') ? 'male' : 'patient';
+        html += ', <strong>' + sx + '</strong>';
+      }
+      html += ', presenting with <strong>' + escapeHtml(station.presentation.toLowerCase()) + '</strong>.';
+      html += '</div>';
+      if (p.appearance) {
+        html += '<div style="margin-top:10px;font-size:13px;color:var(--text);font-style:italic">"' + escapeHtml(p.appearance) + '"</div>';
+      }
+    }
+    html += '<div style="margin-top:14px;font-size:13px;color:var(--text)">';
+    html += '<strong>Instructions:</strong> Take a focused history, perform a relevant physical examination, order appropriate investigations, and provide your diagnosis and management plan.';
+    html += '</div>';
+    html += '</div>';
+
+    // Notepad
+    html += '<div style="background:var(--card);border-radius:12px;padding:16px;border:1px solid var(--border)">';
+    html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-light);margin-bottom:8px">Your Notes <span style="font-weight:400;text-transform:none;letter-spacing:0">(you can bring these into the station)</span></div>';
+    html += '<textarea id="nac-notes-input" style="width:100%;min-height:120px;border:1px solid var(--border);border-radius:8px;padding:12px;font-size:14px;font-family:inherit;background:var(--bg);color:var(--text);resize:vertical" placeholder="Jot down your approach: DDx, key questions to ask, physical exam maneuvers, investigations to order...">' + escapeHtml(App.nacNotes || '') + '</textarea>';
+    html += '</div>';
+
+    html += '</div>'; // end content area
+
+    // Bottom button
+    html += '<div style="padding:16px 24px;border-top:1px solid var(--border);background:var(--card);text-align:center">';
+    html += '<button onclick="endNACReadingPeriod_()" class="btn btn-success" style="width:100%;padding:14px;font-size:16px;font-weight:700">Enter Station</button>';
+    html += '<div style="font-size:11px;color:var(--text-light);margin-top:6px">Station will auto-start when reading time expires</div>';
+    html += '</div>';
+
+    html += '</div>';
+    el.innerHTML = html;
+  }
+
+  renderReading();
+
+  App.nacReadingInterval = setInterval(function() {
+    // Save notes continuously
+    var notesEl = document.getElementById('nac-notes-input');
+    if (notesEl) App.nacNotes = notesEl.value;
+
+    App.nacReadingTimer--;
+    var timerEl = document.getElementById('nac-reading-timer');
+    if (timerEl) {
+      var m = Math.floor(App.nacReadingTimer / 60);
+      var s = App.nacReadingTimer % 60;
+      timerEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+      if (App.nacReadingTimer <= 30) timerEl.style.color = '#c62828';
+      else if (App.nacReadingTimer <= 60) timerEl.style.color = '#e65100';
+    }
+    if (App.nacReadingTimer <= 0) {
+      endNACReadingPeriod_();
+    }
+  }, 1000);
+}
+
+function endNACReadingPeriod_() {
+  if (App.nacReadingInterval) { clearInterval(App.nacReadingInterval); App.nacReadingInterval = null; }
+  // Save final notes
+  var notesEl = document.getElementById('nac-notes-input');
+  if (notesEl) App.nacNotes = notesEl.value;
+
+  // Now start the actual station
+  if (App.nacTimerMinutes > 0) {
+    startNACTimer(App.nacTimerMinutes * 60);
+  }
+  renderPBChat();
+  if (App.pbHandsFree) {
+    resumeHandsFreeAfterSpeak_(App.nacStationMsg);
+  }
 }
 
 function startNACTimer(seconds) {
@@ -9500,7 +9598,8 @@ function renderNACStationUI_() {
     { id: 'vitals', icon: '&#x1FA7A;', label: 'Vitals', count: 0 },
     { id: 'labs', icon: '&#x1F9EA;', label: 'Labs', count: labResults.length },
     { id: 'imaging', icon: '&#x1FA7B;', label: 'Imaging', count: diResults.length },
-    { id: 'exam', icon: '&#x1FA78;', label: 'Exam', count: examMsgs.length }
+    { id: 'exam', icon: '&#x1FA78;', label: 'Exam', count: examMsgs.length },
+    { id: 'notes', icon: '&#x1F4DD;', label: 'Notes', count: 0 }
   ];
   html += '<div style="display:flex;background:var(--card);border-bottom:2px solid var(--border);overflow-x:auto">';
   for (var ti = 0; ti < tabs.length; ti++) {
@@ -9661,6 +9760,12 @@ function renderNACStationUI_() {
         html += '</div>';
       }
     }
+
+  } else if (nacActiveTab === 'notes') {
+    // Notepad — notes from reading period, editable during station
+    html += '<div style="font-size:14px;font-weight:700;margin-bottom:8px;color:var(--text)">Your Notes</div>';
+    html += '<div style="font-size:12px;color:var(--text-light);margin-bottom:12px">These are the notes you took during the reading period. You can edit them during the station.</div>';
+    html += '<textarea id="nac-station-notes" oninput="App.nacNotes=this.value" style="width:100%;min-height:250px;border:1px solid var(--border);border-radius:8px;padding:14px;font-size:14px;font-family:inherit;background:var(--card);color:var(--text);resize:vertical;line-height:1.6" placeholder="No notes taken during reading period.">' + escapeHtml(App.nacNotes || '') + '</textarea>';
 
   }
 
