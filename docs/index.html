@@ -1665,6 +1665,17 @@ body.kb-open #bottom-nav { display: none !important; }
     max-width: 720px;
   }
 
+  /* NAC desktop: two-column overview, taller conversation */
+  .nac-overview-grid {
+    display: grid;
+    grid-template-columns: 55% 45%;
+    gap: 16px;
+    align-items: start;
+  }
+  #nac-convo-box {
+    max-height: 50vh !important;
+  }
+
   .flashcard {
     height: 360px;
   }
@@ -2935,8 +2946,14 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '4.3';
+var APP_VERSION = '4.4';
 var APP_CHANGELOG = [
+  { version: '4.4', date: 'Mar 27 2026', label: 'NAC desktop: two-column layout + conversation auto-scroll', items: [
+    'Desktop: patient info on left, conversation on right — clinical workstation layout',
+    'Conversation box auto-scrolls to latest message',
+    'Desktop conversation box expands to 50vh (was 200px)',
+    'Conversation always visible, even with no messages yet',
+  ]},
   { version: '4.3', date: 'Mar 27 2026', label: 'BUG FIX: Anthropic model name corrected', items: [
     'BUG FIX: Anthropic model was claude-sonnet-4-20250514 (invalid) — corrected to claude-sonnet-4-6',
     'This was causing all AI patient responses to fail, breaking voice mode entirely',
@@ -9939,9 +9956,9 @@ function renderPBChat() {
   if (App.nacActive) {
     renderNACStationUI_();
     startPBMonitorAnimation();
-    // Start mic visualizer if hands-free
-    // NOTE: mic visualizer disabled — getUserMedia conflicts with SpeechRecognition
-    // if (App.pbHandsFree) startMicVisualizer_();
+    // Auto-scroll conversation box to latest message
+    var convoBox = document.getElementById('nac-convo-box');
+    if (convoBox) convoBox.scrollTop = convoBox.scrollHeight;
     // Doctor speaks first — suppress patient TTS until doctor has spoken
     // In direct mode, TTS is handled by sendNACMessageDirect_ — don't double-speak
     if (!App._nacDirectMode && App.nacDoctorSpoke && !App._pbSpeaking) pbSpeakLastMessage_();
@@ -10273,6 +10290,10 @@ function renderNACStationUI_() {
   html += '<div style="flex:1;overflow-y:auto;padding:16px">';
 
   if (nacActiveTab === 'overview') {
+    // Desktop: two-column grid (patient info left, conversation right)
+    html += '<div class="nac-overview-grid">';
+    html += '<div class="nac-overview-left">';
+
     // Patient demographics + doorway assessment
     if (p) {
       var sexLabel = (p.sex === 'nonbinary' || p.sex === 'NB') ? 'NB' : ((p.sex === 'female' || p.sex === 'F' || p.sex === 'trans_f') ? 'F' : ((p.sex === 'trans_m') ? 'M (trans)' : 'M'));
@@ -10315,38 +10336,44 @@ function renderNACStationUI_() {
       var sev = lastCons.severity || 'safe';
       var sevColors = { 'safe': '#4caf50', 'caution': '#ff9800', 'danger': '#f44336', 'critical': '#b71c1c' };
       var sevColor = sevColors[sev] || '#4caf50';
-      html += '<div style="background:rgba(' + (sev === 'safe' ? '76,175,80' : sev === 'caution' ? '255,152,0' : '244,67,54') + ',0.08);border-left:4px solid ' + sevColor + ';border-radius:8px;padding:12px 14px;font-size:13px;color:var(--text)">';
+      html += '<div style="background:rgba(' + (sev === 'safe' ? '76,175,80' : sev === 'caution' ? '255,152,0' : '244,67,54') + ',0.08);border-left:4px solid ' + sevColor + ';border-radius:8px;padding:12px 14px;font-size:13px;color:var(--text);margin-bottom:12px">';
       html += escapeHtml(lastCons.content || '');
       html += '</div>';
     }
     // Death alert
     var deathMsgs = App.pbHistory.filter(function(m) { return m.role === 'death'; });
     if (deathMsgs.length > 0) {
-      html += '<div style="background:#b71c1c;color:white;padding:16px;border-radius:8px;margin-top:12px;text-align:center">';
+      html += '<div style="background:#b71c1c;color:white;padding:16px;border-radius:8px;margin-bottom:12px;text-align:center">';
       html += '<strong>&#x1F480; Patient Deceased</strong><br>' + escapeHtml(deathMsgs[deathMsgs.length-1].content);
       html += '</div>';
     }
 
-    // Conversation transcript
+    html += '</div>'; // end nac-overview-left
+
+    // Conversation transcript (right column on desktop)
+    html += '<div class="nac-overview-right">';
     var convMsgs = App.pbHistory.filter(function(m) { return m.role === 'user' || m.role === 'assistant'; });
-    if (convMsgs.length > 0) {
-      html += '<div style="background:var(--card);border-radius:10px;padding:16px;margin-top:12px;border:1px solid var(--border)">';
-      html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-light);margin-bottom:10px">Conversation</div>';
-      html += '<div style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:8px">';
-      for (var ci = 0; ci < convMsgs.length; ci++) {
-        var cm = convMsgs[ci];
-        var isDoc = cm.role === 'user';
-        var align = isDoc ? 'flex-end' : 'flex-start';
-        var bg = isDoc ? 'var(--primary)' : 'var(--bg)';
-        var color = isDoc ? 'white' : 'var(--text)';
-        var label = isDoc ? 'You' : (App.pbPatientInfo ? App.pbPatientInfo.name : 'Patient');
-        html += '<div style="align-self:' + align + ';max-width:80%">';
-        html += '<div style="font-size:10px;color:var(--text-light);margin-bottom:2px;text-align:' + (isDoc ? 'right' : 'left') + '">' + escapeHtml(label) + '</div>';
-        html += '<div style="background:' + bg + ';color:' + color + ';padding:8px 12px;border-radius:12px;font-size:13px;line-height:1.4">' + escapeHtml(typeof cm.content === 'string' ? cm.content : '') + '</div>';
-        html += '</div>';
-      }
-      html += '</div></div>';
+    html += '<div style="background:var(--card);border-radius:10px;padding:16px;border:1px solid var(--border);height:100%">';
+    html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-light);margin-bottom:10px">Conversation</div>';
+    html += '<div id="nac-convo-box" style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:8px">';
+    if (convMsgs.length === 0) {
+      html += '<div style="text-align:center;color:var(--text-light);font-size:13px;padding:20px 0">Speak to begin the encounter...</div>';
     }
+    for (var ci = 0; ci < convMsgs.length; ci++) {
+      var cm = convMsgs[ci];
+      var isDoc = cm.role === 'user';
+      var align = isDoc ? 'flex-end' : 'flex-start';
+      var bg = isDoc ? 'var(--primary)' : 'var(--bg)';
+      var color = isDoc ? 'white' : 'var(--text)';
+      var label = isDoc ? 'You' : (App.pbPatientInfo ? App.pbPatientInfo.name : 'Patient');
+      html += '<div style="align-self:' + align + ';max-width:80%">';
+      html += '<div style="font-size:10px;color:var(--text-light);margin-bottom:2px;text-align:' + (isDoc ? 'right' : 'left') + '">' + escapeHtml(label) + '</div>';
+      html += '<div style="background:' + bg + ';color:' + color + ';padding:8px 12px;border-radius:12px;font-size:13px;line-height:1.4">' + escapeHtml(typeof cm.content === 'string' ? cm.content : '') + '</div>';
+      html += '</div>';
+    }
+    html += '</div></div>';
+    html += '</div>'; // end nac-overview-right
+    html += '</div>'; // end nac-overview-grid
 
   } else if (nacActiveTab === 'vitals') {
     // Full vitals detail view — numbers only, no ECG
