@@ -933,7 +933,7 @@ function buildGlossary() {
     var prompt = 'Define these medical terms. For each return a JSON object with: term, definition (1 sentence), persian (Farsi translation), arabic (Arabic translation), category (anatomy/pathology/pharmacology/procedure/diagnosis/lab/physiology).\n\nReturn ONLY a JSON array:\n\n' + batch.join('\n');
 
     var payload = {
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 4096,
       messages: [{ role: 'user', content: prompt }]
     };
@@ -1045,7 +1045,7 @@ function condenseDontMiss() {
         var resp = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
           method: 'post', contentType: 'application/json',
           headers: { 'x-api-key': config.API_KEY, 'anthropic-version': '2023-06-01' },
-          payload: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 4096, messages: [{ role: 'user', content: prompt }] }),
+          payload: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 4096, messages: [{ role: 'user', content: prompt }] }),
           muteHttpExceptions: true
         });
         var json = JSON.parse(resp.getContentText());
@@ -2777,7 +2777,7 @@ function sendPatientBotMessage(caseId, message, history) {
   if (systemNote) userMsg += systemNote;
   messages.push({ role: 'user', content: userMsg });
 
-  var response = callAnthropic_(caseData.systemPrompt, messages, 'claude-sonnet-4-6-20260320');
+  var response = callAnthropic_(caseData.systemPrompt, messages, 'claude-sonnet-4-6');
 
   // Strip any accidental JSON from follow-up messages
   response = response.replace(/`{1,3}\s*patient\s*\n?[\s\S]*?\n?\s*`{1,3}\s*/gi, '');
@@ -2876,7 +2876,7 @@ function debriefPatientBot(caseId, history) {
     '}';
 
   try {
-    var response = callAnthropicModel_('claude-sonnet-4-20250514', prompt, [{ role: 'user', content: 'Grade this OSCE station.' }]);
+    var response = callAnthropicModel_('claude-sonnet-4-6', prompt, [{ role: 'user', content: 'Grade this OSCE station.' }]);
     var jsonMatch = response.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       return JSON.parse(jsonMatch[0]);
@@ -2963,7 +2963,7 @@ function generateCaseDebrief(caseId, history) {
     '"examTip": "<one practical MCCQE exam tip relevant to this presentation>"}';
 
   try {
-    var response = callAnthropicModel_('claude-sonnet-4-20250514', prompt, [{ role: 'user', content: 'Score this encounter.' }]);
+    var response = callAnthropicModel_('claude-sonnet-4-6', prompt, [{ role: 'user', content: 'Score this encounter.' }]);
     var jsonMatch = response.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       var result = JSON.parse(jsonMatch[0]);
@@ -3294,7 +3294,7 @@ function condenseDontMiss() {
 
       try {
         var payload = {
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-sonnet-4-6',
           max_tokens: 4096,
           system: SYSTEM_PROMPT,
           messages: [{ role: 'user', content: userMsg }]
