@@ -2935,8 +2935,12 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '4.2';
+var APP_VERSION = '4.3';
 var APP_CHANGELOG = [
+  { version: '4.3', date: 'Mar 27 2026', label: 'BUG FIX: Anthropic model name corrected', items: [
+    'BUG FIX: Anthropic model was claude-sonnet-4-20250514 (invalid) — corrected to claude-sonnet-4-6',
+    'This was causing all AI patient responses to fail, breaking voice mode entirely',
+  ]},
   { version: '4.2', date: 'Mar 27 2026', label: 'Random Case: infinite loop mode', items: [
     'Random Case now keeps going — each station auto-picks a new random case instead of ending',
     'BUG FIX: auto-merge was not triggering GitHub Pages deploy — fixed, future PRs deploy automatically',
@@ -9043,7 +9047,7 @@ function callAnthropicDirect_(systemPrompt, messages) {
       'anthropic-dangerous-direct-browser-access': 'true'
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1024,
       system: systemPrompt,
       messages: messages
