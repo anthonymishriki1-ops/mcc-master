@@ -2935,8 +2935,12 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '4.1';
+var APP_VERSION = '4.2';
 var APP_CHANGELOG = [
+  { version: '4.2', date: 'Mar 27 2026', label: 'Random Case: infinite loop mode', items: [
+    'Random Case now keeps going — each station auto-picks a new random case instead of ending',
+    'BUG FIX: auto-merge was not triggering GitHub Pages deploy — fixed, future PRs deploy automatically',
+  ]},
   { version: '4.1', date: 'Mar 26 2026', label: 'NAC UX: Random Case, Skip button, sidebar reorganization', items: [
     'Random Case button — pick one random station from all 84 cases',
     'Skip button in station UI — jump to next case mid-station',
@@ -9632,7 +9636,10 @@ function skipNACStation_() {
     diagnosis: App.pbDiagnosis || '',
     correct: false, attempts: 0, skipped: true
   });
-  if (App.nacCurrentStation >= App.nacTotalStations) {
+  if (App.nacRandomMode) {
+    App.pbCaseId = null; App.pbHistory = []; VitalsEngine.stop();
+    pickNextRandomStation_();
+  } else if (App.nacCurrentStation >= App.nacTotalStations) {
     showNACSummary();
   } else {
     App.pbCaseId = null; App.pbHistory = []; VitalsEngine.stop();
@@ -9660,7 +9667,10 @@ function finishNACStation() {
     logPBConversation('nac_timeout', {});
   }
 
-  if (App.nacCurrentStation >= App.nacTotalStations) {
+  if (App.nacRandomMode) {
+    App.pbCaseId = null; App.pbHistory = []; VitalsEngine.stop();
+    pickNextRandomStation_();
+  } else if (App.nacCurrentStation >= App.nacTotalStations) {
     showNACSummary();
   } else {
     App.pbCaseId = null;
@@ -9668,6 +9678,20 @@ function finishNACStation() {
     VitalsEngine.stop();
     startNextNACStation();
   }
+}
+
+function pickNextRandomStation_() {
+  var allStations = [];
+  for (var ri = 0; ri < NAC_PRACTICE_TESTS.length; ri++) {
+    for (var rj = 0; rj < NAC_PRACTICE_TESTS[ri].length; rj++) {
+      allStations.push(NAC_PRACTICE_TESTS[ri][rj]);
+    }
+  }
+  var next = allStations[Math.floor(Math.random() * allStations.length)];
+  App.nacStations = [next];
+  App.nacCurrentStation = 0;
+  App.nacTotalStations = 1;
+  startNextNACStation();
 }
 
 function showNACSummary() {
