@@ -2953,6 +2953,7 @@ var APP_CHANGELOG = [
     'Conversation box auto-scrolls to latest message',
     'Desktop conversation box expands to 50vh (was 200px)',
     'Conversation always visible, even with no messages yet',
+    'BUG FIX: expired GAS session no longer dumps you out of NAC exam — advances to next station instead',
   ]},
   { version: '4.3', date: 'Mar 27 2026', label: 'BUG FIX: Anthropic model name corrected', items: [
     'BUG FIX: Anthropic model was claude-sonnet-4-20250514 (invalid) — corrected to claude-sonnet-4-6',
@@ -6149,7 +6150,7 @@ function _handleSttTranscript(text) {
 
   serverCall('sendPatientBotMessage', App.pbCaseId, best, App.pbHistory.slice(-30)).then(function(result) {
     removeEl('pb-typing');
-    if (result.expired) { App.pbCaseId = null; stopHandsFree_(); showPatientBotSetup(); return; }
+    if (result.expired) { App.pbCaseId = null; if (App.nacActive) { finishNACStation(); return; } stopHandsFree_(); showPatientBotSetup(); return; }
     if (result.blocked) {
       App.pbHistory.push({ role: 'system', content: result.consequence, severity: 'prereq' });
       if (result.vitals) App.pbVitals = result.vitals;
@@ -7799,7 +7800,7 @@ function sendPBMessage() {
 
   serverCall('sendPatientBotMessage', App.pbCaseId, message, App.pbHistory.slice(-30)).then(function(result) {
     removeEl('pb-typing');
-    if (result.expired) { App.pbCaseId = null; showPatientBotSetup(); return; }
+    if (result.expired) { App.pbCaseId = null; if (App.nacActive) { finishNACStation(); return; } showPatientBotSetup(); return; }
 
     // PREREQ BLOCKED — action couldn't be performed
     if (result.blocked) {
@@ -8748,7 +8749,7 @@ function submitPBDiagnosis() {
     App.pbDiagnosing = false;
     var renderFn = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
 
-    if (result.expired) { App.pbCaseId = null; showPatientBotSetup(); return; }
+    if (result.expired) { App.pbCaseId = null; if (App.nacActive) { finishNACStation(); return; } showPatientBotSetup(); return; }
 
     if (result.score >= 40 && result.score < 80 && !App.pbPartialUsed) {
       // Partial credit — let them keep investigating and try once more
