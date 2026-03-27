@@ -23,3 +23,10 @@ jobs:
               pull_number: context.payload.pull_request.number,
               merge_method: 'merge'
             });
+            // Explicitly trigger the Pages deploy — GITHUB_TOKEN merges don't fire push triggers
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'static.yml',
+              ref: 'master'
+            });
