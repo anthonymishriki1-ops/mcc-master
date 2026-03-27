@@ -8954,6 +8954,7 @@ function showNACSetup() {
 
   html += '<div class="form-group" style="text-align:left"><label>Practice Test</label>';
   html += '<div class="quiz-count-btns" style="flex-wrap:wrap">';
+  html += '<button class="quiz-count-btn" onclick="setNACTest(0,this)">&#x1F3B2; Random Case</button>';
   for (var ti = 0; ti < NAC_PRACTICE_TESTS.length; ti++) {
     html += '<button class="quiz-count-btn' + (ti === 0 ? ' active' : '') + '" onclick="setNACTest(' + (ti+1) + ',this)">Test ' + (ti+1) + '</button>';
   }
@@ -8967,13 +8968,6 @@ function showNACSetup() {
   html += '<button class="quiz-count-btn" onclick="setNACTimer(7,this)">7 min (Short)</button>';
   html += '<button class="quiz-count-btn active" onclick="setNACTimer(11,this)">11 min (NAC Standard)</button>';
   html += '<button class="quiz-count-btn" onclick="setNACTimer(15,this)">15 min (Extended)</button>';
-  html += '</div></div>';
-
-  html += '<div class="form-group" style="text-align:left"><label>Difficulty</label>';
-  html += '<div class="quiz-count-btns">';
-  html += '<button class="quiz-count-btn" onclick="setNACDiff(\'easy\',this)">Easy</button>';
-  html += '<button class="quiz-count-btn active" onclick="setNACDiff(\'medium\',this)">NAC Standard</button>';
-  html += '<button class="quiz-count-btn" onclick="setNACDiff(\'hard\',this)">Hard</button>';
   html += '</div></div>';
 
   // API keys are stored in localStorage (set via Dev Panel) — no UI needed here
@@ -9274,12 +9268,30 @@ function startNACExam() {
 
 function startNACExamInner_() {
   var testNum = parseInt(document.getElementById('nac-test-num').value) || 1;
-  testNum = Math.max(1, Math.min(testNum, NAC_PRACTICE_TESTS.length));
-  var stations = NAC_PRACTICE_TESTS[testNum - 1];
-  App.nacTestNumber = testNum;
-  App.nacStations = stations.slice();
-  App.nacCurrentStation = 0;
-  App.nacTotalStations = stations.length;
+
+  // Random case mode: pick one random station from all 84
+  if (testNum === 0) {
+    var allStations = [];
+    for (var ri = 0; ri < NAC_PRACTICE_TESTS.length; ri++) {
+      for (var rj = 0; rj < NAC_PRACTICE_TESTS[ri].length; rj++) {
+        allStations.push(NAC_PRACTICE_TESTS[ri][rj]);
+      }
+    }
+    var randomStation = allStations[Math.floor(Math.random() * allStations.length)];
+    App.nacTestNumber = 0;
+    App.nacStations = [randomStation];
+    App.nacCurrentStation = 0;
+    App.nacTotalStations = 1;
+    App.nacRandomMode = true;
+  } else {
+    testNum = Math.max(1, Math.min(testNum, NAC_PRACTICE_TESTS.length));
+    var stations = NAC_PRACTICE_TESTS[testNum - 1];
+    App.nacTestNumber = testNum;
+    App.nacStations = stations.slice();
+    App.nacCurrentStation = 0;
+    App.nacTotalStations = stations.length;
+    App.nacRandomMode = false;
+  }
   App.nacActive = true;
   App.nacScores = [];
   App.nacTimerMinutes = App.nacTimerMinutes || 11;
@@ -9604,7 +9616,27 @@ function stopNACTimer() {
   }
 }
 
+function skipNACStation_() {
+  // Skip current station — mark as skipped and move to next
+  stopHandsFree_();
+  stopNACTimer();
+  App.nacScores.push({
+    station: App.nacCurrentStation,
+    specialty: App.pbSpecialty || '',
+    presentation: App.pbPresentation || '',
+    diagnosis: App.pbDiagnosis || '',
+    correct: false, attempts: 0, skipped: true
+  });
+  if (App.nacCurrentStation >= App.nacTotalStations) {
+    showNACSummary();
+  } else {
+    App.pbCaseId = null; App.pbHistory = []; VitalsEngine.stop();
+    startNextNACStation();
+  }
+}
+
 function finishNACStation() {
+  stopHandsFree_();
   stopNACTimer();
   // Record score
   var score = {
@@ -10421,6 +10453,7 @@ function renderNACStationUI_() {
       html += '</div>';
       html += '<button class="btn btn-warning" onclick="showDiagnoseModal()" style="font-size:13px;padding:8px 16px">Diagnose</button>';
       html += '<button class="btn" onclick="stopHandsFree_()" style="background:#c62828;color:white;font-size:13px;padding:8px 16px;border-radius:20px">&#x1F4F5; Hang Up</button>';
+      html += '<button class="btn" onclick="skipNACStation_()" style="background:transparent;color:var(--text-light);font-size:12px;padding:6px 12px;border:1px solid var(--border);border-radius:16px" title="Skip to next station">Skip &#x23ED;</button>';
       html += '</div>';
       html += '<div id="hf-interim-caption" style="min-height:18px;max-width:90%;font-size:12px;color:var(--text-light);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(App.pbInterimTranscript || '') + '</div>';
       html += '<div style="font-size:11px;color:var(--text-light);text-align:center">Speak naturally &bull; <strong>"my diagnosis is..."</strong> to diagnose &bull; <strong>"order..."</strong> for orders</div>';
