@@ -6075,6 +6075,11 @@ function _handleSttTranscript(text) {
   var best = text.trim();
   if (!best) return;
 
+  // Interrupt: if patient is speaking, kill the audio immediately
+  if (App._ttsAudio) { try { App._ttsAudio.pause(); App._ttsAudio.currentTime = 0; } catch(e) {} App._ttsAudio = null; }
+  try { window.speechSynthesis.cancel(); } catch(e) {}
+  App._pbSpeaking = false;
+
   _setHFIndicatorState_('Processing...', '#f9a825', '#111');
   _setInterimCaption_('');
 
@@ -6176,7 +6181,7 @@ function _launchDeepgram() {
     return ready.then(function() {
     if (myGen !== _sttGen) return;
 
-    var url = 'wss://api.deepgram.com/v1/listen?model=nova-2-medical&language=en&encoding=linear16&sample_rate=' + actualRate + '&channels=1&smart_format=true&interim_results=true&utterance_end_ms=1500&vad_events=true';
+    var url = 'wss://api.deepgram.com/v1/listen?model=nova-2-medical&language=en&encoding=linear16&sample_rate=' + actualRate + '&channels=1&smart_format=true&interim_results=true&utterance_end_ms=2500&vad_events=true';
     var ws = new WebSocket(url, ['token', dgKey]);
     _dgSocket = ws;
 
@@ -9179,7 +9184,7 @@ function buildNACSystemPrompt_(station) {
     '1. NEVER break character. You are ALWAYS the patient.\n' +
     '2. NEVER use medical terminology a real patient wouldn\'t know.\n' +
     '3. NEVER give the diagnosis or hint at it.\n' +
-    '4. Keep ALL responses to 1-3 sentences max.\n' +
+    '4. Keep responses SHORT. 1 sentence is ideal. MAX 2 sentences. NEVER 3+. This is a spoken conversation — short replies only.\n' +
     '5. NEVER output JSON, code blocks, scores, or system messages.\n' +
     '6. ONLY answer what is asked. Do NOT volunteer extra symptoms.\n' +
     '7. NEVER apologize for being sick, for taking up the doctor\'s time, or for the doctor\'s behavior. If someone is rude to you, react like a real person — confused, offended, hurt, angry. NEVER say "I\'m sorry" to rudeness.\n\n' +
@@ -9190,7 +9195,8 @@ function buildNACSystemPrompt_(station) {
     '- Be an imperfect historian. Forget exact dates.\n' +
     '- NEVER say "I appreciate the question" or "That\'s a good question."\n' +
     '- STOP ANSWERING QUESTIONS WITH QUESTIONS. Just answer directly.\n' +
-    '- Vary response length. Some "Yeah." some longer.\n\n' +
+    '- Vary response length. Many answers should be just a few words: "Yeah." "Nah." "Like a week ago?" "Right here." "I dunno."\n' +
+    '- Think about how REAL patients talk to doctors. They give MINIMAL info unless pressed.\n\n' +
     'ACTIONS: When the student performs an ACTION (examines, orders tests, gives medication), it HAPPENS. React to the EFFECTS.\n\n' +
     'EMOTIONAL STATES: Show REAL emotions — anger when frustrated, fear when scared, pain that is primal not articulate. Emotions BUILD over the encounter.\n';
 }
