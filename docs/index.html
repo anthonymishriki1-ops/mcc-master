@@ -2962,8 +2962,12 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '5.8';
+var APP_VERSION = '5.9';
 var APP_CHANGELOG = [
+  { version: '5.9', date: 'Mar 28 2026', label: 'Mobile fix: prompt for API key on first use', items: [
+    'Mobile/new device: prompts for API key on first NAC station instead of failing silently',
+    'Also prompts for OpenAI key (TTS voice) if missing',
+  ]},
   { version: '5.8', date: 'Mar 28 2026', label: 'Fix idle nudge stacking + station loading', items: [
     'Idle nudges no longer stack — max 3, waits for AI response before firing next',
     'Fixed station stuck on Loading screen',
@@ -9802,6 +9806,29 @@ function startNextNACStation() {
     VitalsEngine.init({ hr: station.hr, sbp: station.sbp, dbp: station.dbp, rr: station.rr, temp: station.tmp, spo2: station.o2 });
     App.nacCaseReady = true;
     return;
+  }
+
+  // No API key but station has pregen data — prompt for key instead of hitting broken server
+  if (station.nm && !localStorage.getItem('mcc_anthropic_key')) {
+    var userKey = prompt('NAC-OSCE needs an Anthropic API key to run.\n\nPaste your key below (starts with sk-ant-):');
+    if (userKey && userKey.trim().length > 10) {
+      localStorage.setItem('mcc_anthropic_key', userKey.trim());
+      // Also prompt for OpenAI key if missing (needed for TTS)
+      if (!localStorage.getItem('mcc_openai_key')) {
+        var oKey = prompt('Optional: Paste your OpenAI API key for voice (TTS).\n\nLeave blank to skip (text-only mode):');
+        if (oKey && oKey.trim().length > 10) localStorage.setItem('mcc_openai_key', oKey.trim());
+      }
+      App._nacDirectMode = true;
+      App._nacSystemPrompt = buildNACSystemPrompt_(station);
+      App.pbDiagnosis = station.dx;
+      VitalsEngine.init({ hr: station.hr, sbp: station.sbp, dbp: station.dbp, rr: station.rr, temp: station.tmp, spo2: station.o2 });
+      App.nacCaseReady = true;
+      showToast('API key saved — direct mode active');
+      return;
+    } else {
+      App.nacCaseError = 'API key required. Go to Dev Panel to enter your Anthropic key.';
+      return;
+    }
   }
 
   App._nacDirectMode = false;
