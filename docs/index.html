@@ -2962,7 +2962,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '6.2';
+var APP_VERSION = '6.3';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -2974,9 +2974,9 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
-  { version: '6.2', date: 'Mar 28 2026', label: 'Works on all devices — keys from server', items: [
-    'API keys served securely from server — no keys in code',
-    'Works on mobile, desktop, any browser — auto-fetched on login',
+  { version: '6.3', date: 'Mar 28 2026', label: 'Voice works on all devices', items: [
+    'Push-to-talk and hands-free auto-fetch Deepgram key from server if missing',
+    'No more "add key" errors on new devices — keys load automatically',
   ]},
   { version: '5.8', date: 'Mar 28 2026', label: 'Fix idle nudge stacking + station loading', items: [
     'Idle nudges no longer stack — max 3, waits for AI response before firing next',
@@ -6136,10 +6136,26 @@ function startNACPttRecording_() {
 
   var dgKey = localStorage.getItem('mcc_deepgram_key');
   if (!dgKey) {
-    App.nacPTTRecording = false;
-    App.pbMicActive = false;
-    renderPBChat();
-    showToast_('Add Deepgram key in NAC setup to use push-to-talk voice');
+    // Keys might still be loading from server — retry once after fetch
+    showToast_('Loading voice keys...');
+    serverCall('getApiKeys').then(function(keys) {
+      if (keys && keys.deepgram) {
+        localStorage.setItem('mcc_deepgram_key', keys.deepgram);
+        if (keys.anthropic && !localStorage.getItem('mcc_anthropic_key')) localStorage.setItem('mcc_anthropic_key', keys.anthropic);
+        if (keys.openai && !localStorage.getItem('mcc_openai_key')) localStorage.setItem('mcc_openai_key', keys.openai);
+        startNACPttRecording_(); // retry now that we have the key
+      } else {
+        App.nacPTTRecording = false;
+        App.pbMicActive = false;
+        renderPBChat();
+        showToast_('Voice unavailable — Deepgram key not configured');
+      }
+    }).catch(function() {
+      App.nacPTTRecording = false;
+      App.pbMicActive = false;
+      renderPBChat();
+      showToast_('Voice unavailable — server error');
+    });
     return;
   }
   var session = { finals: [], interim: '', socket: null, source: null, processor: null, keepAlive: null };
@@ -6400,7 +6416,18 @@ function _handleSttTranscript(text) {
 // ── Deepgram WebSocket STT ──
 function _launchDeepgram() {
   var dgKey = localStorage.getItem('mcc_deepgram_key');
-  if (!dgKey) return false;
+  if (!dgKey) {
+    // Try fetching from server if not cached yet
+    serverCall('getApiKeys').then(function(keys) {
+      if (keys && keys.deepgram) {
+        localStorage.setItem('mcc_deepgram_key', keys.deepgram);
+        if (keys.anthropic && !localStorage.getItem('mcc_anthropic_key')) localStorage.setItem('mcc_anthropic_key', keys.anthropic);
+        if (keys.openai && !localStorage.getItem('mcc_openai_key')) localStorage.setItem('mcc_openai_key', keys.openai);
+        _launchDeepgram(); // retry
+      }
+    }).catch(function() {});
+    return false;
+  }
 
   _sttGen++;
   var myGen = _sttGen;
