@@ -2960,12 +2960,12 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '4.7';
+var APP_VERSION = '4.8';
 var APP_CHANGELOG = [
-  { version: '4.7', date: 'Mar 28 2026', label: 'Bigger conversation box', items: [
+  { version: '4.8', date: 'Mar 28 2026', label: 'Text input fix + bigger convo', items: [
+    'Fixed text input — typing and pressing Send now actually works',
     'Conversation box fills available screen height on desktop',
     'Text input moved inside conversation card',
-    'Less wasted space on voice controls',
   ]},
   { version: '4.6', date: 'Mar 28 2026', label: 'Text input + polish', items: [
     'Text chat box in NAC stations',
@@ -9331,7 +9331,9 @@ function sendNACTextMessage_() {
   App.nacDoctorSpoke = true;
   App._nacLastActivity = Date.now();
   App._nacSilenceCount = 0;
-  _handleSttTranscript(msg);
+  // Call processPBTranscriptText_ directly — NOT _handleSttTranscript
+  // because _handleSttTranscript gates on _sttShouldRun (mic must be active)
+  processPBTranscriptText_(msg);
 }
 
 // ── NAC Direct Mode: send message without GAS ──
