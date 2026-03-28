@@ -2962,8 +2962,14 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '5.4';
+var APP_VERSION = '5.5';
 var APP_CHANGELOG = [
+  { version: '5.5', date: 'Mar 28 2026', label: 'Deep debug: 13 bugs fixed', items: [
+    'Fixed state leaks between stations (scorecard, TTS, mic, timers all properly reset)',
+    'Server call race condition fixed — stale callbacks can no longer corrupt new station',
+    'Lab order failures now logged instead of silently swallowed',
+    'Mic stream properly stopped on station transitions (no more phantom mic light)',
+  ]},
   { version: '5.4', date: 'Mar 28 2026', label: 'Lab ordering + Case Library + character fix', items: [
     'Lab/imaging ordering now works: CBC, X-ray, ECG, CT, urinalysis — anything you can order',
     'Case Library shows all NAC stations with patient details',
@@ -6198,12 +6204,6 @@ function stopNACPttRecording_(shouldSend) {
 }
 
 function toggleNACPtt_() {
-  if (!App.nacActive || App.pbDiagResolved) return;
-  if (App.nacPTTRecording) stopNACPttRecording_(true);
-  else startNACPttRecording_();
-}
-
-function toggleNACPtt_() {
   if (!App.nacActive || App.pbDiagResolved || App.nacVoiceMode !== 'push-to-talk') return;
   if (App.nacPTTRecording) {
     stopNACPttRecording_(true); // stop and send
@@ -9297,7 +9297,8 @@ function maybeTriggerNacLabResults_(doctorMessage, patientResponse) {
     App.nacLabResults = App.nacLabResults || [];
     App.nacLabResults.push(labPayload);
     renderPBChat();
-  }).catch(function() {});
+    showToast('Lab results ready — check Labs tab');
+  }).catch(function(e) { console.warn('Lab generation failed:', e); });
 }
 
 function generateLabResults_(orderText) {
@@ -9684,7 +9685,10 @@ function startNACExamInner_() {
   startNextNACStation();
 }
 
+var _nacStationGen = 0; // generation counter to prevent stale async callbacks
+
 function startNextNACStation() {
+  _nacStationGen++; // invalidate any in-flight async callbacks from previous station
   App.nacCurrentStation++;
   App.pbCurrentCase = App.nacCurrentStation;
   App.nacNotes = ''; // fresh notepad each station
@@ -9731,17 +9735,41 @@ function startNextNACStation() {
   App.nacCaseError = null;
   showNACReadingPeriod_(station);
 
+  // Reset ALL state for clean station transition
+  App.pbDiagnosing = false;
+  App.pbDiagAttempts = 0;
+  App.pbDiagResolved = false;
+  App.pbPartialUsed = false;
+  App.pbMonitorAttached = false;
+  App.pbHistory = [];
+  App.nacStationMsg = '';
+  App.pbScorecard = null;
+  App.pbScorecardLoading = false;
+  App.pbScorecardError = false;
+  App.pbScorecardShown = false;
+  App.pbDrDataEval = null;
+  App.pbDrDataEvalLoading = false;
+  App.pbDrDataEvalError = false;
+  App.pbDrDataConvHistory = [];
+  App.pbCaseId = null;
+  App._pbSpeaking = false;
+  App._nacSilenceCount = 0;
+  App.nacPTTRecording = false;
+  // Cancel any in-flight TTS
+  if (App._ttsAudio) { try { App._ttsAudio.pause(); App._ttsAudio = null; } catch(e) {} }
+  // Clear idle timer from previous station
+  if (App.nacIdleTimer) { clearInterval(App.nacIdleTimer); App.nacIdleTimer = null; }
+  // Clear reading interval from previous station
+  if (App.nacReadingInterval) { clearInterval(App.nacReadingInterval); App.nacReadingInterval = null; }
+  // Stop any active mic streams
+  stopHandsFree_();
+  if (_nacPttSession && _nacPttSession.socket) { try { _nacPttSession.socket.close(); } catch(e) {} }
+  if (_dgStream) { try { _dgStream.getTracks().forEach(function(t) { t.stop(); }); } catch(e) {} _dgStream = null; }
+
   // DIRECT MODE: if we have pregen data + API keys, skip server entirely
   if (station.nm && localStorage.getItem('mcc_anthropic_key')) {
     App._nacDirectMode = true;
     App._nacSystemPrompt = buildNACSystemPrompt_(station);
-    App.pbDiagnosing = false;
-    App.pbDiagAttempts = 0;
-    App.pbDiagResolved = false;
-    App.pbPartialUsed = false;
-    App.pbMonitorAttached = false;
-    App.pbHistory = []; // empty — doctor speaks first
-    App.nacStationMsg = '';
     App.pbDiagnosis = station.dx;
     VitalsEngine.init({ hr: station.hr, sbp: station.sbp, dbp: station.dbp, rr: station.rr, temp: station.tmp, spo2: station.o2 });
     App.nacCaseReady = true;
@@ -9750,7 +9778,9 @@ function startNextNACStation() {
 
   App._nacDirectMode = false;
   // Fallback: fire server call in background to set up AI conversation session
+  var thisGen = _nacStationGen;
   serverCall('startPatientBotCase', station.specialty, false, App.nacDifficulty, App.pbCustom).then(function(result) {
+    if (thisGen !== _nacStationGen) return; // stale callback — station already changed
     App.pbCaseId = result.caseId;
     App.pbSpecialty = result.specialty;
     App.pbPresentation = station.presentation;
