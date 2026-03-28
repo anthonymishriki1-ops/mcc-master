@@ -9632,6 +9632,9 @@ function startNextNACStation() {
   App.pbCurrentCase = App.nacCurrentStation;
   App.nacNotes = ''; // fresh notepad each station
   nacActiveTab = 'overview'; // reset to overview tab
+  // Clear stale patient info to prevent flash of wrong patient during loading
+  App.pbPatientInfo = null;
+  App.pbVitals = null;
   var station = App.nacStations[App.nacCurrentStation - 1];
 
   // Set PB specialty to the station's specialty
@@ -10595,7 +10598,14 @@ function renderNACStationUI_() {
     html += '<div class="nac-overview-left">';
 
     // Patient demographics + doorway assessment
-    if (p) {
+    if (!p) {
+      // Loading skeleton — patient data not yet loaded
+      html += '<div style="background:var(--card);border-radius:10px;padding:24px;margin-bottom:12px;border:1px solid var(--border);text-align:center">';
+      html += '<div style="width:60%;height:22px;background:var(--border);border-radius:6px;margin:0 auto 12px;animation:pulse 1.5s infinite"></div>';
+      html += '<div style="width:40%;height:14px;background:var(--border);border-radius:4px;margin:0 auto 8px;animation:pulse 1.5s infinite"></div>';
+      html += '<div style="font-size:13px;color:var(--text-light);margin-top:12px">Loading patient data...</div>';
+      html += '</div>';
+    } else if (p) {
       var sexLabel = (p.sex === 'nonbinary' || p.sex === 'NB') ? 'NB' : ((p.sex === 'female' || p.sex === 'F' || p.sex === 'trans_f') ? 'F' : ((p.sex === 'trans_m') ? 'M (trans)' : 'M'));
       html += '<div style="background:var(--card);border-radius:10px;padding:16px;margin-bottom:12px;border:1px solid var(--border)">';
       html += '<div style="font-size:22px;font-weight:800;color:var(--text);margin-bottom:8px">' + escapeHtml(p.name || 'Unknown Patient') + '</div>';
