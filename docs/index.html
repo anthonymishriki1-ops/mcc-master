@@ -2962,8 +2962,13 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '5.0';
+var APP_VERSION = '5.1';
 var APP_CHANGELOG = [
+  { version: '5.1', date: 'Mar 28 2026', label: 'Random Case fix + Tests 2-7 coming soon', items: [
+    'Random Case now works — only picks from fully loaded stations',
+    'Tests 2-7 marked "Coming Soon" until patient data is added',
+    'AI idle nudges escalate with personality based on conversation context',
+  ]},
   { version: '5.0', date: 'Mar 28 2026', label: 'Realistic patient speech', items: [
     'Patient uses vocal sounds: "ugh", "ahh", "oww" mid-sentence',
     'No more TTS silence from asterisk actions',
@@ -9148,7 +9153,12 @@ function showNACSetup() {
   html += '<div class="quiz-count-btns" style="flex-wrap:wrap">';
   html += '<button class="quiz-count-btn" onclick="setNACTest(0,this)">&#x1F3B2; Random Case</button>';
   for (var ti = 0; ti < NAC_PRACTICE_TESTS.length; ti++) {
-    html += '<button class="quiz-count-btn' + (ti === 0 ? ' active' : '') + '" onclick="setNACTest(' + (ti+1) + ',this)">Test ' + (ti+1) + '</button>';
+    var hasData = NAC_PRACTICE_TESTS[ti][0] && NAC_PRACTICE_TESTS[ti][0].nm;
+    if (hasData) {
+      html += '<button class="quiz-count-btn' + (ti === 0 ? ' active' : '') + '" onclick="setNACTest(' + (ti+1) + ',this)">Test ' + (ti+1) + '</button>';
+    } else {
+      html += '<button class="quiz-count-btn" disabled style="opacity:0.4;cursor:not-allowed">Test ' + (ti+1) + ' (Soon)</button>';
+    }
   }
   html += '</div>';
   html += '<input type="hidden" id="nac-test-num" value="1">';
@@ -9584,14 +9594,15 @@ function startNACExamInner_() {
   var testNum = parseInt(document.getElementById('nac-test-num').value, 10);
   if (isNaN(testNum)) testNum = 1;
 
-  // Random case mode: pick one random station from all 84
+  // Random case mode: pick one random station from all available pregen stations
   if (testNum === 0) {
     var allStations = [];
     for (var ri = 0; ri < NAC_PRACTICE_TESTS.length; ri++) {
       for (var rj = 0; rj < NAC_PRACTICE_TESTS[ri].length; rj++) {
-        allStations.push(NAC_PRACTICE_TESTS[ri][rj]);
+        if (NAC_PRACTICE_TESTS[ri][rj].nm) allStations.push(NAC_PRACTICE_TESTS[ri][rj]);
       }
     }
+    if (allStations.length === 0) { showToast('No pregen stations available'); return; }
     var randomStation = allStations[Math.floor(Math.random() * allStations.length)];
     App.nacTestNumber = 0;
     App.nacStations = [randomStation];
