@@ -2990,7 +2990,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '6.6';
+var APP_VERSION = '6.7';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3002,6 +3002,10 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '6.7', date: 'Mar 28 2026', label: 'Lab ordering actually works now', items: [
+    'Fixed: "order CBC", "order DOA screen" etc. now actually generate lab results',
+    'Voice command handler was intercepting orders but not triggering lab generation',
+  ]},
   { version: '6.6', date: 'Mar 28 2026', label: 'OSCE scorecard + accessibility + all 84 stations', items: [
     'OSCE scorecard after each station — AI evaluates you on 5 domains (0-3 each)',
     'All 84 stations across 7 practice tests now have full patient data',
@@ -7022,6 +7026,16 @@ function handleVoiceCommand_(text) {
     var item = orderM[1].replace(/^(a|an|the|some)\s+/i, '').replace(/\s*(please|thanks|thank you|for (?:me|the patient)|stat|urgent|asap)\.?$/i, '').trim();
     if (item && item.length > 1) {
       showToast('Ordering: ' + item);
+      // Generate lab results for NAC mode
+      if (App.nacActive) {
+        generateLabResults_('order ' + item).then(function(labPayload) {
+          if (!labPayload || !labPayload.testName || !Array.isArray(labPayload.values) || labPayload.values.length === 0) return;
+          App.nacLabResults = App.nacLabResults || [];
+          App.nacLabResults.push(labPayload);
+          renderPBChat();
+          showToast('Results ready — check Labs tab');
+        }).catch(function(e) { console.warn('Lab generation failed:', e); });
+      }
       insertPBAction(item);
       return true;
     }
@@ -7031,7 +7045,7 @@ function handleVoiceCommand_(text) {
   var rxM = tl.match(/^(?:i'?m prescribing|i am prescribing|prescri(?:be|bing))\s+(.+)/);
   if (rxM) {
     var item = rxM[1].replace(/^(a|an|the)\s+/i, '').trim();
-    showToast('🔊 Prescribing: ' + item);
+    showToast('Prescribing: ' + item);
     insertPBAction(item);
     return true;
   }
