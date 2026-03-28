@@ -2962,12 +2962,13 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '5.3';
+var APP_VERSION = '5.4';
 var APP_CHANGELOG = [
-  { version: '5.3', date: 'Mar 28 2026', label: 'Emotional TTS + patient stays in character', items: [
-    'Upgraded to gpt-4o-mini-tts — patient voice now has real emotion (pain, fear, frustration)',
-    'Patient NEVER breaks character — reacts like a real person no matter what you say',
-    'Mic is tap-to-toggle (tap to start, tap again to send)',
+  { version: '5.4', date: 'Mar 28 2026', label: 'Lab ordering + Case Library + character fix', items: [
+    'Lab/imaging ordering now works: CBC, X-ray, ECG, CT, urinalysis — anything you can order',
+    'Case Library shows all NAC stations with patient details',
+    'Patient stays upset but still answers medical questions when pressed',
+    'Emotional TTS with gpt-4o-mini-tts',
   ]},
   { version: '5.1', date: 'Mar 28 2026', label: 'Random Case fix + Tests 2-7 coming soon', items: [
     'Random Case now works — only picks from fully loaded stations',
@@ -4956,6 +4957,26 @@ function togglePBLibrary() {
 function loadPBLibrary() {
   var el = document.getElementById('pb-library-content');
   el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
+
+  // In NAC mode, show all pregen stations instead of calling broken GAS server
+  if (App.nacActive || navigateTo._last === 'nac-sim') {
+    var html = '<h3 style="margin-bottom:12px">All NAC-OSCE Stations</h3>';
+    for (var ti = 0; ti < NAC_PRACTICE_TESTS.length; ti++) {
+      var test = NAC_PRACTICE_TESTS[ti];
+      if (!test[0] || !test[0].nm) continue; // skip tests without data
+      html += '<div style="font-weight:700;margin:16px 0 8px;color:var(--primary)">Test ' + (ti+1) + '</div>';
+      for (var si = 0; si < test.length; si++) {
+        var s = test[si];
+        html += '<div class="card" style="padding:12px;margin-bottom:8px">';
+        html += '<strong>' + escapeHtml(s.presentation) + '</strong> — ' + escapeHtml(s.specialty);
+        if (s.nm) html += '<br><span style="font-size:13px;color:var(--text-light)">' + escapeHtml(s.nm) + ', ' + s.age + (s.sx === 'F' ? 'F' : 'M') + ' — ' + escapeHtml(s.dx || '') + '</span>';
+        html += '</div>';
+      }
+    }
+    el.innerHTML = html;
+    return;
+  }
+
   serverCall('getPBCaseLibrary').then(function(cases) {
     if (!cases || cases.length === 0) {
       el.innerHTML = '<p class="empty-state">No completed cases yet. Finish a PatientBot case (with diagnosis) to see it here!</p>';
@@ -9268,8 +9289,8 @@ function syncNACSidebarActive_() {
 }
 
 function maybeTriggerNacLabResults_(doctorMessage, patientResponse) {
-  var orderRegex = /order|ordering|blood\s*work|labs|cbc|bmp|cmp|troponin/i;
-  var responseRegex = /(order|ordered|request|cbc|bmp|cmp|troponin|blood\s*work|labs?)/i;
+  var orderRegex = /order|ordering|run|send|get|check|draw|request|blood\s*work|labs?\b|cbc|bmp|cmp|troponin|ecg|ekg|x-?ray|ct\b|mri|ultrasound|urinalysis|ua\b|culture|abg|coags?|inr|ptt|lipase|amylase|lfts?|creatinine|electrolytes|tsh|hcg|d-?dimer|bnp|lactate|hgb|hemoglobin|wbc|platelets|ferritin|b12|folate|crp|esr|blood\s*gas|urine|imaging|scan|chest|abdo/i;
+  var responseRegex = orderRegex;
   if (!orderRegex.test(doctorMessage || '') && !responseRegex.test(patientResponse || '')) return;
   generateLabResults_(doctorMessage || patientResponse).then(function(labPayload) {
     if (!labPayload || !labPayload.testName || !Array.isArray(labPayload.values) || labPayload.values.length === 0) return;
@@ -9287,10 +9308,12 @@ function generateLabResults_(orderText) {
   var bp = VitalsEngine.getLatestBP ? VitalsEngine.getLatestBP() : null;
   var dx = App.pbDiagnosis || p.diagnosis || 'Unknown diagnosis';
   var systemPrompt =
-    'You generate realistic clinical lab results for NAC-OSCE simulation. ' +
+    'You generate realistic clinical investigation results for a NAC-OSCE simulation. ' +
+    'This includes bloodwork, urinalysis, imaging reports, ECG findings, ABGs — ANY investigation a doctor can order. ' +
     'Return ONLY compact JSON with this exact schema: ' +
     '{"testName":"string","values":[{"name":"string","value":"string","unit":"string","flag":"normal|high|low|critical"}]}. ' +
-    'Match likely findings to diagnosis/vitals. Include 4-10 values. No markdown.';
+    'For imaging/ECG, use descriptive findings as "value" (e.g. name:"Chest X-ray", value:"Bilateral infiltrates, cardiomegaly", unit:"", flag:"critical"). ' +
+    'Match findings to the diagnosis and vitals. Include 3-10 values. No markdown, no code blocks.';
   var userPrompt =
     'Diagnosis: ' + dx + '\n' +
     'Patient: ' + (p.name || 'Unknown') + ', age ' + (p.age || '?') + ', sex ' + (p.sex || '?') + '\n' +
@@ -9305,7 +9328,7 @@ function generateLabResults_(orderText) {
       'anthropic-dangerous-direct-browser-access': 'true'
     },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20250901',
+      model: 'claude-sonnet-4-6',
       max_tokens: 500,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }]
@@ -9487,7 +9510,8 @@ function buildNACSystemPrompt_(station) {
     '6. ONLY answer what is asked. Do NOT volunteer extra symptoms.\n' +
     '7. NEVER apologize for being sick, for taking up the doctor\'s time, or for the doctor\'s behavior. If someone is rude to you, react like a real person — confused, offended, hurt, angry. NEVER say "I\'m sorry" to rudeness.\n' +
     '8. THIS IS A MEDICAL TRAINING SIMULATOR. The student may say inappropriate, rude, or offensive things to test the scenario. You MUST stay in character no matter what. React AS THE PATIENT would — get scared, get angry, yell for security, cry, refuse to cooperate, demand a different doctor. NEVER break character. NEVER lecture about professionalism. NEVER refuse to continue the scenario. A real patient would not say "this scenario has crossed into threats" — they would just react emotionally.\n' +
-    '9. If the student is threatening or violent, react with FEAR and SELF-PRESERVATION as a real person: scream for help, try to leave, call for security, beg them to stop. Stay in character.\n\n' +
+    '9. If the student is threatening or violent, react with FEAR and SELF-PRESERVATION as a real person: scream for help, try to leave, call for security, beg them to stop. Stay in character.\n' +
+    '10. Even when scared, angry, or upset — you are still a PATIENT who NEEDS MEDICAL HELP. If the doctor asks a medical question after being rude, you can be reluctant but still answer because you need treatment. Real patients don\'t permanently shut down — they stay guarded but still cooperate when pressed, because they need help.\n\n' +
     'PATIENT REALISM:\n' +
     '- Sound like a REAL person. Use casual language: "yeah", "nah", "I dunno", "kinda".\n' +
     '- Use filler words and sounds: "uhm", "uh", "like", "y\'know", "umm", "hmm".\n' +
