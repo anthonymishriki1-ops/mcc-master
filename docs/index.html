@@ -6300,6 +6300,7 @@ function processPBTranscriptText_(text) {
   if (App.nacActive && !App.nacDoctorSpoke) {
     App.nacDoctorSpoke = true;
     App._nacLastActivity = Date.now();
+    App._nacSilenceCount = 0;
   }
   if (App._nacDirectMode && App.nacActive) {
     sendNACMessageDirect_(best);
@@ -7956,6 +7957,7 @@ function sendPBMessage() {
   if (App.nacActive && !App.nacDoctorSpoke) {
     App.nacDoctorSpoke = true;
     App._nacLastActivity = Date.now();
+    App._nacSilenceCount = 0;
   }
 
   // NAC Direct Mode — skip GAS
@@ -9890,9 +9892,22 @@ function enterNACStation_() {
     if (App._nacDirectMode && App._nacSystemPrompt) {
       var nudgeMessages = App.pbHistory.filter(function(m) { return m.role === 'user' || m.role === 'assistant'; })
         .map(function(m) { return { role: m.role, content: m.content }; });
-      var nudgePrompt = App.pbHistory.length === 0
-        ? 'The doctor just entered and has been standing there silently for 30 seconds. Say something brief to get their attention — you\'re a patient waiting for help. 1 sentence max.'
-        : 'The doctor has gone silent for 30 seconds. React naturally — maybe ask if they\'re still there, or mention your symptoms are getting worse. 1 sentence max. Stay in character.';
+      var silenceCount = (App._nacSilenceCount = (App._nacSilenceCount || 0) + 1);
+      var nudgePrompt;
+      if (App.pbHistory.length === 0) {
+        nudgePrompt = 'The doctor walked in and has been STARING at you in silence for ' + (silenceCount * 30) + ' seconds. You\'re a real patient — react naturally. Be a bit weirded out. Maybe passive-aggressive, confused, or nervous. Show personality. 1 sentence max.';
+      } else {
+        var lastMsg = '';
+        for (var ni = App.pbHistory.length - 1; ni >= 0; ni--) {
+          if (App.pbHistory[ni].role === 'user') { lastMsg = App.pbHistory[ni].content; break; }
+        }
+        nudgePrompt = 'The doctor said "' + lastMsg.substring(0, 100) + '" and then went COMPLETELY SILENT for ' + (silenceCount * 30) + ' seconds. ' +
+          'React like a REAL person would. You have full emotional range — confused, annoyed, worried, sarcastic, passive-aggressive, scared, impatient. ' +
+          'If they were rude then went quiet, be offended. If they were nice then disappeared, be confused. If they asked something then zoned out, prompt them. ' +
+          'The longer the silence (' + silenceCount + ' nudges so far), the more frustrated/worried you get. ' +
+          'Be natural, funny in a real-human way (not trying to be funny, just authentically reacting). ' +
+          'Use casual speech — trailing off, filler words, sarcasm. 1-2 sentences MAX.';
+      }
       nudgeMessages.push({ role: 'user', content: '[SYSTEM: ' + nudgePrompt + ']' });
       callAnthropicDirect_(App._nacSystemPrompt, nudgeMessages).then(function(response) {
         response = response.replace(/```[\s\S]*?```/g, '').replace(/\[SYSTEM[^\]]*\]/gi, '').trim();
