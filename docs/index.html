@@ -2946,8 +2946,16 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '4.4';
+var APP_VERSION = '4.5';
 var APP_CHANGELOG = [
+  { version: '4.5', date: 'Mar 28 2026', label: 'NAC-OSCE bug fixes: random case, AI first reply, labs trigger, UI polish', items: [
+    'Fixed Random Case selection so Test 0 no longer falls back to Test 1',
+    'Removed scripted first patient reply shortcut — first patient response is now AI-generated from the doctor\'s actual opening',
+    'Fixed NAC sidebar highlighting so NAC-OSCE stays active in the left nav during stations',
+    'Added Skip button to NAC text mode controls',
+    'Added direct-mode lab generation for bloodwork orders (CBC/BMP/CMP/troponin/labs) and automatic Labs tab population',
+    'Fixed NAC header in Random Case mode to show "Random Case" instead of blank test number',
+  ]},
   { version: '4.4', date: 'Mar 27 2026', label: 'NAC desktop: two-column layout + conversation auto-scroll', items: [
     'Desktop: patient info on left, conversation on right — clinical workstation layout',
     'Conversation box auto-scrolls to latest message',
@@ -7833,6 +7841,7 @@ function sendPBMessage() {
     // Detect drug/procedure effects from user message
     VitalsEngine.detectAndApply(message);
     App.pbHistory.push({ role: 'assistant', content: result.response });
+    if (App.nacActive) maybeTriggerNacLabResults_(message, result.response);
     target(); input.disabled = false; input.focus();
   }).catch(function(e) {
     removeEl('pb-typing'); App.pbHistory.push({ role: 'assistant', content: 'Error: ' + (e.message || String(e)) });
@@ -9077,6 +9086,81 @@ function callAnthropicDirect_(systemPrompt, messages) {
   });
 }
 
+function syncNACSidebarActive_() {
+  var items = document.querySelectorAll('.sidebar-nav li[data-page]');
+  for (var i = 0; i < items.length; i++) items[i].classList.remove('active');
+  var nacItem = document.querySelector('.sidebar-nav li[data-page="nac-sim"]');
+  if (nacItem) nacItem.classList.add('active');
+}
+
+function maybeTriggerNacLabResults_(doctorMessage, patientResponse) {
+  var orderRegex = /order|ordering|blood\s*work|labs|cbc|bmp|cmp|troponin/i;
+  var responseRegex = /(order|ordered|request|cbc|bmp|cmp|troponin|blood\s*work|labs?)/i;
+  if (!orderRegex.test(doctorMessage || '') && !responseRegex.test(patientResponse || '')) return;
+  generateLabResults_(doctorMessage || patientResponse).then(function(labPayload) {
+    if (!labPayload || !labPayload.testName || !Array.isArray(labPayload.values) || labPayload.values.length === 0) return;
+    App.pbHistory.push({ role: 'results', content: labPayload });
+    renderPBChat();
+  }).catch(function() {});
+}
+
+function generateLabResults_(orderText) {
+  var key = localStorage.getItem('mcc_anthropic_key');
+  if (!key) return Promise.reject(new Error('No Anthropic API key'));
+  var p = App.pbPatientInfo || {};
+  var vd = VitalsEngine._display || {};
+  var bp = VitalsEngine.getLatestBP ? VitalsEngine.getLatestBP() : null;
+  var dx = App.pbDiagnosis || p.diagnosis || 'Unknown diagnosis';
+  var systemPrompt =
+    'You generate realistic clinical lab results for NAC-OSCE simulation. ' +
+    'Return ONLY compact JSON with this exact schema: ' +
+    '{"testName":"string","values":[{"name":"string","value":"string","unit":"string","flag":"normal|high|low|critical"}]}. ' +
+    'Match likely findings to diagnosis/vitals. Include 4-10 values. No markdown.';
+  var userPrompt =
+    'Diagnosis: ' + dx + '\n' +
+    'Patient: ' + (p.name || 'Unknown') + ', age ' + (p.age || '?') + ', sex ' + (p.sex || '?') + '\n' +
+    'Vitals: HR ' + (vd.hr || '?') + ', BP ' + (bp ? (bp.sbp + '/' + bp.dbp) : (p.bp || '?')) + ', RR ' + (vd.rr || '?') + ', Temp ' + (vd.temp || '?') + ', SpO2 ' + (vd.spo2 || '?') + '\n' +
+    'Order text: ' + (orderText || 'General bloodwork');
+  return fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20250901',
+      max_tokens: 500,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }]
+    })
+  }).then(function(r) {
+    if (!r.ok) return r.text().then(function(t) { throw new Error('Anthropic lab error: ' + t.substring(0, 200)); });
+    return r.json();
+  }).then(function(data) {
+    var text = (((data || {}).content || [])[0] || {}).text || '{}';
+    var cleaned = text.replace(/```json|```/gi, '').trim();
+    var parsed = JSON.parse(cleaned);
+    if (!parsed || !Array.isArray(parsed.values)) throw new Error('Invalid lab JSON');
+    return {
+      testName: parsed.testName || 'Laboratory Results',
+      values: parsed.values.map(function(v) {
+        return {
+          name: String((v && v.name) || ''),
+          value: String((v && v.value) || ''),
+          unit: String((v && v.unit) || ''),
+          flag: /high|low|critical|normal/i.test((v && v.flag) || '') ? String(v.flag).toLowerCase() : 'normal'
+        };
+      }).filter(function(v) { return v.name; }),
+      abnormal: parsed.values.some(function(v) { return /high|low|critical/i.test((v && v.flag) || ''); }),
+      results: parsed.values.map(function(v) {
+        return (v.name || '?') + ': ' + (v.value || '?') + (v.unit ? ' ' + v.unit : '') + (v.flag && v.flag !== 'normal' ? ' (' + v.flag + ')' : '');
+      }).join('\n')
+    };
+  });
+}
+
 // ── Direct OpenAI TTS call (browser → OpenAI, no GAS middleman) ──
 function callTTSDirect_(text, voice, speed) {
   var key = localStorage.getItem('mcc_openai_key');
@@ -9133,14 +9217,6 @@ function sendNACMessageDirect_(userMessage) {
   App.pbHistory.push({ role: 'user', content: userMessage });
   renderPBChat();
 
-  // First message from doctor — use pregen opening line (instant, no API call)
-  if (App._nacPregenOpening) {
-    var opening = App._nacPregenOpening;
-    App._nacPregenOpening = null;
-    nacDirectRespond_(opening);
-    return;
-  }
-
   // Build messages array for Anthropic
   var apiMessages = [];
   for (var i = 0; i < App.pbHistory.length; i++) {
@@ -9153,6 +9229,7 @@ function sendNACMessageDirect_(userMessage) {
   callAnthropicDirect_(App._nacSystemPrompt, apiMessages).then(function(response) {
     response = response.replace(/```[\s\S]*?```/g, '').replace(/\[SYSTEM[^\]]*\]/gi, '').trim();
     nacDirectRespond_(response);
+    maybeTriggerNacLabResults_(userMessage, response);
   }).catch(function(e) {
     App.pbHistory.push({ role: 'system', content: 'Error: ' + (e.message || String(e)) });
     renderPBChat();
@@ -9297,7 +9374,8 @@ function startNACExam() {
 }
 
 function startNACExamInner_() {
-  var testNum = parseInt(document.getElementById('nac-test-num').value) || 1;
+  var testNum = parseInt(document.getElementById('nac-test-num').value, 10);
+  if (isNaN(testNum)) testNum = 1;
 
   // Random case mode: pick one random station from all 84
   if (testNum === 0) {
@@ -9332,8 +9410,9 @@ function startNACExamInner_() {
   App.pbDifficulty = App.nacDifficulty;
   App.pbCustom = {};
   App.pbCaseScores = [];
-  App.pbTotalCases = stations.length;
+  App.pbTotalCases = App.nacTotalStations;
   App.pbCurrentCase = 0;
+  syncNACSidebarActive_();
 
   // NAC is hands-free only
   App.pbHandsFree = true;
@@ -9397,7 +9476,6 @@ function startNextNACStation() {
     App.pbPartialUsed = false;
     App.pbMonitorAttached = false;
     App.pbHistory = []; // empty — doctor speaks first
-    App._nacPregenOpening = station.op || ''; // saved for when doctor speaks
     App.nacStationMsg = '';
     App.pbDiagnosis = station.dx;
     VitalsEngine.init({ hr: station.hr, sbp: station.sbp, dbp: station.dbp, rr: station.rr, temp: station.tmp, spo2: station.o2 });
@@ -9424,8 +9502,7 @@ function startNextNACStation() {
     App.pbDrDataConvHistory = [];
     App.pbMonitorAttached = false;
     VitalsEngine.init(result.vitals || result.patient || {});
-    // Use pregen opening line if available, otherwise use AI-generated
-    var msg = station.op ? station.op : stripPatientJSON(result.initialMessage);
+    var msg = stripPatientJSON(result.initialMessage);
     if (result.patientInfo) {
       App.pbPatientInfo = result.patientInfo;
       App.pbDiagnosis = result.patientInfo.diagnosis;
@@ -9433,7 +9510,6 @@ function startNextNACStation() {
       App.pbDiagnosis = station.dx;
     }
     App.pbHistory = []; // doctor speaks first — don't pre-load opening line
-    App._nacPregenOpening = msg; // saved for when doctor speaks
     App.nacStationMsg = msg;
     App.nacCaseReady = true;
   }).catch(function(e) { App.nacCaseError = e.message || String(e); });
@@ -9574,6 +9650,7 @@ function endNACReadingPeriod_() {
 }
 
 function enterNACStation_() {
+  syncNACSidebarActive_();
   // Start the actual station
   if (App.nacTimerMinutes > 0) {
     startNACTimer(App.nacTimerMinutes * 60);
@@ -9588,8 +9665,6 @@ function enterNACStation_() {
   if (station && station.nm && localStorage.getItem('mcc_anthropic_key')) {
     App._nacDirectMode = true;
     App._nacSystemPrompt = buildNACSystemPrompt_(station);
-    // Don't pre-load opening line — doctor speaks first
-    App._nacPregenOpening = station.op || '';
   } else {
     App._nacDirectMode = false;
   }
@@ -10250,7 +10325,10 @@ function renderNACStationUI_() {
 
   // ── Top bar: Station info + timer + controls ──
   html += '<div class="pb-top-bar" style="background:linear-gradient(135deg,#0d1442,#1a237e)">';
-  html += '<div class="pb-top-left"><h3 style="color:white">NAC-OSCE &mdash; Test ' + (App.nacTestNumber || '') + ' &mdash; Station ' + App.nacCurrentStation + '/' + App.nacTotalStations + '</h3>';
+  var nacHeaderTitle = App.nacRandomMode
+    ? 'NAC-OSCE &mdash; Random Case &mdash; Station ' + App.nacCurrentStation + '/' + App.nacTotalStations
+    : 'NAC-OSCE &mdash; Test ' + (App.nacTestNumber || '') + ' &mdash; Station ' + App.nacCurrentStation + '/' + App.nacTotalStations;
+  html += '<div class="pb-top-left"><h3 style="color:white">' + nacHeaderTitle + '</h3>';
   html += '<div style="font-size:12px;color:rgba(255,255,255,0.6);margin-top:2px">' + escapeHtml(App.pbSpecialty || '') + ' &mdash; ' + escapeHtml(App.pbPresentation || '') + '</div></div>';
   html += '<div class="pb-top-right">';
   if (App.nacTimerMinutes > 0 && !App.pbDiagResolved) {
@@ -10522,6 +10600,7 @@ function renderNACStationUI_() {
       html += '<textarea id="pb-input" placeholder="Talk to the patient..." rows="2" style="flex:1" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendPBMessage()}"></textarea>';
       html += '<button class="btn btn-primary" onclick="sendPBMessage()">Send</button>';
       html += '<button class="btn btn-warning" onclick="showDiagnoseModal()">Diagnose</button>';
+      html += '<button class="btn" onclick="skipNACStation_()" style="background:transparent;color:var(--text-light);font-size:12px;padding:6px 12px;border:1px solid var(--border);border-radius:16px" title="Skip to next station">Skip &#x23ED;</button>';
       html += '</div>';
     }
     html += '</div>';
