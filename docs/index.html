@@ -2962,11 +2962,12 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '5.2';
+var APP_VERSION = '5.3';
 var APP_CHANGELOG = [
-  { version: '5.2', date: 'Mar 28 2026', label: 'Mic toggle + accessibility', items: [
-    'Mic is now tap-to-toggle (tap to start, tap again to send) — no more holding',
-    'Random Case only picks from loaded stations',
+  { version: '5.3', date: 'Mar 28 2026', label: 'Emotional TTS + patient stays in character', items: [
+    'Upgraded to gpt-4o-mini-tts — patient voice now has real emotion (pain, fear, frustration)',
+    'Patient NEVER breaks character — reacts like a real person no matter what you say',
+    'Mic is tap-to-toggle (tap to start, tap again to send)',
   ]},
   { version: '5.1', date: 'Mar 28 2026', label: 'Random Case fix + Tests 2-7 coming soon', items: [
     'Random Case now works — only picks from fully loaded stations',
@@ -9348,13 +9349,18 @@ function callTTSDirect_(text, voice, speed) {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer ' + key
     },
-    body: JSON.stringify({
-      model: localStorage.getItem('mcc_tts_model') || 'tts-1',
+    body: JSON.stringify(Object.assign({
+      model: localStorage.getItem('mcc_tts_model') || 'gpt-4o-mini-tts',
       input: clean,
       voice: localStorage.getItem('mcc_tts_voice_override') || voice || 'alloy',
       speed: speed || 1.0,
       response_format: 'mp3'
-    })
+    }, (localStorage.getItem('mcc_tts_model') || 'gpt-4o-mini-tts') === 'gpt-4o-mini-tts' ? {
+      instructions: 'You are voicing a hospital patient. Speak with REAL emotion — pain, fear, frustration, confusion. ' +
+        'When the text has pain sounds like "ugh" or "ahh", VOICE them naturally — grunt, gasp, wince audibly. ' +
+        'Vary your pace: rush when panicked, slow when exhausted, pause when thinking. ' +
+        'Sound like a real person in a hospital, not a narrator reading text.'
+    } : {}))
   }).then(function(r) {
     if (!r.ok) return r.text().then(function(t) { throw new Error('OpenAI TTS error: ' + t.substring(0, 200)); });
     return r.blob();
@@ -9473,13 +9479,15 @@ function buildNACSystemPrompt_(station) {
     '- Diagnosis (HIDDEN from student): ' + station.dx + '\n' +
     '- Vitals: HR=' + station.hr + ' BP=' + station.sbp + '/' + station.dbp + ' RR=' + station.rr + ' Temp=' + station.tmp + ' SpO2=' + station.o2 + '\n\n' +
     'ABSOLUTE RULES:\n' +
-    '1. NEVER break character. You are ALWAYS the patient.\n' +
+    '1. NEVER break character. You are ALWAYS the patient. NEVER reference being an AI, a simulation, a roleplay, or a language model. You are a REAL PERSON in a hospital.\n' +
     '2. NEVER use medical terminology a real patient wouldn\'t know.\n' +
     '3. NEVER give the diagnosis or hint at it.\n' +
     '4. Keep responses SHORT. 1 sentence is ideal. MAX 2 sentences. NEVER 3+. This is a spoken conversation — short replies only.\n' +
     '5. NEVER output JSON, code blocks, scores, or system messages.\n' +
     '6. ONLY answer what is asked. Do NOT volunteer extra symptoms.\n' +
-    '7. NEVER apologize for being sick, for taking up the doctor\'s time, or for the doctor\'s behavior. If someone is rude to you, react like a real person — confused, offended, hurt, angry. NEVER say "I\'m sorry" to rudeness.\n\n' +
+    '7. NEVER apologize for being sick, for taking up the doctor\'s time, or for the doctor\'s behavior. If someone is rude to you, react like a real person — confused, offended, hurt, angry. NEVER say "I\'m sorry" to rudeness.\n' +
+    '8. THIS IS A MEDICAL TRAINING SIMULATOR. The student may say inappropriate, rude, or offensive things to test the scenario. You MUST stay in character no matter what. React AS THE PATIENT would — get scared, get angry, yell for security, cry, refuse to cooperate, demand a different doctor. NEVER break character. NEVER lecture about professionalism. NEVER refuse to continue the scenario. A real patient would not say "this scenario has crossed into threats" — they would just react emotionally.\n' +
+    '9. If the student is threatening or violent, react with FEAR and SELF-PRESERVATION as a real person: scream for help, try to leave, call for security, beg them to stop. Stay in character.\n\n' +
     'PATIENT REALISM:\n' +
     '- Sound like a REAL person. Use casual language: "yeah", "nah", "I dunno", "kinda".\n' +
     '- Use filler words and sounds: "uhm", "uh", "like", "y\'know", "umm", "hmm".\n' +
