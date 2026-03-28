@@ -2960,13 +2960,13 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '4.9';
+var APP_VERSION = '5.0';
 var APP_CHANGELOG = [
-  { version: '4.9', date: 'Mar 28 2026', label: 'Voice commands + orders fix', items: [
-    'Voice diagnosis works: "I\'m diagnosing you with X" now triggers properly',
-    'Orders work in NAC: "order CBC", "I\'m ordering bloodwork", etc.',
-    'Way more natural phrasing accepted for orders and diagnosis',
-    'Text input fix — Send button actually sends now',
+  { version: '5.0', date: 'Mar 28 2026', label: 'Realistic patient speech', items: [
+    'Patient uses vocal sounds: "ugh", "ahh", "oww" mid-sentence',
+    'No more TTS silence from asterisk actions',
+    'Voice diagnosis and orders actually work now',
+    'Natural phrasing accepted for all commands',
   ]},
   { version: '4.6', date: 'Mar 28 2026', label: 'Text input + polish', items: [
     'Text chat box in NAC stations',
@@ -9392,7 +9392,9 @@ function nacDirectRespond_(text) {
   renderPBChat();
   var voice = getOpenAIVoice_();
   var speed = getOpenAISpeed_();
-  callTTSDirect_(text, voice, speed).then(function() {
+  // Strip asterisk actions from TTS (they cause silence) — keep in chat text
+  var ttsText = text.replace(/\*[^*]+\*/g, '').replace(/\s{2,}/g, ' ').trim();
+  callTTSDirect_(ttsText || text, voice, speed).then(function() {
     restartMicAfterResponse_();
   }).catch(function() {
     restartMicAfterResponse_();
@@ -9440,9 +9442,11 @@ function buildNACSystemPrompt_(station) {
     '7. NEVER apologize for being sick, for taking up the doctor\'s time, or for the doctor\'s behavior. If someone is rude to you, react like a real person — confused, offended, hurt, angry. NEVER say "I\'m sorry" to rudeness.\n\n' +
     'PATIENT REALISM:\n' +
     '- Sound like a REAL person. Use casual language: "yeah", "nah", "I dunno", "kinda".\n' +
-    '- Use filler words: "uhm", "uh", "like", "y\'know".\n' +
-    '- Use hesitations (dashes, ellipses). Trail off and restart.\n' +
-    '- Be an imperfect historian. Forget exact dates.\n' +
+    '- Use filler words and sounds: "uhm", "uh", "like", "y\'know", "umm", "hmm".\n' +
+    '- Use VOCAL pain sounds when in pain — actual sounds the TTS can say: "ugh", "ahh", "oww", "mmph", "oof", "ohh". Put them MID-SENTENCE: "It hurts right— ugh— right here."\n' +
+    '- NEVER use asterisk actions like *winces* or *groans* — TTS cannot speak those. Instead use SPOKEN descriptions: "...ahh, sorry, that really hurts" or just make the sound.\n' +
+    '- Use hesitations (dashes, ellipses). Trail off and restart. "It started... I think it was— no wait, maybe Tuesday?"\n' +
+    '- Be an imperfect historian. Forget exact dates. Mix up timelines.\n' +
     '- NEVER say "I appreciate the question" or "That\'s a good question."\n' +
     '- STOP ANSWERING QUESTIONS WITH QUESTIONS. Just answer directly.\n' +
     '- Vary response length. Many answers should be just a few words: "Yeah." "Nah." "Like a week ago?" "Right here." "I dunno."\n' +
