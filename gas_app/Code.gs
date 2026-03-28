@@ -65,7 +65,8 @@ function doGet(e) {
         'generateCaseDebrief': generateCaseDebrief,
         'getPBCaseLibrary': getPBCaseLibrary,
         'savePBConversation': savePBConversation,
-        'textToSpeech': textToSpeech
+        'textToSpeech': textToSpeech,
+        'getApiKeys': getApiKeys
       };
       if (!allowed[fn]) {
         return ContentService.createTextOutput(JSON.stringify({ error: 'Function not allowed: ' + fn }))
@@ -3382,4 +3383,14 @@ function debugListSheets() {
     Logger.log(name + ': ' + rows + ' rows');
   });
   return result;
+}
+
+// ── Serve API keys from Script Properties to all users ──
+function getApiKeys() {
+  var props = PropertiesService.getScriptProperties();
+  return {
+    anthropic: props.getProperty('ANTHROPIC_API_KEY') || '',
+    openai: props.getProperty('OPENAI_API_KEY') || '',
+    deepgram: props.getProperty('DEEPGRAM_API_KEY') || ''
+  };
 }
