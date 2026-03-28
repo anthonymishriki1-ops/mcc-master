@@ -2962,25 +2962,21 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '6.1';
+var APP_VERSION = '6.2';
 
-// ── Embedded API keys (base64, auto-seed into localStorage on load) ──
-(function() {
-  var _k = {
-    a: 'c2stYW50LWFwaTAzLWFZcUZKb0VLUjdMbjRqZFZJSnRzbmxfeTQ3d0JIWTJjbXdLYk9zVkl4YU9xeVZVMmthLVgxaVNQanZyMGJJWU50ZVJqMml5VW5tQmtiUmRpdFFnZ2NRLWVUWmhrd0FB',
-    o: 'c2stcHJvai0xX3BLMEVHanJYV3dVbjhQQm1LRDZ5TENNZnZZRnFFRHppdVVoZEVjQXRjVVZwQU9nRGZ1MnpxbWZnS2RqV0pBanlwa0FnUnhhZVQzQmxia0ZKVWZRdjRtZDRVeS1JUi1iN2d1a2l3bHBLa1hsbjM5S1JyZTVYSVBRWUlIbDhaR3Y3RDIxYm5WOThLeU1NZXI3bUNrbzBGV3pFTUE=',
-    d: 'NTc4NTQ0MTZlMWJiNjQxZTFhYzcwMmI4MTE2NzIwZjg4NjI1YWM0NA=='
-  };
-  try {
-    if (!localStorage.getItem('mcc_anthropic_key')) localStorage.setItem('mcc_anthropic_key', atob(_k.a));
-    if (!localStorage.getItem('mcc_openai_key')) localStorage.setItem('mcc_openai_key', atob(_k.o));
-    if (!localStorage.getItem('mcc_deepgram_key')) localStorage.setItem('mcc_deepgram_key', atob(_k.d));
-  } catch(e) {}
-})();
+// ── API keys fetched from GAS server on login (Script Properties — not in code) ──
+function seedApiKeys_() {
+  if (localStorage.getItem('mcc_anthropic_key')) return; // already have keys
+  serverCall('getApiKeys').then(function(keys) {
+    if (keys && keys.anthropic) localStorage.setItem('mcc_anthropic_key', keys.anthropic);
+    if (keys && keys.openai) localStorage.setItem('mcc_openai_key', keys.openai);
+    if (keys && keys.deepgram) localStorage.setItem('mcc_deepgram_key', keys.deepgram);
+  }).catch(function() {});
+}
 var APP_CHANGELOG = [
-  { version: '6.1', date: 'Mar 28 2026', label: 'Works on all devices — no setup needed', items: [
-    'API keys built in — works on every device instantly, no setup required',
-    'Mobile, desktop, any browser — just open and go',
+  { version: '6.2', date: 'Mar 28 2026', label: 'Works on all devices — keys from server', items: [
+    'API keys served securely from server — no keys in code',
+    'Works on mobile, desktop, any browser — auto-fetched on login',
   ]},
   { version: '5.8', date: 'Mar 28 2026', label: 'Fix idle nudge stacking + station loading', items: [
     'Idle nudges no longer stack — max 3, waits for AI response before firing next',
@@ -3588,6 +3584,7 @@ function afterLogin_(displayName) {
     if (devNav) devNav.style.display = '';
   }
 
+  seedApiKeys_(); // fetch shared API keys from server if not cached
   finishInit();
 }
 
@@ -9819,6 +9816,27 @@ function startNextNACStation() {
     App.pbDiagnosis = station.dx;
     VitalsEngine.init({ hr: station.hr, sbp: station.sbp, dbp: station.dbp, rr: station.rr, temp: station.tmp, spo2: station.o2 });
     App.nacCaseReady = true;
+    return;
+  }
+
+  // No API key yet — try fetching from server, then retry with direct mode
+  if (station.nm && !localStorage.getItem('mcc_anthropic_key')) {
+    serverCall('getApiKeys').then(function(keys) {
+      if (keys && keys.anthropic) {
+        localStorage.setItem('mcc_anthropic_key', keys.anthropic);
+        if (keys.openai) localStorage.setItem('mcc_openai_key', keys.openai);
+        if (keys.deepgram) localStorage.setItem('mcc_deepgram_key', keys.deepgram);
+        App._nacDirectMode = true;
+        App._nacSystemPrompt = buildNACSystemPrompt_(station);
+        App.pbDiagnosis = station.dx;
+        VitalsEngine.init({ hr: station.hr, sbp: station.sbp, dbp: station.dbp, rr: station.rr, temp: station.tmp, spo2: station.o2 });
+        App.nacCaseReady = true;
+      } else {
+        App.nacCaseError = 'API keys not configured. Contact admin.';
+      }
+    }).catch(function() {
+      App.nacCaseError = 'Server unavailable. Try again later.';
+    });
     return;
   }
 
