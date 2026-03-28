@@ -2483,7 +2483,7 @@ body.kb-open #bottom-nav { display: none !important; }
     <div class="sidebar-footer">
       <button class="dark-mode-toggle" onclick="toggleDarkMode()" id="dark-mode-btn" title="Toggle dark mode" style="margin-top:8px">&#x1F319; Dark Mode</button>
       <button class="dark-mode-toggle" onclick="showNameEntry()" style="margin-top:6px">&#x1F465; Switch User</button>
-      <button class="dark-mode-toggle" onclick="startTutorial()" style="margin-top:6px" title="Replay the pronunciation &amp; translation guide">&#x2753; Help</button>
+      <button class="dark-mode-toggle" onclick="startTutorial()" style="margin-top:6px" title="Replay the audio &amp; translation guide">&#x2753; Help</button>
       <button class="dark-mode-toggle" id="copy-link-btn" onclick="copyAppLink_()" style="margin-top:6px" title="Copy MCC Master link to share">&#x1F517; Copy Link</button>
     </div>
   </nav>
@@ -3593,7 +3593,7 @@ function afterLogin_(displayName) {
 function startTutorial() {
   var steps = [
     {
-      title: 'Blue Terms: Tap for Pronunciation',
+      title: 'Blue Terms: Tap to Listen',
       text: 'Medical terms throughout the app are <span style="border-bottom:2px solid var(--accent);color:var(--accent);font-weight:600">underlined</span>. Tap one → 🔊 Normal speed, 🐌 Slow.',
       target: null
     },
@@ -5445,7 +5445,7 @@ function renderFlashcard() {
   // One-time tap hint for medical terms (dismissed after first tap or explicit close)
   if (App.glossary && !localStorage.getItem('mcc_medterm_hint_seen')) {
     html += '<div id="medterm-hint-banner" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;background:rgba(37,99,235,0.07);border:1px solid rgba(37,99,235,0.18);border-radius:10px;font-size:13px;color:var(--text);line-height:1.4">';
-    html += '&#x1F4A1; Tap <span style="color:#2563eb;font-weight:700;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px">blue underlined words</span> for pronunciation &amp; translation';
+    html += '&#x1F4A1; Tap <span style="color:#2563eb;font-weight:700;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px">blue underlined words</span> to hear audio &amp; translation';
     html += '<button onclick="dismissMedHint()" style="margin-left:auto;flex-shrink:0;background:none;border:none;cursor:pointer;font-size:17px;color:var(--text-light);padding:0;line-height:1">&#x2715;</button>';
     html += '</div>';
   }
@@ -11517,7 +11517,7 @@ var FALLBACK_GLOSSARY = [
   {Term:'biopsy',Category:'Pathology',Definition:'Removal of tissue for microscopic examination',fa:'بیوپسی / نمونه‌برداری',ar:'خزعة',fr:'biopsie'},
   {Term:'echocardiogram',Category:'Cardiology',Definition:'Ultrasound imaging of the heart',fa:'اکوکاردیوگرام / سونوگرافی قلب',ar:'صدى صوت القلب',fr:'échocardiogramme'},
   {Term:'electrocardiogram',Category:'Cardiology',Definition:'Recording of heart electrical activity',fa:'نوار قلب',ar:'تخطيط القلب',fr:'électrocardiogramme'},
-  // ── Extended set: pronunciation focus for non-native English speakers ──────
+  // ── Extended set: audio + translation for medical terms ──────
   {Term:'ischemia',Category:'Cardiology',Definition:'Insufficient blood supply to tissue',fa:'ایسکمی / کمبود خون‌رسانی',ar:'نقص التروية',fr:'ischémie'},
   {Term:'pericarditis',Category:'Cardiology',Definition:'Inflammation of the pericardium (sac around the heart)',fa:'پریکاردیت / التهاب پریکارد',ar:'التهاب التامور',fr:'péricardite'},
   {Term:'aortic stenosis',Category:'Cardiology',Definition:'Narrowing of the aortic valve opening',fa:'تنگی دریچه آئورت',ar:'تضيق الأبهر',fr:'sténose aortique'},
@@ -12138,8 +12138,8 @@ function toggleMedPanel(e) {
   var displayLabel = isAbbrev ? (dispTerm + ' (' + abbrevExpanded + ')') : dispTerm;
 
   var inner = '';
-  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(speakTerm) + ',1.0)" title="Pronounce (normal speed)">&#x1F50A;</button>';
-  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(speakTerm) + ',0.45)" title="Pronounce (slow — hear every syllable)">&#x1F40C;</button>';
+  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(speakTerm) + ',1.0)" title="Listen (normal)">&#x1F50A;</button>';
+  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(speakTerm) + ',0.45)" title="Listen (slow)">&#x1F40C;</button>';
   if (isAbbrev) {
     inner += '<span style="font-size:11px;color:var(--text-light);margin:0 3px;font-style:italic">' + escapeHtml(abbrevExpanded) + '</span>';
   }
@@ -12169,8 +12169,8 @@ function closeMedPanel() {
 
 function _patternPillInner_(termKey, data) {
   var inner = '';
-  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(termKey) + ',1.0)" title="Pronounce">&#x1F50A;</button>';
-  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(termKey) + ',0.45)" title="Pronounce slow">&#x1F40C;</button>';
+  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(termKey) + ',1.0)" title="Listen">&#x1F50A;</button>';
+  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(termKey) + ',0.45)" title="Listen (slow)">&#x1F40C;</button>';
   if (data) {
     var def = data.definition || data.Definition || '';
     var trans = data.translation || data.Translation || '';
