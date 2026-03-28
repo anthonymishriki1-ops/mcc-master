@@ -2959,8 +2959,16 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '4.4';
+var APP_VERSION = '4.5';
 var APP_CHANGELOG = [
+  { version: '4.5', date: 'Mar 28 2026', label: 'NAC-OSCE bug fixes: random case, AI first reply, labs trigger, UI polish', items: [
+    'Fixed Random Case selection so Test 0 no longer falls back to Test 1',
+    'Removed scripted first patient reply shortcut — first patient response is now AI-generated from the doctor\'s actual opening',
+    'Fixed NAC sidebar highlighting so NAC-OSCE stays active in the left nav during stations',
+    'Added Skip button to NAC text mode controls',
+    'Added direct-mode lab generation for bloodwork orders (CBC/BMP/CMP/troponin/labs) and automatic Labs tab population',
+    'Fixed NAC header in Random Case mode to show "Random Case" instead of blank test number',
+  ]},
   { version: '4.4', date: 'Mar 27 2026', label: 'NAC desktop: two-column layout + conversation auto-scroll', items: [
     'Desktop: patient info on left, conversation on right — clinical workstation layout',
     'Conversation box auto-scrolls to latest message',
@@ -6291,7 +6299,7 @@ function processPBTranscriptText_(text) {
 
   if (App.nacActive && !App.nacDoctorSpoke) {
     App.nacDoctorSpoke = true;
-    if (App.nacIdleTimer) { clearTimeout(App.nacIdleTimer); App.nacIdleTimer = null; }
+    App._nacLastActivity = Date.now();
   }
   if (App._nacDirectMode && App.nacActive) {
     sendNACMessageDirect_(best);
@@ -7947,7 +7955,7 @@ function sendPBMessage() {
 
   if (App.nacActive && !App.nacDoctorSpoke) {
     App.nacDoctorSpoke = true;
-    if (App.nacIdleTimer) { clearTimeout(App.nacIdleTimer); App.nacIdleTimer = null; }
+    App._nacLastActivity = Date.now();
   }
 
   // NAC Direct Mode — skip GAS
@@ -8002,6 +8010,7 @@ function sendPBMessage() {
     // Detect drug/procedure effects from user message
     VitalsEngine.detectAndApply(message);
     App.pbHistory.push({ role: 'assistant', content: result.response });
+    if (App.nacActive) maybeTriggerNacLabResults_(message, result.response);
     target(); input.disabled = false; input.focus();
   }).catch(function(e) {
     removeEl('pb-typing'); App.pbHistory.push({ role: 'assistant', content: 'Error: ' + (e.message || String(e)) });
@@ -9246,6 +9255,81 @@ function callAnthropicDirect_(systemPrompt, messages) {
   });
 }
 
+function syncNACSidebarActive_() {
+  var items = document.querySelectorAll('.sidebar-nav li[data-page]');
+  for (var i = 0; i < items.length; i++) items[i].classList.remove('active');
+  var nacItem = document.querySelector('.sidebar-nav li[data-page="nac-sim"]');
+  if (nacItem) nacItem.classList.add('active');
+}
+
+function maybeTriggerNacLabResults_(doctorMessage, patientResponse) {
+  var orderRegex = /order|ordering|blood\s*work|labs|cbc|bmp|cmp|troponin/i;
+  var responseRegex = /(order|ordered|request|cbc|bmp|cmp|troponin|blood\s*work|labs?)/i;
+  if (!orderRegex.test(doctorMessage || '') && !responseRegex.test(patientResponse || '')) return;
+  generateLabResults_(doctorMessage || patientResponse).then(function(labPayload) {
+    if (!labPayload || !labPayload.testName || !Array.isArray(labPayload.values) || labPayload.values.length === 0) return;
+    App.pbHistory.push({ role: 'results', content: labPayload });
+    renderPBChat();
+  }).catch(function() {});
+}
+
+function generateLabResults_(orderText) {
+  var key = localStorage.getItem('mcc_anthropic_key');
+  if (!key) return Promise.reject(new Error('No Anthropic API key'));
+  var p = App.pbPatientInfo || {};
+  var vd = VitalsEngine._display || {};
+  var bp = VitalsEngine.getLatestBP ? VitalsEngine.getLatestBP() : null;
+  var dx = App.pbDiagnosis || p.diagnosis || 'Unknown diagnosis';
+  var systemPrompt =
+    'You generate realistic clinical lab results for NAC-OSCE simulation. ' +
+    'Return ONLY compact JSON with this exact schema: ' +
+    '{"testName":"string","values":[{"name":"string","value":"string","unit":"string","flag":"normal|high|low|critical"}]}. ' +
+    'Match likely findings to diagnosis/vitals. Include 4-10 values. No markdown.';
+  var userPrompt =
+    'Diagnosis: ' + dx + '\n' +
+    'Patient: ' + (p.name || 'Unknown') + ', age ' + (p.age || '?') + ', sex ' + (p.sex || '?') + '\n' +
+    'Vitals: HR ' + (vd.hr || '?') + ', BP ' + (bp ? (bp.sbp + '/' + bp.dbp) : (p.bp || '?')) + ', RR ' + (vd.rr || '?') + ', Temp ' + (vd.temp || '?') + ', SpO2 ' + (vd.spo2 || '?') + '\n' +
+    'Order text: ' + (orderText || 'General bloodwork');
+  return fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20250901',
+      max_tokens: 500,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }]
+    })
+  }).then(function(r) {
+    if (!r.ok) return r.text().then(function(t) { throw new Error('Anthropic lab error: ' + t.substring(0, 200)); });
+    return r.json();
+  }).then(function(data) {
+    var text = (((data || {}).content || [])[0] || {}).text || '{}';
+    var cleaned = text.replace(/```json|```/gi, '').trim();
+    var parsed = JSON.parse(cleaned);
+    if (!parsed || !Array.isArray(parsed.values)) throw new Error('Invalid lab JSON');
+    return {
+      testName: parsed.testName || 'Laboratory Results',
+      values: parsed.values.map(function(v) {
+        return {
+          name: String((v && v.name) || ''),
+          value: String((v && v.value) || ''),
+          unit: String((v && v.unit) || ''),
+          flag: /high|low|critical|normal/i.test((v && v.flag) || '') ? String(v.flag).toLowerCase() : 'normal'
+        };
+      }).filter(function(v) { return v.name; }),
+      abnormal: parsed.values.some(function(v) { return /high|low|critical/i.test((v && v.flag) || ''); }),
+      results: parsed.values.map(function(v) {
+        return (v.name || '?') + ': ' + (v.value || '?') + (v.unit ? ' ' + v.unit : '') + (v.flag && v.flag !== 'normal' ? ' (' + v.flag + ')' : '');
+      }).join('\n')
+    };
+  });
+}
+
 // ── Direct OpenAI TTS call (browser → OpenAI, no GAS middleman) ──
 function callTTSDirect_(text, voice, speed) {
   var key = localStorage.getItem('mcc_openai_key');
@@ -9260,9 +9344,9 @@ function callTTSDirect_(text, voice, speed) {
       'Authorization': 'Bearer ' + key
     },
     body: JSON.stringify({
-      model: 'tts-1',
+      model: localStorage.getItem('mcc_tts_model') || 'tts-1',
       input: clean,
-      voice: voice || 'alloy',
+      voice: localStorage.getItem('mcc_tts_voice_override') || voice || 'alloy',
       speed: speed || 1.0,
       response_format: 'mp3'
     })
@@ -9294,21 +9378,13 @@ function sendNACMessageDirect_(userMessage) {
   try { window.speechSynthesis.cancel(); } catch(e) {}
   App._pbSpeaking = false;
 
-  // Mark doctor spoke, clear idle nudge
+  // Mark doctor spoke, reset idle timer
   App.nacDoctorSpoke = true;
-  if (App.nacIdleTimer) { clearTimeout(App.nacIdleTimer); App.nacIdleTimer = null; }
+  App._nacLastActivity = Date.now();
 
   // Add user message to history and render
   App.pbHistory.push({ role: 'user', content: userMessage });
   renderPBChat();
-
-  // First message from doctor — use pregen opening line (instant, no API call)
-  if (App._nacPregenOpening) {
-    var opening = App._nacPregenOpening;
-    App._nacPregenOpening = null;
-    nacDirectRespond_(opening);
-    return;
-  }
 
   // Build messages array for Anthropic
   var apiMessages = [];
@@ -9322,6 +9398,7 @@ function sendNACMessageDirect_(userMessage) {
   callAnthropicDirect_(App._nacSystemPrompt, apiMessages).then(function(response) {
     response = response.replace(/```[\s\S]*?```/g, '').replace(/\[SYSTEM[^\]]*\]/gi, '').trim();
     nacDirectRespond_(response);
+    maybeTriggerNacLabResults_(userMessage, response);
   }).catch(function(e) {
     App.pbHistory.push({ role: 'system', content: 'Error: ' + (e.message || String(e)) });
     renderPBChat();
@@ -9500,7 +9577,8 @@ function startNACExam() {
 }
 
 function startNACExamInner_() {
-  var testNum = parseInt(document.getElementById('nac-test-num').value) || 1;
+  var testNum = parseInt(document.getElementById('nac-test-num').value, 10);
+  if (isNaN(testNum)) testNum = 1;
 
   // Random case mode: pick one random station from all 84
   if (testNum === 0) {
@@ -9535,8 +9613,9 @@ function startNACExamInner_() {
   App.pbDifficulty = App.nacDifficulty;
   App.pbCustom = {};
   App.pbCaseScores = [];
-  App.pbTotalCases = stations.length;
+  App.pbTotalCases = App.nacTotalStations;
   App.pbCurrentCase = 0;
+  syncNACSidebarActive_();
 
   App.nacVoiceMode = getNACVoiceMode_();
   App.pbHandsFree = App.nacVoiceMode === 'hands-free';
@@ -9600,7 +9679,6 @@ function startNextNACStation() {
     App.pbPartialUsed = false;
     App.pbMonitorAttached = false;
     App.pbHistory = []; // empty — doctor speaks first
-    App._nacPregenOpening = station.op || ''; // saved for when doctor speaks
     App.nacStationMsg = '';
     App.pbDiagnosis = station.dx;
     VitalsEngine.init({ hr: station.hr, sbp: station.sbp, dbp: station.dbp, rr: station.rr, temp: station.tmp, spo2: station.o2 });
@@ -9627,8 +9705,7 @@ function startNextNACStation() {
     App.pbDrDataConvHistory = [];
     App.pbMonitorAttached = false;
     VitalsEngine.init(result.vitals || result.patient || {});
-    // Use pregen opening line if available, otherwise use AI-generated
-    var msg = station.op ? station.op : stripPatientJSON(result.initialMessage);
+    var msg = stripPatientJSON(result.initialMessage);
     if (result.patientInfo) {
       App.pbPatientInfo = result.patientInfo;
       App.pbDiagnosis = result.patientInfo.diagnosis;
@@ -9636,7 +9713,6 @@ function startNextNACStation() {
       App.pbDiagnosis = station.dx;
     }
     App.pbHistory = []; // doctor speaks first — don't pre-load opening line
-    App._nacPregenOpening = msg; // saved for when doctor speaks
     App.nacStationMsg = msg;
     App.nacCaseReady = true;
   }).catch(function(e) { App.nacCaseError = e.message || String(e); });
@@ -9777,6 +9853,7 @@ function endNACReadingPeriod_() {
 }
 
 function enterNACStation_() {
+  syncNACSidebarActive_();
   // Start the actual station
   if (App.nacTimerMinutes > 0) {
     startNACTimer(App.nacTimerMinutes * 60);
@@ -9791,8 +9868,6 @@ function enterNACStation_() {
   if (station && station.nm && localStorage.getItem('mcc_anthropic_key')) {
     App._nacDirectMode = true;
     App._nacSystemPrompt = buildNACSystemPrompt_(station);
-    // Don't pre-load opening line — doctor speaks first
-    App._nacPregenOpening = station.op || '';
   } else {
     App._nacDirectMode = false;
   }
@@ -9801,21 +9876,36 @@ function enterNACStation_() {
   showNACOnboardingPopup_();
   // Start hands-free listening (slight delay to ensure DOM is ready for mic permission)
   if (App.pbHandsFree) setTimeout(function() { startHandsFreeListening_(); }, 500);
-  // Start 30-second idle nudge — if doctor doesn't speak, patient prompts them
-  if (App.nacIdleTimer) { clearTimeout(App.nacIdleTimer); App.nacIdleTimer = null; }
-  App.nacIdleTimer = setTimeout(function() {
-    if (!App.nacDoctorSpoke && App.nacActive && !App.pbDiagResolved) {
-      var nudges = [
-        "Uh... hi? Are you my doctor?",
-        "...so, are you gonna help me or...",
-        "Hello? Is everything okay?",
-        "Um... doc? I'm kinda in pain here...",
-        "...are you the doctor? Should I be worried that you're just standing there?"
-      ];
-      var nudge = nudges[Math.floor(Math.random() * nudges.length)];
+  // Start recurring idle nudge — patient speaks if doctor is silent for 30s
+  if (App.nacIdleTimer) { clearInterval(App.nacIdleTimer); App.nacIdleTimer = null; }
+  App._nacLastActivity = Date.now();
+  App.nacIdleTimer = setInterval(function() {
+    if (!App.nacActive || App.pbDiagResolved) { clearInterval(App.nacIdleTimer); return; }
+    if (Date.now() - App._nacLastActivity < 28000) return; // reset if recent activity
+    App._nacLastActivity = Date.now(); // prevent double-fire
+    // Use AI to generate a natural nudge (not scripted)
+    if (App._nacDirectMode && App._nacSystemPrompt) {
+      var nudgeMessages = App.pbHistory.filter(function(m) { return m.role === 'user' || m.role === 'assistant'; })
+        .map(function(m) { return { role: m.role, content: m.content }; });
+      var nudgePrompt = App.pbHistory.length === 0
+        ? 'The doctor just entered and has been standing there silently for 30 seconds. Say something brief to get their attention — you\'re a patient waiting for help. 1 sentence max.'
+        : 'The doctor has gone silent for 30 seconds. React naturally — maybe ask if they\'re still there, or mention your symptoms are getting worse. 1 sentence max. Stay in character.';
+      nudgeMessages.push({ role: 'user', content: '[SYSTEM: ' + nudgePrompt + ']' });
+      callAnthropicDirect_(App._nacSystemPrompt, nudgeMessages).then(function(response) {
+        response = response.replace(/```[\s\S]*?```/g, '').replace(/\[SYSTEM[^\]]*\]/gi, '').trim();
+        if (response && App.nacActive) {
+          App.nacDoctorSpoke = true;
+          App.pbHistory.push({ role: 'assistant', content: response });
+          renderPBChat();
+          // Speak it too
+          var voice = localStorage.getItem('mcc_tts_voice_override') || getOpenAIVoice_();
+          callTTSDirect_(response, voice, getOpenAISpeed_()).catch(function() {});
+        }
+      }).catch(function() {});
+    } else {
+      // Fallback for non-direct mode — still use AI via server if possible
       App.nacDoctorSpoke = true;
-      // Just add to history and render — don't touch the mic or TTS
-      App.pbHistory.push({ role: 'assistant', content: nudge });
+      App.pbHistory.push({ role: 'assistant', content: '...doc? You still there?' });
       renderPBChat();
     }
   }, 30000);
@@ -10457,7 +10547,10 @@ function renderNACStationUI_() {
 
   // ── Top bar: Station info + timer + controls ──
   html += '<div class="pb-top-bar" style="background:linear-gradient(135deg,#0d1442,#1a237e)">';
-  html += '<div class="pb-top-left"><h3 style="color:white">NAC-OSCE &mdash; Test ' + (App.nacTestNumber || '') + ' &mdash; Station ' + App.nacCurrentStation + '/' + App.nacTotalStations + '</h3>';
+  var nacHeaderTitle = App.nacRandomMode
+    ? 'NAC-OSCE &mdash; Random Case &mdash; Station ' + App.nacCurrentStation + '/' + App.nacTotalStations
+    : 'NAC-OSCE &mdash; Test ' + (App.nacTestNumber || '') + ' &mdash; Station ' + App.nacCurrentStation + '/' + App.nacTotalStations;
+  html += '<div class="pb-top-left"><h3 style="color:white">' + nacHeaderTitle + '</h3>';
   html += '<div style="font-size:12px;color:rgba(255,255,255,0.6);margin-top:2px">' + escapeHtml(App.pbSpecialty || '') + ' &mdash; ' + escapeHtml(App.pbPresentation || '') + '</div></div>';
   html += '<div class="pb-top-right">';
   if (App.nacTimerMinutes > 0 && !App.pbDiagResolved) {
@@ -10739,6 +10832,27 @@ function renderNACStationUI_() {
       html += '<button class="btn" onclick="skipNACStation_()" style="background:transparent;color:var(--text-light);font-size:12px;padding:6px 12px;border:1px solid var(--border);border-radius:16px" title="Skip to next station">Skip &#x23ED;</button>';
       html += '</div>';
       html += '<div style="font-size:11px;color:var(--text-light);text-align:center">Deepgram transcribes live while recording &bull; say <strong>"order CBC"</strong> &bull; tap Diagnose when ready</div>';
+    }
+    // Dev-only TTS controls (Tony mode)
+    if (DEV_USERS.indexOf((App.guestId || '').replace('profile_', '')) !== -1) {
+      var curModel = localStorage.getItem('mcc_tts_model') || 'tts-1';
+      var curVoice = localStorage.getItem('mcc_tts_voice_override') || '';
+      html += '<div style="display:flex;gap:8px;align-items:center;margin-top:6px;opacity:0.6">';
+      html += '<span style="font-size:10px;color:var(--text-light)">🔧 TTS:</span>';
+      html += '<select onchange="localStorage.setItem(\'mcc_tts_model\',this.value);showToast(\'TTS: \'+this.value)" style="font-size:11px;padding:2px 6px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text)">';
+      html += '<option value="tts-1"' + (curModel === 'tts-1' ? ' selected' : '') + '>TTS-1 (fast)</option>';
+      html += '<option value="tts-1-hd"' + (curModel === 'tts-1-hd' ? ' selected' : '') + '>TTS-1-HD</option>';
+      html += '</select>';
+      html += '<select onchange="localStorage.setItem(\'mcc_tts_voice_override\',this.value);showToast(\'Voice: \'+(this.value||\'auto\'))" style="font-size:11px;padding:2px 6px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text)">';
+      html += '<option value=""' + (!curVoice ? ' selected' : '') + '>Auto (by patient)</option>';
+      html += '<option value="alloy"' + (curVoice === 'alloy' ? ' selected' : '') + '>Alloy</option>';
+      html += '<option value="echo"' + (curVoice === 'echo' ? ' selected' : '') + '>Echo</option>';
+      html += '<option value="fable"' + (curVoice === 'fable' ? ' selected' : '') + '>Fable</option>';
+      html += '<option value="onyx"' + (curVoice === 'onyx' ? ' selected' : '') + '>Onyx</option>';
+      html += '<option value="nova"' + (curVoice === 'nova' ? ' selected' : '') + '>Nova</option>';
+      html += '<option value="shimmer"' + (curVoice === 'shimmer' ? ' selected' : '') + '>Shimmer</option>';
+      html += '</select>';
+      html += '</div>';
     }
     html += '</div>';
   } else {
