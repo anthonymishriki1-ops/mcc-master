@@ -2962,8 +2962,12 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '5.7';
+var APP_VERSION = '5.8';
 var APP_CHANGELOG = [
+  { version: '5.8', date: 'Mar 28 2026', label: 'Fix idle nudge stacking + station loading', items: [
+    'Idle nudges no longer stack — max 3, waits for AI response before firing next',
+    'Fixed station stuck on Loading screen',
+  ]},
   { version: '5.7', date: 'Mar 28 2026', label: 'Fix station loading (was stuck on Loading...)', items: [
     'Fixed station stuck on "Loading station..." — cleanup code was killing the reading period before it started',
   ]},
@@ -9772,6 +9776,7 @@ function startNextNACStation() {
   App.pbCaseId = null;
   App._pbSpeaking = false;
   App._nacSilenceCount = 0;
+  App._nacNudgeInFlight = false;
   App.nacPTTRecording = false;
   // Cancel any in-flight TTS
   if (App._ttsAudio) { try { App._ttsAudio.pause(); App._ttsAudio = null; } catch(e) {} }
@@ -10000,8 +10005,11 @@ function enterNACStation_() {
     if (!App.nacActive || App.pbDiagResolved) { clearInterval(App.nacIdleTimer); return; }
     if (!App.nacDoctorSpoke && App.pbHistory.length === 0) return;
     if (Date.now() - App._nacLastActivity < 28000) return; // reset if recent activity
-    App._nacLastActivity = Date.now(); // prevent double-fire
+    if (App._nacNudgeInFlight) return; // don't stack nudges
     App.nacIdleNudgeCount = (App.nacIdleNudgeCount || 0) + 1;
+    if (App.nacIdleNudgeCount > 3) return; // max 3 nudges then stop
+    App._nacLastActivity = Date.now(); // prevent double-fire
+    App._nacNudgeInFlight = true;
     // Use AI to generate a natural nudge (not scripted)
     if (App._nacDirectMode && App._nacSystemPrompt) {
       var nudgeMessages = App.pbHistory.filter(function(m) { return m.role === 'user' || m.role === 'assistant'; })
@@ -10024,16 +10032,17 @@ function enterNACStation_() {
       }
       nudgeMessages.push({ role: 'user', content: '[SYSTEM: ' + nudgePrompt + ']' });
       callAnthropicDirect_(App._nacSystemPrompt, nudgeMessages).then(function(response) {
+        App._nacNudgeInFlight = false;
+        App._nacLastActivity = Date.now(); // reset after nudge so next one waits full 28s
         response = response.replace(/```[\s\S]*?```/g, '').replace(/\[SYSTEM[^\]]*\]/gi, '').trim();
         if (response && App.nacActive) {
           App.nacDoctorSpoke = true;
           App.pbHistory.push({ role: 'assistant', content: response });
           renderPBChat();
-          // Speak it too
           var voice = localStorage.getItem('mcc_tts_voice_override') || getOpenAIVoice_();
           callTTSDirect_(response, voice, getOpenAISpeed_()).catch(function() {});
         }
-      }).catch(function() {});
+      }).catch(function() { App._nacNudgeInFlight = false; });
     } else {
       // Fallback for non-direct mode — still use AI via server if possible
       App.nacDoctorSpoke = true;
