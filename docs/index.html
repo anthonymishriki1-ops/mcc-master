@@ -2939,7 +2939,9 @@ var App = {
   nacTimerInterval: null,
   nacDifficulty: 'medium',
   nacVoiceMode: 'push-to-talk',
-  nacPTTRecording: false
+  nacPTTRecording: false,
+  nacLabResults: [],
+  nacIdleNudgeCount: 0
 };
 
 // Point values
@@ -3152,7 +3154,8 @@ function navigateTo(page) {
   var target = document.getElementById('page-' + page);
   if (target) target.classList.add('active');
 
-  var link = document.querySelector('.nav-links [data-page="' + page + '"]');
+  var activeNavPage = (page === 'patientbot' && App.nacActive) ? 'nac-sim' : page;
+  var link = document.querySelector('.nav-links [data-page="' + activeNavPage + '"]');
   if (link) link.classList.add('active');
 
   App.currentPage = page;
@@ -6215,6 +6218,20 @@ function toggleNACPtt_() {
   else startNACPttRecording_();
 }
 
+function startNACPttHold_(evt) {
+  if (evt && evt.preventDefault) evt.preventDefault();
+  if (!App.nacActive || App.pbDiagResolved || App.nacVoiceMode !== 'push-to-talk') return false;
+  if (!App.nacPTTRecording) startNACPttRecording_();
+  return false;
+}
+
+function stopNACPttHold_(evt) {
+  if (evt && evt.preventDefault) evt.preventDefault();
+  if (!App.nacActive || App.pbDiagResolved || App.nacVoiceMode !== 'push-to-talk') return false;
+  if (App.nacPTTRecording) stopNACPttRecording_(true);
+  return false;
+}
+
 var _sttShouldRun = false;
 var _sttRestarting = false;
 var _sttRetryMs = 250;
@@ -6258,7 +6275,7 @@ function _setInterimCaption_(text) {
   var cap = document.getElementById('hf-interim-caption');
   if (cap) cap.textContent = App.pbInterimTranscript;
   var pttCap = document.getElementById('nac-ptt-caption');
-  if (pttCap) pttCap.textContent = App.pbInterimTranscript || (App.nacPTTRecording ? 'Recording...' : 'Click mic to speak, click again to send');
+  if (pttCap) pttCap.textContent = App.pbInterimTranscript || (App.nacPTTRecording ? 'Recording... release to send' : 'Hold mic to record • release to send');
 }
 
 function _setHFIndicatorState_(label, bg, color) {
@@ -6305,6 +6322,8 @@ function processPBTranscriptText_(text) {
     sendNACMessageDirect_(best);
     return;
   }
+
+  maybeTriggerNacLabResults_(best, '');
 
   App.pbHistory.push({ role: 'user', content: best });
   var target = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
@@ -9256,9 +9275,9 @@ function callAnthropicDirect_(systemPrompt, messages) {
 }
 
 function syncNACSidebarActive_() {
-  var items = document.querySelectorAll('.sidebar-nav li[data-page]');
+  var items = document.querySelectorAll('.nav-links li[data-page]');
   for (var i = 0; i < items.length; i++) items[i].classList.remove('active');
-  var nacItem = document.querySelector('.sidebar-nav li[data-page="nac-sim"]');
+  var nacItem = document.querySelector('.nav-links li[data-page="nac-sim"]');
   if (nacItem) nacItem.classList.add('active');
 }
 
@@ -9268,7 +9287,8 @@ function maybeTriggerNacLabResults_(doctorMessage, patientResponse) {
   if (!orderRegex.test(doctorMessage || '') && !responseRegex.test(patientResponse || '')) return;
   generateLabResults_(doctorMessage || patientResponse).then(function(labPayload) {
     if (!labPayload || !labPayload.testName || !Array.isArray(labPayload.values) || labPayload.values.length === 0) return;
-    App.pbHistory.push({ role: 'results', content: labPayload });
+    App.nacLabResults = App.nacLabResults || [];
+    App.nacLabResults.push(labPayload);
     renderPBChat();
   }).catch(function() {});
 }
@@ -9635,6 +9655,8 @@ function startNextNACStation() {
   // Clear stale patient info to prevent flash of wrong patient during loading
   App.pbPatientInfo = null;
   App.pbVitals = null;
+  App.nacLabResults = [];
+  App.nacIdleNudgeCount = 0;
   var station = App.nacStations[App.nacCurrentStation - 1];
 
   // Set PB specialty to the station's specialty
@@ -9863,6 +9885,8 @@ function enterNACStation_() {
   }
   // Hard reset at station entry so doctor always speaks first
   App.pbHistory = [];
+  App.nacLabResults = [];
+  App.nacIdleNudgeCount = 0;
   _setInterimCaption_('');
   // Doctor speaks first — don't auto-play patient's opening line
   App.nacDoctorSpoke = false;
@@ -9884,15 +9908,21 @@ function enterNACStation_() {
   App._nacLastActivity = Date.now();
   App.nacIdleTimer = setInterval(function() {
     if (!App.nacActive || App.pbDiagResolved) { clearInterval(App.nacIdleTimer); return; }
+    if (!App.nacDoctorSpoke && App.pbHistory.length === 0) return;
     if (Date.now() - App._nacLastActivity < 28000) return; // reset if recent activity
     App._nacLastActivity = Date.now(); // prevent double-fire
+    App.nacIdleNudgeCount = (App.nacIdleNudgeCount || 0) + 1;
     // Use AI to generate a natural nudge (not scripted)
     if (App._nacDirectMode && App._nacSystemPrompt) {
       var nudgeMessages = App.pbHistory.filter(function(m) { return m.role === 'user' || m.role === 'assistant'; })
         .map(function(m) { return { role: m.role, content: m.content }; });
+      var lastDoctorMessage = '';
+      for (var ni = App.pbHistory.length - 1; ni >= 0; ni--) {
+        if (App.pbHistory[ni] && App.pbHistory[ni].role === 'user') { lastDoctorMessage = String(App.pbHistory[ni].content || ''); break; }
+      }
       var nudgePrompt = App.pbHistory.length === 0
         ? 'The doctor just entered and has been standing there silently for 30 seconds. Say something brief to get their attention — you\'re a patient waiting for help. 1 sentence max.'
-        : 'The doctor has gone silent for 30 seconds. React naturally — maybe ask if they\'re still there, or mention your symptoms are getting worse. 1 sentence max. Stay in character.';
+        : 'The doctor has gone silent for 30 seconds. Last doctor message: "' + (lastDoctorMessage || 'none') + '". This is silence nudge #' + App.nacIdleNudgeCount + '. React naturally, escalating frustration slightly each time. 1 sentence max. Stay in character.';
       nudgeMessages.push({ role: 'user', content: '[SYSTEM: ' + nudgePrompt + ']' });
       callAnthropicDirect_(App._nacSystemPrompt, nudgeMessages).then(function(response) {
         response = response.replace(/```[\s\S]*?```/g, '').replace(/\[SYSTEM[^\]]*\]/gi, '').trim();
@@ -10540,6 +10570,15 @@ function renderNACStationUI_() {
   // Ensure login screen is hidden
   var profilePage = document.getElementById('profile-select-page');
   if (profilePage) profilePage.style.display = 'none';
+  if (!App.nacCaseReady) {
+    el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:24px">' +
+      '<div style="text-align:center;max-width:320px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px">' +
+      '<div class="spinner" style="margin:0 auto 12px"></div>' +
+      '<div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">Loading station...</div>' +
+      '<div style="font-size:12px;color:var(--text-light)">Preparing patient profile, vitals, and checklist.</div>' +
+      '</div></div>';
+    return;
+  }
   if (!App.pbMonitorAttached) {
     App.pbMonitorAttached = true;
     VitalsEngine.start();
@@ -10567,7 +10606,9 @@ function renderNACStationUI_() {
   html += '</div></div>';
 
   // ── Count results for badge indicators ──
-  var labResults = App.pbHistory.filter(function(m) { return m.role === 'results' && m.content && !/(x.ray|ct\b|mri|ultrasound|echo|radio|scan|imaging)/i.test(m.content.testName || ''); });
+  var historyLabResults = App.pbHistory.filter(function(m) { return m.role === 'results' && m.content && !/(x.ray|ct\b|mri|ultrasound|echo|radio|scan|imaging)/i.test(m.content.testName || ''); });
+  var nacGeneratedLabs = (App.nacLabResults || []).map(function(r) { return { role: 'results', content: r, _nac: true }; });
+  var labResults = nacGeneratedLabs.concat(historyLabResults);
   var diResults = App.pbHistory.filter(function(m) { return m.role === 'results' && m.content && /(x.ray|ct\b|mri|ultrasound|echo|radio|scan|imaging)/i.test(m.content.testName || ''); });
   var examMsgs = App.pbHistory.filter(function(m) { return m.role === 'partial'; });
 
@@ -10835,8 +10876,11 @@ function renderNACStationUI_() {
       html += '<div id="hf-interim-caption" style="min-height:18px;max-width:90%;font-size:12px;color:var(--text-light);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(App.pbInterimTranscript || '') + '</div>';
       html += '<div style="font-size:11px;color:var(--text-light);text-align:center">Speak naturally &bull; <strong>"my diagnosis is..."</strong> to diagnose &bull; <strong>"order..."</strong> for orders</div>';
     } else {
-      html += '<button class="nac-ptt-button' + (App.nacPTTRecording ? ' recording' : '') + '" onclick="toggleNACPtt_()" title="' + (App.nacPTTRecording ? 'Stop and send' : 'Start recording') + '">&#x1F3A4;</button>';
-      html += '<div id="nac-ptt-caption" style="min-height:18px;max-width:92%;font-size:12px;color:var(--text-light);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(App.pbInterimTranscript || (App.nacPTTRecording ? 'Recording...' : 'Click mic to speak, click again to send')) + '</div>';
+      html += '<button class="nac-ptt-button' + (App.nacPTTRecording ? ' recording' : '') + '" ' +
+        'onmousedown="startNACPttHold_()" onmouseup="stopNACPttHold_()" onmouseleave="stopNACPttHold_()" ' +
+        'ontouchstart="startNACPttHold_(event)" ontouchend="stopNACPttHold_(event)" ontouchcancel="stopNACPttHold_(event)" ' +
+        'onclick="return false" title="' + (App.nacPTTRecording ? 'Release to send' : 'Hold to record') + '">&#x1F3A4;</button>';
+      html += '<div id="nac-ptt-caption" style="min-height:18px;max-width:92%;font-size:12px;color:var(--text-light);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(App.pbInterimTranscript || (App.nacPTTRecording ? 'Recording... release to send' : 'Hold mic to record • release to send')) + '</div>';
       html += '<div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;width:100%">';
       html += '<button class="btn btn-warning" onclick="showDiagnoseModal()">Diagnose</button>';
       html += '<button class="btn" onclick="skipNACStation_()" style="background:transparent;color:var(--text-light);font-size:12px;padding:6px 12px;border:1px solid var(--border);border-radius:16px" title="Skip to next station">Skip &#x23ED;</button>';
