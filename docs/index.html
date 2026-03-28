@@ -10374,9 +10374,13 @@ function startNextNACStation() {
   }
 
   App._nacDirectMode = false;
+  App._nacLoadStartTime = Date.now();
   // Fallback: fire server call in background to set up AI conversation session
   var thisGen = _nacStationGen;
-  serverCall('startPatientBotCase', station.specialty, false, App.nacDifficulty, App.pbCustom).then(function(result) {
+  var nacTimeout = new Promise(function(_, reject) {
+    setTimeout(function() { reject(new Error('Server took too long to respond. Check your connection and retry.')); }, 15000);
+  });
+  Promise.race([serverCall('startPatientBotCase', station.specialty, false, App.nacDifficulty, App.pbCustom), nacTimeout]).then(function(result) {
     if (thisGen !== _nacStationGen) return; // stale callback — station already changed
     App.pbCaseId = result.caseId;
     App.pbSpecialty = result.specialty;
@@ -10404,7 +10408,10 @@ function startNextNACStation() {
     App.pbHistory = []; // doctor speaks first — don't pre-load opening line
     App.nacStationMsg = msg;
     App.nacCaseReady = true;
-  }).catch(function(e) { App.nacCaseError = e.message || String(e); });
+  }).catch(function(e) {
+    if (thisGen !== _nacStationGen) return;
+    App.nacCaseError = e.message || String(e);
+  });
 }
 
 // ── NAC Reading Period (2 min door prompt + notepad) ──
@@ -10526,14 +10533,22 @@ function endNACReadingPeriod_() {
   if (!App.nacCaseReady) {
     var el = document.getElementById('patientbot-content');
     if (el) el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div><p style="margin-top:16px;color:var(--text-light)">Preparing station...</p></div>';
+    var waitCaseStart = Date.now();
     var waitCase = setInterval(function() {
       if (App.nacCaseReady) {
         clearInterval(waitCase);
         enterNACStation_();
-      } else if (App.nacCaseError) {
+      } else if (App.nacCaseError || Date.now() - waitCaseStart > 15000) {
         clearInterval(waitCase);
-        if (el) el.innerHTML = '<div class="card"><p>Error: ' + escapeHtml(App.nacCaseError) + '</p>' +
-          '<button class="btn btn-primary" onclick="App.nacCurrentStation--;startNextNACStation()" style="margin-top:12px">Retry</button></div>';
+        var errMsg = App.nacCaseError || 'Server took too long to respond. Check your connection and retry.';
+        if (!App.nacCaseError) App.nacCaseError = errMsg;
+        if (el) el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:24px">' +
+          '<div style="text-align:center;max-width:340px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px">' +
+          '<div style="font-size:32px;margin-bottom:12px">⚠️</div>' +
+          '<div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:8px">Failed to load station</div>' +
+          '<div style="font-size:12px;color:var(--text-light);margin-bottom:16px">' + escapeHtml(errMsg) + '</div>' +
+          '<button class="btn btn-primary" onclick="App.nacCurrentStation--;App.nacCaseError=null;App.nacCaseReady=false;startNextNACStation()" style="width:100%;padding:12px;font-size:14px;font-weight:700">Retry Station</button>' +
+          '</div></div>';
       }
     }, 200);
     return;
@@ -11514,6 +11529,18 @@ function renderNACStationUI_() {
   var profilePage = document.getElementById('profile-select-page');
   if (profilePage) profilePage.style.display = 'none';
   if (!App.nacCaseReady) {
+    var nacLoadErr = App.nacCaseError || (App._nacLoadStartTime && Date.now() - App._nacLoadStartTime > 15000 ? 'Server took too long to respond.' : null);
+    if (nacLoadErr) {
+      if (!App.nacCaseError) App.nacCaseError = nacLoadErr;
+      el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:24px">' +
+        '<div style="text-align:center;max-width:340px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px">' +
+        '<div style="font-size:32px;margin-bottom:12px">⚠️</div>' +
+        '<div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:8px">Failed to load station</div>' +
+        '<div style="font-size:12px;color:var(--text-light);margin-bottom:16px">' + escapeHtml(nacLoadErr) + '</div>' +
+        '<button class="btn btn-primary" onclick="App.nacCurrentStation--;App.nacCaseError=null;App.nacCaseReady=false;startNextNACStation()" style="width:100%;padding:12px;font-size:14px;font-weight:700">Retry Station</button>' +
+        '</div></div>';
+      return;
+    }
     el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:24px">' +
       '<div style="text-align:center;max-width:320px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px">' +
       '<div class="spinner" style="margin:0 auto 12px"></div>' +
