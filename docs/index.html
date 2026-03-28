@@ -23,9 +23,9 @@
   --primary-dark: #0d1442;
   --accent: #6366f1;
   --accent-dark: #4f46e5;
-  --success: #22c55e;
-  --error: #ef4444;
-  --warning: #f59e0b;
+  --success: #15803d;
+  --error: #b91c1c;
+  --warning: #a16207;
   --bg: #f8fafc;
   --card: #ffffff;
   --text: #1e293b;
@@ -42,8 +42,8 @@
   --accent: #818cf8;
   --accent-dark: #6366f1;
   --success: #22c55e;
-  --error: #ef4444;
-  --warning: #f59e0b;
+  --error: #f87171;
+  --warning: #fbbf24;
   --bg: #0a0a0a;
   --card: #161616;
   --text: #f5f5f5;
@@ -1312,8 +1312,8 @@ body {
 
 .pb-resolved-bar { text-align: center; padding: 16px; color: var(--text-light); font-size: 14px; }
 
-.btn-warning { background: #ff9800; color: white; }
-.btn-warning:hover { background: #e68a00; }
+.btn-warning { background: #a16207; color: white; }
+.btn-warning:hover { background: #854d0e; }
 
 .pb-diag-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
 .pb-diag-modal { background: var(--card); border-radius: 16px; padding: 28px; max-width: 450px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
@@ -2407,6 +2407,32 @@ body.kb-open #bottom-nav { display: none !important; }
   cursor: pointer; transition: all 0.15s;
 }
 .flag-btn:hover { border-color: var(--error); color: var(--error); }
+.icon-touch-target {
+  min-width: 44px !important;
+  min-height: 44px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+button:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px rgba(37,99,235,0.25);
+}
+[data-theme="dark"] button:focus-visible,
+[data-theme="dark"] [role="button"]:focus-visible,
+[data-theme="dark"] input:focus-visible,
+[data-theme="dark"] textarea:focus-visible,
+[data-theme="dark"] select:focus-visible,
+[data-theme="dark"] a:focus-visible {
+  outline-color: #93c5fd;
+  box-shadow: 0 0 0 2px rgba(147,197,253,0.28);
+}
 .flag-modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9998;
   display: flex; align-items: center; justify-content: center; padding: 20px;
@@ -2440,7 +2466,7 @@ body.kb-open #bottom-nav { display: none !important; }
 
   <!-- Mobile Header -->
   <div id="mobile-header">
-    <button id="hamburger" onclick="toggleSidebar()">&#9776;</button>
+    <button id="hamburger" onclick="toggleSidebar()" aria-label="Open navigation menu" title="Open navigation menu">&#9776;</button>
     <span class="mobile-title">MCC Master</span>
   </div>
 
@@ -2491,9 +2517,9 @@ body.kb-open #bottom-nav { display: none !important; }
 
   <!-- Zoom Controls -->
   <div id="zoom-controls" style="position:fixed;top:58px;right:16px;z-index:999;display:flex;align-items:center;gap:4px;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:3px 8px;box-shadow:0 1px 4px rgba(0,0,0,0.1);font-size:13px;opacity:0.7;transition:opacity 0.2s" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.7'">
-    <button onclick="adjustZoom(-10)" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 6px;color:var(--text);font-weight:700" title="Zoom out">-</button>
+    <button onclick="adjustZoom(-10)" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 6px;color:var(--text);font-weight:700" title="Zoom out" aria-label="Zoom out">-</button>
     <span id="zoom-level" style="min-width:36px;text-align:center;font-size:11px;color:var(--text-light);cursor:pointer" onclick="resetZoom()" title="Click to reset">100%</span>
-    <button onclick="adjustZoom(10)" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 6px;color:var(--text);font-weight:700" title="Zoom in">+</button>
+    <button onclick="adjustZoom(10)" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 6px;color:var(--text);font-weight:700" title="Zoom in" aria-label="Zoom in">+</button>
   </div>
   <!-- Auto-Translate Toggle + Language Picker -->
   <div id="auto-translate-toggle" style="position:fixed;top:104px;right:10px;z-index:999;flex-direction:column;align-items:stretch;gap:4px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:6px 10px;box-shadow:0 2px 8px rgba(0,0,0,0.12);font-size:11px;opacity:0.85;transition:opacity 0.2s" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.85'">
@@ -2516,7 +2542,7 @@ body.kb-open #bottom-nav { display: none !important; }
     </select>
   </div>
   <!-- Refresh button -->
-  <button id="refresh-btn" onclick="refreshCurrentView_()" title="Refresh" style="position:fixed;top:10px;right:10px;z-index:9999;background:var(--card);border:1px solid var(--border);border-radius:50%;width:36px;height:36px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.15);opacity:0.85;transition:opacity 0.2s,transform 0.3s" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.85'">&#x21BB;</button>
+  <button id="refresh-btn" onclick="refreshCurrentView_()" title="Refresh" aria-label="Refresh current page" style="position:fixed;top:10px;right:10px;z-index:9999;background:var(--card);border:1px solid var(--border);border-radius:50%;width:44px;height:44px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.15);opacity:0.85;transition:opacity 0.2s,transform 0.3s" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.85'">&#x21BB;</button>
 
   <!-- Main Content -->
   <main id="content">
@@ -2620,7 +2646,7 @@ body.kb-open #bottom-nav { display: none !important; }
         <button class="btn btn-sm" onclick="clearDrDataChat()">New Chat</button>
       </div>
       <div class="chat-container">
-        <div class="chat-messages" id="drdata-messages">
+        <div class="chat-messages" id="drdata-messages" role="log" aria-live="polite" aria-relevant="additions">
           <div class="chat-welcome">
             <div class="welcome-icon">&#x1F916;</div>
             <h3>Dr. Data</h3>
@@ -2942,7 +2968,9 @@ var App = {
   nacVoiceMode: 'push-to-talk',
   nacPTTRecording: false,
   nacLabResults: [],
-  nacIdleNudgeCount: 0
+  nacIdleNudgeCount: 0,
+  nacStationEvalLoading: false,
+  nacStationEval: null
 };
 
 // Point values
@@ -3213,6 +3241,7 @@ function navigateTo(page) {
     case 'achievements': loadAchievements(); break;
     case 'devpanel': loadDevPanel(); break;
   }
+  applyAccessibilityEnhancements_();
 }
 
 function toggleSidebar() {
@@ -4350,6 +4379,7 @@ function finishInit() {
   if (lastVersion !== APP_VERSION) {
     showVersionBanner();
   }
+  applyAccessibilityEnhancements_();
 }
 
 function showVersionBanner() {
@@ -4895,6 +4925,7 @@ function renderDailyPBChat() {
 
   var msgs = document.getElementById('pb-messages');
   if (msgs) msgs.scrollTop = msgs.scrollHeight;
+  applyAccessibilityEnhancements_();
   if (App.pbDiagnosing) {
     var dinput = document.getElementById('pb-diag-input');
     if (dinput) dinput.focus();
@@ -5586,10 +5617,51 @@ function showToast_(msg) {
   if (existing) existing.remove();
   var toast = document.createElement('div');
   toast.id = 'mcc-toast';
+  toast.setAttribute('role', 'status');
+  toast.setAttribute('aria-live', 'polite');
+  toast.setAttribute('aria-atomic', 'true');
   toast.style.cssText = 'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#333;color:white;padding:12px 24px;border-radius:12px;font-size:14px;font-weight:600;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.3);animation:nudgeSlide 0.3s ease';
   toast.innerHTML = msg;
   document.body.appendChild(toast);
   setTimeout(function() { if (toast.parentNode) toast.remove(); }, 3000);
+}
+
+function inferIconButtonLabel_(btn) {
+  var title = (btn.getAttribute('title') || '').trim();
+  if (title) return title;
+  var txt = (btn.textContent || '').replace(/\s+/g, ' ').trim();
+  if (txt === '×' || txt === '✕' || txt === '✖') return 'Close';
+  if (txt === '↻' || txt === '⟳') return 'Refresh';
+  if (txt === '🔊') return 'Replay audio';
+  if (txt === '🚩') return 'Flag issue';
+  if (txt === '📎') return 'Attach';
+  if (txt === '🔗') return 'Copy link';
+  if (txt === '-') return 'Zoom out';
+  if (txt === '+') return 'Zoom in';
+  return '';
+}
+
+function applyAccessibilityEnhancements_() {
+  var buttons = document.querySelectorAll('button');
+  for (var i = 0; i < buttons.length; i++) {
+    var btn = buttons[i];
+    var rawText = (btn.textContent || '').replace(/\s+/g, ' ').trim();
+    var hasWord = /[A-Za-z]{2,}/.test(rawText);
+    var isIconButton = !hasWord || btn.classList.contains('flag-btn') || btn.classList.contains('med-inline-btn') || btn.classList.contains('pb-actions-handle');
+    if (isIconButton) {
+      btn.classList.add('icon-touch-target');
+      if (!btn.getAttribute('aria-label')) {
+        var label = inferIconButtonLabel_(btn);
+        if (label) btn.setAttribute('aria-label', label);
+      }
+    }
+  }
+  var chats = document.querySelectorAll('.chat-messages');
+  for (var j = 0; j < chats.length; j++) {
+    if (!chats[j].getAttribute('aria-live')) chats[j].setAttribute('aria-live', 'polite');
+    if (!chats[j].getAttribute('role')) chats[j].setAttribute('role', 'log');
+    chats[j].setAttribute('aria-relevant', 'additions');
+  }
 }
 var showToast = showToast_; // alias — both names work throughout the app
 
@@ -8391,7 +8463,7 @@ function renderHouseChat() {
     html += '</div>';
   } // end standard mode briefing
   // Chat messages
-  html += '<div class="chat-container"><div class="chat-messages" id="pb-messages" style="min-height:300px">';
+  html += '<div class="chat-container"><div class="chat-messages" id="pb-messages" role="log" aria-live="polite" aria-relevant="additions" style="min-height:300px">';
   for (var i = 0; i < history.length; i++) {
     var m = history[i];
     if (m.role === 'user') {
@@ -8434,6 +8506,7 @@ function renderHouseChat() {
   el.innerHTML = html;
   var msgs = document.getElementById('pb-messages');
   if (msgs) msgs.scrollTop = msgs.scrollHeight;
+  applyAccessibilityEnhancements_();
 }
 
 function sendHouseMessage() {
@@ -10168,6 +10241,7 @@ function skipNACStation_() {
 }
 
 function finishNACStation() {
+  if (App.nacStationEvalLoading) return;
   stopNACPttRecording_(false);
   stopHandsFree_();
   stopNACTimer();
@@ -10188,17 +10262,114 @@ function finishNACStation() {
     logPBConversation('nac_timeout', {});
   }
 
+  App.nacStationEvalLoading = true;
+  var historyForEval = App.pbHistory.slice(-80);
+  evaluateNACStationOSCE_(historyForEval).then(function(evalResult) {
+    App.nacStationEvalLoading = false;
+    App.nacStationEval = evalResult;
+    showNACStationScoreModal_(evalResult);
+  }).catch(function(err) {
+    App.nacStationEvalLoading = false;
+    console.error('NAC station evaluation failed:', err);
+    showToast_('OSCE scorecard unavailable. You can still continue.');
+    showNACStationScoreModal_(null);
+  });
+}
+
+function advanceNACStation_() {
+  App.pbCaseId = null;
+  App.pbHistory = [];
+  VitalsEngine.stop();
+  App.nacStationEval = null;
   if (App.nacRandomMode) {
-    App.pbCaseId = null; App.pbHistory = []; VitalsEngine.stop();
     pickNextRandomStation_();
   } else if (App.nacCurrentStation >= App.nacTotalStations) {
     showNACSummary();
   } else {
-    App.pbCaseId = null;
-    App.pbHistory = [];
-    VitalsEngine.stop();
     startNextNACStation();
   }
+}
+
+function evaluateNACStationOSCE_(history) {
+  var transcript = '';
+  for (var i = 0; i < history.length; i++) {
+    var m = history[i];
+    if (!m || (m.role !== 'user' && m.role !== 'assistant' && m.role !== 'results' && m.role !== 'partial')) continue;
+    var raw = typeof m.content === 'string' ? m.content : JSON.stringify(m.content || {});
+    transcript += (m.role === 'user' ? 'Student: ' : (m.role === 'assistant' ? 'Patient: ' : '[Clinical Data] ')) + raw.substring(0, 400) + '\n';
+  }
+  var prompt = [
+    'You are a strict NAC-OSCE examiner.',
+    'Evaluate this student encounter and score each domain from 0 to 3 (integer only).',
+    'Domains: History Taking, Physical Exam, Communication, Clinical Reasoning, Investigations.',
+    'Use only evidence from transcript. If missing, score low.',
+    'Return STRICT JSON with this schema and no extra text:',
+    '{"historyTaking":0,"physicalExam":0,"communication":0,"clinicalReasoning":0,"investigations":0,"summary":"max 2 short sentences"}',
+    '',
+    'Transcript:',
+    transcript || 'No meaningful interaction captured.'
+  ].join('\n');
+  return callAnthropicDirect_('', [{ role: 'user', content: prompt }]).then(function(raw) {
+    var txt = String(raw || '').trim();
+    var match = txt.match(/\{[\s\S]*\}/);
+    var parsed = match ? JSON.parse(match[0]) : JSON.parse(txt);
+    var out = {
+      historyTaking: clampEvalScore_(parsed.historyTaking),
+      physicalExam: clampEvalScore_(parsed.physicalExam),
+      communication: clampEvalScore_(parsed.communication),
+      clinicalReasoning: clampEvalScore_(parsed.clinicalReasoning),
+      investigations: clampEvalScore_(parsed.investigations),
+      summary: String(parsed.summary || '').substring(0, 240)
+    };
+    out.total = out.historyTaking + out.physicalExam + out.communication + out.clinicalReasoning + out.investigations;
+    return out;
+  });
+}
+
+function clampEvalScore_(v) {
+  var n = parseInt(v, 10);
+  if (isNaN(n)) return 0;
+  return Math.max(0, Math.min(3, n));
+}
+
+function showNACStationScoreModal_(evalResult) {
+  var existing = document.getElementById('nac-station-score-modal');
+  if (existing) existing.remove();
+  var isLast = (!App.nacRandomMode && App.nacCurrentStation >= App.nacTotalStations);
+  var nextLabel = isLast ? 'View Final Results' : 'Next Station';
+  var rows = [
+    { key: 'historyTaking', label: 'History Taking', icon: '&#x1F4DD;' },
+    { key: 'physicalExam', label: 'Physical Exam', icon: '&#x1FA7A;' },
+    { key: 'communication', label: 'Communication', icon: '&#x1F4AC;' },
+    { key: 'clinicalReasoning', label: 'Clinical Reasoning', icon: '&#x1F9E0;' },
+    { key: 'investigations', label: 'Investigations', icon: '&#x1F52C;' }
+  ];
+  var h = '';
+  h += '<div id="nac-station-score-modal" role="dialog" aria-modal="true" aria-labelledby="nac-station-score-title" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.65);padding:16px">';
+  h += '<div style="background:var(--card);color:var(--text);border-radius:18px;max-width:520px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,0.3)">';
+  h += '<h3 id="nac-station-score-title" style="margin:0 0 8px;font-size:22px">NAC OSCE Station Scorecard</h3>';
+  h += '<p style="margin:0 0 16px;color:var(--text-light);font-size:14px">Station ' + App.nacCurrentStation + ' complete.</p>';
+  if (evalResult) {
+    h += '<div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;background:var(--bg);margin-bottom:12px">';
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      var v = evalResult[r.key] || 0;
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:' + (i < rows.length - 1 ? '1px solid var(--border)' : 'none') + '">';
+      h += '<span style="font-size:14px">' + r.icon + ' ' + r.label + '</span><strong style="font-size:14px">' + v + '/3</strong></div>';
+    }
+    h += '</div>';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><span style="font-size:13px;color:var(--text-light)">Total</span><strong style="font-size:18px">' + evalResult.total + '/15</strong></div>';
+    if (evalResult.summary) h += '<div style="font-size:13px;color:var(--text-light);margin-bottom:14px;line-height:1.5">' + escapeHtml(evalResult.summary) + '</div>';
+  } else {
+    h += '<div style="font-size:13px;color:var(--text-light);margin-bottom:14px">Evaluation was unavailable for this station.</div>';
+  }
+  h += '<button id="nac-score-next-btn" class="btn btn-success" style="width:100%" onclick="document.getElementById(\'nac-station-score-modal\').remove();advanceNACStation_()">' + nextLabel + '</button>';
+  h += '</div></div>';
+  document.body.insertAdjacentHTML('beforeend', h);
+  setTimeout(function() {
+    var nextBtn = document.getElementById('nac-score-next-btn');
+    if (nextBtn) nextBtn.focus();
+  }, 0);
 }
 
 function pickNextRandomStation_() {
@@ -10473,6 +10644,7 @@ function renderPBChat() {
   }
   var msgs = document.getElementById('pb-messages');
   if (msgs) msgs.scrollTop = msgs.scrollHeight;
+  applyAccessibilityEnhancements_();
   if (App.pbDiagnosing) { var dinput = document.getElementById('pb-diag-input'); if (dinput) dinput.focus(); }
   // Start live ECG animation
   startPBMonitorAnimation();
@@ -11216,7 +11388,7 @@ function renderPBChatInner() {
 
   // Diagnosis results now shown inline in chat history
 
-  html += '<div class="chat-container"><div class="chat-messages" id="pb-messages">';
+  html += '<div class="chat-container"><div class="chat-messages" id="pb-messages" role="log" aria-live="polite" aria-relevant="additions">';
   for (var i = 0; i < App.pbHistory.length; i++) {
     var m = App.pbHistory[i];
     if (m.role === 'debrief') {
