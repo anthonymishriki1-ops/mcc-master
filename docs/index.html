@@ -2990,7 +2990,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '6.5';
+var APP_VERSION = '6.6';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3002,6 +3002,11 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '6.6', date: 'Mar 28 2026', label: 'OSCE scorecard + accessibility + all 84 stations', items: [
+    'OSCE scorecard after each station — AI evaluates you on 5 domains (0-3 each)',
+    'All 84 stations across 7 practice tests now have full patient data',
+    'WCAG 2.1 AA accessibility: focus styles, aria-labels, touch targets, contrast fixes',
+  ]},
   { version: '6.5', date: 'Mar 28 2026', label: 'Lab ordering fixed — only triggers on YOUR orders', items: [
     'Labs only trigger when YOU order them — patient mentioning "CT" no longer auto-generates results',
     'Requires action verb + test name: "order CBC" works, "I had a CT" doesn\'t',
