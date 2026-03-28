@@ -9368,6 +9368,19 @@ function callTTSDirect_(text, voice, speed) {
   });
 }
 
+// ── NAC Text Input: type a message instead of speaking ──
+function sendNACTextMessage_() {
+  var input = document.getElementById('nac-text-input');
+  if (!input) return;
+  var msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  App.nacDoctorSpoke = true;
+  App._nacLastActivity = Date.now();
+  App._nacSilenceCount = 0;
+  _handleSttTranscript(msg);
+}
+
 // ── NAC Direct Mode: send message without GAS ──
 function sendNACMessageDirect_(userMessage) {
   if (!App.nacActive || !App._nacSystemPrompt) return;
@@ -10858,6 +10871,11 @@ function renderNACStationUI_() {
       html += '</div>';
       html += '<div style="font-size:11px;color:var(--text-light);text-align:center">Deepgram transcribes live while recording &bull; say <strong>"order CBC"</strong> &bull; tap Diagnose when ready</div>';
     }
+    // Text input — always available as fallback
+    html += '<div style="display:flex;gap:8px;width:100%;max-width:600px;margin-top:4px">';
+    html += '<input type="text" id="nac-text-input" class="search-bar" placeholder="Type a message..." style="flex:1;font-size:14px;padding:10px 14px;border-radius:20px" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendNACTextMessage_()}">';
+    html += '<button class="btn btn-primary" onclick="sendNACTextMessage_()" style="border-radius:20px;padding:8px 16px;font-size:14px">Send</button>';
+    html += '</div>';
     // Dev-only TTS controls (Tony mode)
     if (DEV_USERS.indexOf((App.guestId || '').replace('profile_', '')) !== -1) {
       var curModel = localStorage.getItem('mcc_tts_model') || 'tts-1';
