@@ -2962,7 +2962,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '6.4';
+var APP_VERSION = '6.5';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -2974,6 +2974,11 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '6.5', date: 'Mar 28 2026', label: 'Lab ordering fixed — only triggers on YOUR orders', items: [
+    'Labs only trigger when YOU order them — patient mentioning "CT" no longer auto-generates results',
+    'Requires action verb + test name: "order CBC" works, "I had a CT" doesn\'t',
+    'Added DOA screen, drug screen, tox screen, UDS to recognized tests',
+  ]},
   { version: '6.4', date: 'Mar 28 2026', label: 'Patients have real personality now', items: [
     'Each patient gets a unique personality based on age/background — sarcastic, anxious, stoic, chatty, etc.',
     'Patients crack dry jokes, have opinions, drop personal details',
@@ -9348,10 +9353,15 @@ function syncNACSidebarActive_() {
 }
 
 function maybeTriggerNacLabResults_(doctorMessage, patientResponse) {
-  var orderRegex = /order|ordering|run|send|get|check|draw|request|blood\s*work|labs?\b|cbc|bmp|cmp|troponin|ecg|ekg|x-?ray|ct\b|mri|ultrasound|urinalysis|ua\b|culture|abg|coags?|inr|ptt|lipase|amylase|lfts?|creatinine|electrolytes|tsh|hcg|d-?dimer|bnp|lactate|hgb|hemoglobin|wbc|platelets|ferritin|b12|folate|crp|esr|blood\s*gas|urine|imaging|scan|chest|abdo/i;
-  var responseRegex = orderRegex;
-  if (!orderRegex.test(doctorMessage || '') && !responseRegex.test(patientResponse || '')) return;
-  generateLabResults_(doctorMessage || patientResponse).then(function(labPayload) {
+  // ONLY trigger on DOCTOR's message — never on patient's response (patient mentioning "CT" doesn't mean ordering one)
+  if (!doctorMessage) return;
+  // Require an ACTION VERB + test name pattern — "order CBC" yes, "I had a CT" no
+  var actionVerb = /\b(order|ordering|run|send|draw|request|do|perform|get\s+(?:a|an|the|me|some)?)\b/i;
+  var testName = /\b(blood\s*work|labs?\b|cbc|bmp|cmp|troponin|ecg|ekg|x-?ray|ct\s*scan|ct\b|mri|ultrasound|urinalysis|ua\b|culture|abg|coags?|inr|ptt|lipase|amylase|lfts?|creatinine|electrolytes|tsh|hcg|d-?dimer|bnp|lactate|hgb|hemoglobin|wbc|platelets|ferritin|b12|folate|crp|esr|blood\s*gas|urine|imaging|chest\s*x-?ray|abdominal|doa|drug\s*screen|tox\s*screen|uds)\b/i;
+  // Need BOTH an action verb AND a test name, OR just "order X" / "I'd like X"
+  var wantPattern = /\b(i'?d?\s*like|i\s*want|let'?s|can\s*we|i'?m\s*(?:going\s*to|gonna)|please)\b/i;
+  if (!(actionVerb.test(doctorMessage) && testName.test(doctorMessage)) && !(wantPattern.test(doctorMessage) && testName.test(doctorMessage))) return;
+  generateLabResults_(doctorMessage).then(function(labPayload) {
     if (!labPayload || !labPayload.testName || !Array.isArray(labPayload.values) || labPayload.values.length === 0) return;
     App.nacLabResults = App.nacLabResults || [];
     App.nacLabResults.push(labPayload);
