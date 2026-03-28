@@ -2960,12 +2960,13 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '4.8';
+var APP_VERSION = '4.9';
 var APP_CHANGELOG = [
-  { version: '4.8', date: 'Mar 28 2026', label: 'Text input fix + bigger convo', items: [
-    'Fixed text input — typing and pressing Send now actually works',
-    'Conversation box fills available screen height on desktop',
-    'Text input moved inside conversation card',
+  { version: '4.9', date: 'Mar 28 2026', label: 'Voice commands + orders fix', items: [
+    'Voice diagnosis works: "I\'m diagnosing you with X" now triggers properly',
+    'Orders work in NAC: "order CBC", "I\'m ordering bloodwork", etc.',
+    'Way more natural phrasing accepted for orders and diagnosis',
+    'Text input fix — Send button actually sends now',
   ]},
   { version: '4.6', date: 'Mar 28 2026', label: 'Text input + polish', items: [
     'Text chat box in NAC stations',
@@ -6818,13 +6819,15 @@ function handleVoiceCommand_(text) {
   var t = text.trim();
   var tl = t.toLowerCase();
 
-  // ORDER / LABS / IMAGING — "order CBC", "I'm ordering a chest X-ray"
-  var orderM = tl.match(/^(?:i'?m ordering|i am ordering|ordering|order(?:ing)?)\s+(.+)/);
+  // ORDER / LABS / IMAGING — generous matching for natural speech
+  var orderM = tl.match(/(?:i'?m (?:gonna |going to )?order(?:ing)?|i am ordering|order(?:ing)?|can we (?:get|order|run)|let'?s (?:get|order|run|do)|run a|send off|get me|i'?d like to order|i want to order|we(?:'ll| will) need|i need|i'?m gonna order)\s+(?:a |an |the |some )?(.+)/);
   if (orderM) {
-    var item = orderM[1].replace(/^(a|an|the)\s+/i, '').trim();
-    showToast('🔊 Ordering: ' + item);
-    insertPBAction(item);
-    return true;
+    var item = orderM[1].replace(/^(a|an|the|some)\s+/i, '').replace(/\s*(please|thanks|thank you|for (?:me|the patient)|stat|urgent|asap)\.?$/i, '').trim();
+    if (item && item.length > 1) {
+      showToast('Ordering: ' + item);
+      insertPBAction(item);
+      return true;
+    }
   }
 
   // PRESCRIBE / MEDS — "prescribe amoxicillin 500mg", "I'm prescribing..."
@@ -6854,8 +6857,8 @@ function handleVoiceCommand_(text) {
     return true;
   }
 
-  // DIAGNOSE — "my diagnosis is X", "I'm diagnosing X", "the diagnosis is X"
-  var dxM = tl.match(/^(?:i'?m diagnosing|i am diagnosing|my diagnosis is|the diagnosis is|i think it(?:'s| is))\s+(.+)/);
+  // DIAGNOSE — "my diagnosis is X", "I'm diagnosing you with X", "the diagnosis is X", "diagnose X"
+  var dxM = tl.match(/^(?:i'?m diagnosing(?: (?:you|this|him|her|them|the patient))?(?: with)?|i am diagnosing(?: (?:you|this|him|her|them|the patient))?(?: with)?|my diagnosis is|the diagnosis is|i think (?:it(?:'s| is)|this is|the diagnosis is)|i(?:'m| am) going with|diagnos(?:e|is)(?::)?)\s+(.+)/);
   if (dxM) {
     var dx = dxM[1].trim();
     showToast('🔊 Diagnosing: ' + dx);
@@ -8796,7 +8799,14 @@ function insertPBAction(text) {
   if (panel) panel.style.display = 'none';
   var allTabs = document.querySelectorAll('.pb-action-tab');
   for (var i = 0; i < allTabs.length; i++) allTabs[i].classList.remove('active');
-  // Auto-send
+  // NAC mode: send directly through transcript pipeline (no #pb-input in NAC UI)
+  if (App.nacActive) {
+    App.nacDoctorSpoke = true;
+    App._nacLastActivity = Date.now();
+    processPBTranscriptText_(text);
+    return;
+  }
+  // Auto-send (standard PatientBot mode)
   var input = document.getElementById('pb-input');
   if (input) { input.value = text; }
   sendPBMessage();
