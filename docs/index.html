@@ -1684,7 +1684,8 @@ body.kb-open #bottom-nav { display: none !important; }
     align-items: start;
   }
   #nac-convo-box {
-    max-height: 50vh !important;
+    max-height: calc(100vh - 340px) !important;
+    min-height: 300px;
   }
 
   .flashcard {
@@ -2959,8 +2960,13 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '4.6';
+var APP_VERSION = '4.7';
 var APP_CHANGELOG = [
+  { version: '4.7', date: 'Mar 28 2026', label: 'Bigger conversation box', items: [
+    'Conversation box fills available screen height on desktop',
+    'Text input moved inside conversation card',
+    'Less wasted space on voice controls',
+  ]},
   { version: '4.6', date: 'Mar 28 2026', label: 'Text input + polish', items: [
     'Text chat box in NAC stations',
     'Cleaned up changelog',
@@ -10656,7 +10662,13 @@ function renderNACStationUI_() {
       html += '<div style="background:' + bg + ';color:' + color + ';padding:8px 12px;border-radius:12px;font-size:13px;line-height:1.4">' + escapeHtml(typeof cm.content === 'string' ? cm.content : '') + '</div>';
       html += '</div>';
     }
-    html += '</div></div>';
+    html += '</div>';
+    // Text input inside the conversation card
+    html += '<div style="display:flex;gap:8px;margin-top:10px">';
+    html += '<input type="text" id="nac-text-input" class="search-bar" placeholder="Type a message..." style="flex:1;font-size:13px;padding:8px 12px;border-radius:20px" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendNACTextMessage_()}">';
+    html += '<button class="btn btn-primary" onclick="sendNACTextMessage_()" style="border-radius:20px;padding:6px 14px;font-size:13px">Send</button>';
+    html += '</div>';
+    html += '</div>';
     html += '</div>'; // end nac-overview-right
     html += '</div>'; // end nac-overview-grid
 
@@ -10818,11 +10830,6 @@ function renderNACStationUI_() {
       html += '</div>';
       html += '<div style="font-size:11px;color:var(--text-light);text-align:center">Deepgram transcribes live while recording &bull; say <strong>"order CBC"</strong> &bull; tap Diagnose when ready</div>';
     }
-    // Text input — always available as fallback
-    html += '<div style="display:flex;gap:8px;width:100%;max-width:600px;margin-top:4px">';
-    html += '<input type="text" id="nac-text-input" class="search-bar" placeholder="Type a message..." style="flex:1;font-size:14px;padding:10px 14px;border-radius:20px" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendNACTextMessage_()}">';
-    html += '<button class="btn btn-primary" onclick="sendNACTextMessage_()" style="border-radius:20px;padding:8px 16px;font-size:14px">Send</button>';
-    html += '</div>';
     // Dev-only TTS controls (Tony mode)
     if (DEV_USERS.indexOf((App.guestId || '').replace('profile_', '')) !== -1) {
       var curModel = localStorage.getItem('mcc_tts_model') || 'tts-1';
