@@ -2962,8 +2962,11 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '5.6';
+var APP_VERSION = '5.7';
 var APP_CHANGELOG = [
+  { version: '5.7', date: 'Mar 28 2026', label: 'Fix station loading (was stuck on Loading...)', items: [
+    'Fixed station stuck on "Loading station..." — cleanup code was killing the reading period before it started',
+  ]},
   { version: '5.6', date: 'Mar 28 2026', label: 'Patient stays in character no matter what', items: [
     'Patient never breaks character — reacts with fear, anger, or calls for security instead of AI refusal',
     'All 13 station bugs fixed (state leaks, timer leaks, race conditions)',
@@ -9750,12 +9753,7 @@ function startNextNACStation() {
     App.pbSpecialty = station.specialty;
   }
 
-  // Show reading period immediately — door prompt uses embedded station data
-  App.nacCaseReady = false;
-  App.nacCaseError = null;
-  showNACReadingPeriod_(station);
-
-  // Reset ALL state for clean station transition
+  // Reset ALL state for clean station transition (MUST happen before showNACReadingPeriod_)
   App.pbDiagnosing = false;
   App.pbDiagAttempts = 0;
   App.pbDiagResolved = false;
@@ -9785,6 +9783,11 @@ function startNextNACStation() {
   stopHandsFree_();
   if (_nacPttSession && _nacPttSession.socket) { try { _nacPttSession.socket.close(); } catch(e) {} }
   if (_dgStream) { try { _dgStream.getTracks().forEach(function(t) { t.stop(); }); } catch(e) {} _dgStream = null; }
+
+  // Show reading period — AFTER cleanup so the new interval doesn't get killed
+  App.nacCaseReady = false;
+  App.nacCaseError = null;
+  showNACReadingPeriod_(station);
 
   // DIRECT MODE: if we have pregen data + API keys, skip server entirely
   if (station.nm && localStorage.getItem('mcc_anthropic_key')) {
