@@ -2961,103 +2961,44 @@ var POINTS = {
 
 var APP_VERSION = '4.5';
 var APP_CHANGELOG = [
-  { version: '4.5', date: 'Mar 28 2026', label: 'NAC-OSCE bug fixes: random case, AI first reply, labs trigger, UI polish', items: [
-    'Fixed Random Case selection so Test 0 no longer falls back to Test 1',
-    'Removed scripted first patient reply shortcut — first patient response is now AI-generated from the doctor\'s actual opening',
-    'Fixed NAC sidebar highlighting so NAC-OSCE stays active in the left nav during stations',
-    'Added Skip button to NAC text mode controls',
-    'Added direct-mode lab generation for bloodwork orders (CBC/BMP/CMP/troponin/labs) and automatic Labs tab population',
-    'Fixed NAC header in Random Case mode to show "Random Case" instead of blank test number',
+  { version: '4.5', date: 'Mar 28 2026', label: 'NAC bug fixes + text input', items: [
+    'Text chat box — type messages instead of speaking',
+    'Random case, skip button, lab ordering fixes',
+    'Patient no longer speaks first',
+    'GAS backend model name fixed',
   ]},
-  { version: '4.4', date: 'Mar 27 2026', label: 'NAC desktop: two-column layout + conversation auto-scroll', items: [
-    'Desktop: patient info on left, conversation on right — clinical workstation layout',
-    'Conversation box auto-scrolls to latest message',
-    'Desktop conversation box expands to 50vh (was 200px)',
-    'Conversation always visible, even with no messages yet',
+  { version: '4.4', date: 'Mar 27 2026', label: 'Desktop layout', items: [
+    'Two-column layout on desktop (patient info + conversation)',
+    'Conversation auto-scrolls',
+    'Context-aware idle nudges',
   ]},
-  { version: '4.3', date: 'Mar 27 2026', label: 'BUG FIX: Anthropic model name corrected', items: [
-    'BUG FIX: Anthropic model was claude-sonnet-4-20250514 (invalid) — corrected to claude-sonnet-4-6',
-    'This was causing all AI patient responses to fail, breaking voice mode entirely',
+  { version: '4.0', date: 'Mar 26 2026', label: 'NAC-OSCE voice mode', items: [
+    'Deepgram real-time voice input (cross-browser)',
+    'Push-to-talk + hands-free modes',
+    'Direct Anthropic API calls (faster)',
+    'Random Case mode, Skip button',
+    'MCCQE Part I + NAC-OSCE under Exam Prep',
   ]},
-  { version: '4.2', date: 'Mar 27 2026', label: 'Random Case: infinite loop mode', items: [
-    'Random Case now keeps going — each station auto-picks a new random case instead of ending',
-    'BUG FIX: auto-merge was not triggering GitHub Pages deploy — fixed, future PRs deploy automatically',
+  { version: '3.7', date: 'Mar 25 2026', label: 'NAC-OSCE launch', items: [
+    '84 stations across 7 practice tests',
+    'Clinical workstation UI with tabs',
+    'OSCE scorecard',
+    'Live vitals engine',
   ]},
-  { version: '4.1', date: 'Mar 26 2026', label: 'NAC UX: Random Case, Skip button, sidebar reorganization', items: [
-    'Random Case button — pick one random station from all 84 cases',
-    'Skip button in station UI — jump to next case mid-station',
-    'MCCQE Part I and NAC-OSCE grouped under EXAM PREP in sidebar',
-    'Shorter patient responses + interruption support',
+  { version: '3.6', date: 'Mar 23 2026', label: 'Translations + glossary', items: [
+    'Auto-translate toggle for medical terms',
+    '500+ glossary terms',
+    'Audio playback for terms',
   ]},
-  { version: '4.0', date: 'Mar 26 2026', label: 'NAC-OSCE: Deepgram STT, direct Anthropic calls, doctor-speaks-first flow', items: [
-    'Deepgram WebSocket STT — real-time voice input, works cross-browser',
-    'Direct browser→Anthropic API calls — no GAS middleman, faster responses',
-    'Doctor speaks first — patient waits for you to introduce yourself',
-    'BP vitals display fixed from pregen data',
-    'Door prompt redesigned — no countdown timer, proper clinical info',
-    'API keys removed from settings page — managed via Dev Panel',
+  { version: '3.0', date: 'Mar 23 2026', label: 'PatientBot + Dr. House', items: [
+    'Real-time vitals with drug effects',
+    'Dr. Data post-case review',
+    'Dr. House reverse role-play mode',
   ]},
-  { version: '3.9', date: 'Mar 25 2026', label: 'NAC-OSCE fix: station rendering, live vitals, TTS overlap', items: [
-    'Fixed NAC station showing "undefined" instead of clinical workstation UI',
-    'VitalsEngine now starts properly in NAC mode — live updating vitals',
-    'Fixed overlapping TTS audio when entering stations'
-  ]},
-  { version: '3.8', date: 'Mar 25 2026', label: 'NAC-OSCE dedicated tutorial, clinical workstation UI', items: [
-    'NAC-OSCE has its own first-time tutorial — no more PatientBot walkthrough',
-    'Clinical workstation UI: vitals, results, doorway assessment — no chatbox',
-    'Version bump to 3.8'
-  ]},
-  { version: '3.7', date: 'Mar 25 2026', label: 'NAC-OSCE: 7 practice tests, hands-free voice mode, scorecard popup', items: [
-    'NAC-OSCE redesigned: 7 fixed practice tests (12 stations each, 84 total)',
-    'Hands-free voice mode auto-enabled for NAC stations',
-    'OSCE scorecard now shows as popup modal at eye level',
-    'Cache-busting headers added for reliable deploys'
-  ]},
-  { version: '3.6', date: 'Mar 23 2026', label: 'Auto-translate, 500+ glossary terms, TTS fix, Farsi flag, Refresh button', items: [
-    'Auto-translate toggle: one tap shows all term translations inline (localStorage persisted)',
-    'Glossary expanded to 500+ terms across all specialties',
-    'TTS deep fix: error handling, voice loading, onerror callback, unavailable toast',
-    'Farsi: replaced Islamic Republic flag with lion emoji across all UI',
-    'Refresh button: reload current view data without full page reload',
-    'Sticky bar padding: content no longer hidden behind fixed bottom bars',
-    'Persona firewall: DR_DATA_PERSONA_LOCK injected in all Dr. Data API calls',
-    'Dr. House: ironclad never-break-character rules with specific in-character responses',
-    'Language picker: cleaner modal with 4 options, proper button styles',
-  ]},
-  { version: '3.0', date: 'Mar 23 2026', label: 'PatientBot Overhaul: VitalsEngine, Dr. Data Review, Dr. House Mode', items: [
-    'VitalsEngine: real-time fluctuating vitals (HR ±3 bpm, SpO2 ±1%) — no monitor by default',
-    'Attach Monitor: vitals appear only after clicking + Attach Monitor in the Exam palette',
-    'BP cycles like a real NIBP cuff: Measuring... → reading every 20s',
-    '40+ drugs/procedures mapped to vital sign effects (epinephrine, morphine, fluids, O2, intubation, chest tube, etc.)',
-    'Dr. Data Post-Case Review: automatic case analysis after diagnosis, follow-up Q&A',
-    'Dr. House Mode: reverse role-play — you are the patient, House is skeptical/sarcastic doctor',
-    '25 conditions from common (UTI, pneumonia) to exotic (Behçet, kala-azar, Pott\'s spine, falciparum malaria)',
-    'House difficulty levels: Easy = common conditions, Expert = tropical/rare + gaslighting',
-    'Speech buttons repositioned next to English term (not translation); TTS resume fix',
-    'Dashboard auto-navigates on login (navigateTo fix)',
-    'Tutorial stripped to 2 lean sentences. No marketing.',
-  ]},
-  { version: '2.9', date: 'Mar 23 2026', label: 'Key Topics MCQ + Login Preloading + Tutorial Rewrite', items: [
-    'Key Topics "Quiz Me" now generates real A/B/C/D multiple-choice questions with correct/incorrect feedback',
-    'Login screen shows loading spinner while data preloads — no more blank flash after tapping Enter',
-    'Tutorial rewritten to focus on the new Pronunciation & Translation feature (5 focused steps)',
-    'Tutorial auto-shows once per user after login (mcc_tutorial_v3_ key)',
-    'Sidebar Copy Link button — share MCC Master URL with one tap',
-    'Dead code cleanup: removed dismissGuide() function',
-  ]},
-  { version: '2.8', date: 'Mar 23 2026', label: 'Flashcard UI + Med Term Overhaul', items: [
-    'FLASHCARD: Portrait mode — cards now fill ~52% of viewport height instead of a tiny fixed 220px box',
-    'FLASHCARD: Landscape phone support — cards adapt to rotated orientation with compact layout',
-    'FLASHCARD: Tapping a medical term no longer accidentally flips the card (stopPropagation guard added)',
-    'MED TERMS: Replaced floating hover panel with persistent INLINE pill — translation and 🔊/🐌 buttons appear right next to the word, never disappear',
-    'MED TERMS: Blue term text is now white on the purple card front so it\'s legible',
-    'MED TERMS: First-time tap hint banner — "Tap blue underlined words for pronunciation & translation" (dismisses after first use)',
-    'MED TERMS: Glossary expanded from 50 → 115+ terms covering cardiology, neuro, GI, hematology, endo, rheum, obs, onco, pharm — focus on pronunciation-tricky words for FMGs',
-  ]},
-  { version: '2.7', date: 'Mar 23 2026', label: 'PatientBot OSCE Scorecard Bug Fix', items: [
-    'BUG FIX: "substring is not a function" crash after diagnosis — getPBTranscript() was calling .substring() on object-typed message content (diagnosis_result, debrief, partial roles store objects, not strings)',
-    'BUG FIX: OSCE scorecard spinner would freeze forever if generateCaseDebrief failed — catch handler now clears the spinner and shows a Retry button instead of silently hanging',
-    'BUG FIX: scorecard auto-load would retry infinitely on failure — now blocked by pbScorecardError flag until user clicks Retry',
+  { version: '2.8', date: 'Mar 23 2026', label: 'Flashcards + med terms', items: [
+    'Better flashcard sizing (portrait + landscape)',
+    'Inline term translations with audio',
+    'Key Topics quiz mode',
   ]},
   { version: '2.6', date: 'Mar 23 2026', label: 'Med Term Click Panel + Pronunciation', items: [
     'TRANSLATION: Clicking a highlighted medical term now opens a persistent panel — no more blink/hover disappearing',
