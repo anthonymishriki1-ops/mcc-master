@@ -1319,6 +1319,17 @@ body {
 .pb-diag-modal { background: var(--card); border-radius: 16px; padding: 28px; max-width: 450px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
 .pb-diag-modal h3 { margin: 0 0 4px; }
 .pb-diag-modal .search-bar { width: 100%; margin: 0; box-sizing: border-box; }
+.nac-voice-mode-toggle { display:flex; gap:8px; background:var(--bg); border:1px solid var(--border); border-radius:999px; padding:4px; }
+.nac-voice-mode-btn { border:none; border-radius:999px; background:transparent; color:var(--text-light); font-size:12px; font-weight:700; padding:7px 14px; cursor:pointer; transition:all 0.15s; }
+.nac-voice-mode-btn.active { background:var(--primary); color:#fff; box-shadow:0 2px 8px rgba(26,35,126,0.22); }
+.nac-ptt-button { width:90px; height:90px; border-radius:50%; border:none; cursor:pointer; background:linear-gradient(135deg,#1a237e,#3949ab); color:#fff; font-size:38px; font-weight:800; box-shadow:0 12px 28px rgba(26,35,126,0.35); transition:transform 0.15s, box-shadow 0.15s, background 0.15s; }
+.nac-ptt-button:hover { transform:translateY(-1px); box-shadow:0 16px 30px rgba(26,35,126,0.3); }
+.nac-ptt-button.recording { background:linear-gradient(135deg,#c62828,#ef5350); animation:pulse 1.2s infinite; }
+.nac-onboarding-overlay { position:fixed; inset:0; z-index:9999; background:rgba(2,6,23,0.7); backdrop-filter:blur(5px); display:flex; align-items:center; justify-content:center; padding:20px; }
+.nac-onboarding-modal { width:min(620px,100%); background:var(--card); border-radius:20px; border:1px solid var(--border); box-shadow:0 24px 70px rgba(0,0,0,0.35); padding:24px; }
+.nac-onboarding-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px; }
+.nac-onboarding-chip { border:1px solid var(--border); background:var(--bg); border-radius:12px; padding:12px; font-size:13px; color:var(--text); line-height:1.45; }
+[data-theme="dark"] .nac-onboarding-overlay { background:rgba(0,0,0,0.8); }
 
 /* --- Key Topics --- */
 .kt-collapsed .kt-section-body { display: none; }
@@ -2926,7 +2937,9 @@ var App = {
   nacTimerMinutes: 11,
   nacTimerSeconds: 0,
   nacTimerInterval: null,
-  nacDifficulty: 'medium'
+  nacDifficulty: 'medium',
+  nacVoiceMode: 'push-to-talk',
+  nacPTTRecording: false
 };
 
 // Point values
@@ -6052,6 +6065,156 @@ function stopHandsFree_() {
   showToast_('Hands-free mode OFF');
 }
 
+var _nacPttSession = null;
+
+function getNACVoiceMode_() {
+  var mode = localStorage.getItem('mcc_nac_voice_mode') || 'push-to-talk';
+  return mode === 'hands-free' ? 'hands-free' : 'push-to-talk';
+}
+
+function setNACVoiceMode_(mode, quiet) {
+  var nextMode = mode === 'hands-free' ? 'hands-free' : 'push-to-talk';
+  var wasHandsFree = App.pbHandsFree;
+  localStorage.setItem('mcc_nac_voice_mode', nextMode);
+  App.nacVoiceMode = nextMode;
+  App.pbHandsFree = nextMode === 'hands-free';
+
+  if (nextMode === 'hands-free') {
+    stopNACPttRecording_(false);
+    if (App.nacActive && !App.pbDiagResolved) startHandsFreeListening_();
+  } else {
+    if (wasHandsFree) stopHandsFree_();
+    _sttShouldRun = false;
+    _cleanupStt();
+  }
+  if (App.nacActive) renderPBChat();
+  if (!quiet) showToast_('Voice mode: ' + (nextMode === 'hands-free' ? 'Hands-Free' : 'Push-to-Talk'));
+}
+
+function _cleanupNACPtt_() {
+  if (_nacPttSession && _nacPttSession.keepAlive) clearInterval(_nacPttSession.keepAlive);
+  if (_nacPttSession && _nacPttSession.processor) {
+    try { _nacPttSession.processor.disconnect(); } catch (e) {}
+  }
+  if (_nacPttSession && _nacPttSession.source) {
+    try { _nacPttSession.source.disconnect(); } catch (e) {}
+  }
+  if (_nacPttSession && _nacPttSession.socket) {
+    try { _nacPttSession.socket.close(); } catch (e) {}
+  }
+  _nacPttSession = null;
+}
+
+function startNACPttRecording_() {
+  if (!App.nacActive || App.pbDiagResolved || App.nacPTTRecording) return;
+  if (App.pbHandsFree) stopHandsFree_();
+  App.nacVoiceMode = 'push-to-talk';
+  App.nacPTTRecording = true;
+  App.pbMicActive = true;
+  App.pbInterimTranscript = '';
+  renderPBChat();
+
+  var dgKey = localStorage.getItem('mcc_deepgram_key');
+  if (!dgKey) {
+    App.nacPTTRecording = false;
+    App.pbMicActive = false;
+    renderPBChat();
+    showToast_('Add Deepgram key in NAC setup to use push-to-talk voice');
+    return;
+  }
+  var session = { finals: [], interim: '', socket: null, source: null, processor: null, keepAlive: null };
+  _nacPttSession = session;
+
+  var getMic = _dgStream
+    ? Promise.resolve(_dgStream)
+    : navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 } });
+
+  getMic.then(function(stream) {
+    if (!App.nacPTTRecording || _nacPttSession !== session) return;
+    _dgStream = stream;
+    if (!_dgAudioCtx || _dgAudioCtx.state === 'closed') _dgAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    var ctx = _dgAudioCtx;
+    var ready = (ctx.state === 'suspended') ? ctx.resume() : Promise.resolve();
+    return ready.then(function() {
+      if (!App.nacPTTRecording || _nacPttSession !== session) return;
+      var url = 'wss://api.deepgram.com/v1/listen?model=nova-2-medical&language=en&encoding=linear16&sample_rate=' + ctx.sampleRate + '&channels=1&smart_format=true&interim_results=true&utterance_end_ms=1200&vad_events=true';
+      var ws = new WebSocket(url, ['token', dgKey]);
+      session.socket = ws;
+      session.keepAlive = setInterval(function() {
+        if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'KeepAlive' }));
+      }, 8000);
+      ws.addEventListener('open', function() {
+        if (!App.nacPTTRecording || _nacPttSession !== session) return;
+        var source = ctx.createMediaStreamSource(stream);
+        var processor = ctx.createScriptProcessor(4096, 1, 1);
+        session.source = source;
+        session.processor = processor;
+        processor.onaudioprocess = function(e) {
+          if (!session.socket || session.socket.readyState !== 1 || !App.nacPTTRecording) return;
+          var float32 = e.inputBuffer.getChannelData(0);
+          var int16 = new Int16Array(float32.length);
+          for (var i = 0; i < float32.length; i++) {
+            var s = Math.max(-1, Math.min(1, float32[i]));
+            int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          }
+          session.socket.send(int16.buffer);
+        };
+        source.connect(processor);
+        processor.connect(ctx.destination);
+      });
+      ws.addEventListener('message', function(evt) {
+        if (_nacPttSession !== session) return;
+        try {
+          var data = JSON.parse(evt.data);
+          if (data.type === 'Results' && data.channel && data.channel.alternatives && data.channel.alternatives[0]) {
+            var transcript = (data.channel.alternatives[0].transcript || '').trim();
+            if (data.is_final && transcript) {
+              session.finals.push(transcript);
+              session.interim = '';
+            } else {
+              session.interim = transcript;
+            }
+            _setInterimCaption_(session.interim || session.finals.join(' '));
+          }
+        } catch (e) {}
+      });
+      ws.addEventListener('error', function() {
+        if (_nacPttSession !== session) return;
+        showToast_('Push-to-talk audio error. Try again.');
+      });
+    });
+  }).catch(function() {
+    App.nacPTTRecording = false;
+    App.pbMicActive = false;
+    _cleanupNACPtt_();
+    renderPBChat();
+    showToast_('Microphone access denied');
+  });
+}
+
+function stopNACPttRecording_(shouldSend) {
+  if (!App.nacPTTRecording && !_nacPttSession) return;
+  var session = _nacPttSession;
+  App.nacPTTRecording = false;
+  App.pbMicActive = false;
+  _cleanupNACPtt_();
+  var transcript = '';
+  if (session) {
+    var parts = session.finals.slice();
+    if (session.interim) parts.push(session.interim);
+    transcript = parts.join(' ').replace(/\s+/g, ' ').trim();
+  }
+  _setInterimCaption_('');
+  renderPBChat();
+  if (shouldSend && transcript) processPBTranscriptText_(transcript);
+}
+
+function toggleNACPtt_() {
+  if (!App.nacActive || App.pbDiagResolved) return;
+  if (App.nacPTTRecording) stopNACPttRecording_(true);
+  else startNACPttRecording_();
+}
+
 var _sttShouldRun = false;
 var _sttRestarting = false;
 var _sttRetryMs = 250;
@@ -6094,6 +6257,8 @@ function _setInterimCaption_(text) {
   App.pbInterimTranscript = text || '';
   var cap = document.getElementById('hf-interim-caption');
   if (cap) cap.textContent = App.pbInterimTranscript;
+  var pttCap = document.getElementById('nac-ptt-caption');
+  if (pttCap) pttCap.textContent = App.pbInterimTranscript || (App.nacPTTRecording ? 'Recording...' : 'Click mic to speak, click again to send');
 }
 
 function _setHFIndicatorState_(label, bg, color) {
@@ -6107,9 +6272,7 @@ function _setHFIndicatorState_(label, bg, color) {
 }
 
 // ── Common transcript handler — called by both Deepgram and Web Speech ──
-function _handleSttTranscript(text) {
-  if (!_sttShouldRun) return;
-  _sttRetryMs = 250;
+function processPBTranscriptText_(text) {
   var best = text.trim();
   if (!best) return;
 
@@ -6136,7 +6299,7 @@ function _handleSttTranscript(text) {
 
   if (App.nacActive && !App.nacDoctorSpoke) {
     App.nacDoctorSpoke = true;
-    if (App.nacIdleTimer) { clearTimeout(App.nacIdleTimer); App.nacIdleTimer = null; }
+    App._nacLastActivity = Date.now();
   }
   if (App._nacDirectMode && App.nacActive) {
     sendNACMessageDirect_(best);
@@ -6189,6 +6352,12 @@ function _handleSttTranscript(text) {
     target();
     resumeHandsFreeListening_();
   });
+}
+
+function _handleSttTranscript(text) {
+  if (!_sttShouldRun) return;
+  _sttRetryMs = 250;
+  processPBTranscriptText_(text);
 }
 
 // ── Deepgram WebSocket STT ──
@@ -7786,7 +7955,7 @@ function sendPBMessage() {
 
   if (App.nacActive && !App.nacDoctorSpoke) {
     App.nacDoctorSpoke = true;
-    if (App.nacIdleTimer) { clearTimeout(App.nacIdleTimer); App.nacIdleTimer = null; }
+    App._nacLastActivity = Date.now();
   }
 
   // NAC Direct Mode — skip GAS
@@ -9023,7 +9192,7 @@ function showNACSetup() {
   if (hasAnthropicKey && hasOpenAIKey) html += '&#x26A1; <strong>Direct mode active</strong> — fast responses, no server middleman<br>';
   html += '</div>';
 
-  html += '<button class="btn btn-success" style="width:100%;padding:14px;font-size:16px" onclick="startNACExam()">&#x1F4DE; Start NAC-OSCE Exam (Hands-Free)</button>';
+  html += '<button class="btn btn-success" style="width:100%;padding:14px;font-size:16px" onclick="startNACExam()">&#x1F3A4; Start NAC-OSCE Exam</button>';
   html += '</div>';
   el.innerHTML = html;
 }
@@ -9209,9 +9378,9 @@ function sendNACMessageDirect_(userMessage) {
   try { window.speechSynthesis.cancel(); } catch(e) {}
   App._pbSpeaking = false;
 
-  // Mark doctor spoke, clear idle nudge
+  // Mark doctor spoke, reset idle timer
   App.nacDoctorSpoke = true;
-  if (App.nacIdleTimer) { clearTimeout(App.nacIdleTimer); App.nacIdleTimer = null; }
+  App._nacLastActivity = Date.now();
 
   // Add user message to history and render
   App.pbHistory.push({ role: 'user', content: userMessage });
@@ -9368,6 +9537,40 @@ function dismissNACTutorial() {
   }
 }
 
+function showNACOnboardingPopup_() {
+  if (!App.nacActive) return;
+  if (localStorage.getItem('mcc_nac_onboarded') === '1') return;
+  if (document.getElementById('nac-onboarding-overlay')) return;
+
+  var overlay = document.createElement('div');
+  overlay.id = 'nac-onboarding-overlay';
+  overlay.className = 'nac-onboarding-overlay';
+  var html = '';
+  html += '<div class="nac-onboarding-modal">';
+  html += '<div style="font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-light)">Quick station guide</div>';
+  html += '<h3 style="margin:6px 0 8px;font-size:24px;color:var(--text)">Welcome to NAC-OSCE mode</h3>';
+  html += '<p style="margin:0;color:var(--text-light);line-height:1.6">You can switch between voice styles anytime from the station controls.</p>';
+  html += '<div class="nac-onboarding-grid">';
+  html += '<div class="nac-onboarding-chip"><strong>Push-to-talk</strong><br>Tap the big mic button to record, tap again to send your full question.</div>';
+  html += '<div class="nac-onboarding-chip"><strong>Hands-free</strong><br>Continuous listening mode for natural back-and-forth conversation.</div>';
+  html += '<div class="nac-onboarding-chip"><strong>Order labs/imaging</strong><br>Say commands like <strong>order CBC</strong> or <strong>order CT head</strong>.</div>';
+  html += '<div class="nac-onboarding-chip"><strong>Diagnose + tabs</strong><br>Use the Diagnose button anytime, and review findings in Vitals, Labs, Imaging, Exam, and Notes tabs.</div>';
+  html += '</div>';
+  html += '<button onclick="dismissNACOnboarding_()" style="margin-top:16px;width:100%;padding:13px 14px;font-size:15px;font-weight:700;border:none;border-radius:12px;background:linear-gradient(135deg,#1a237e,#3949ab);color:white;cursor:pointer">Got it</button>';
+  html += '</div>';
+  overlay.innerHTML = html;
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) dismissNACOnboarding_();
+  });
+  document.body.appendChild(overlay);
+}
+
+function dismissNACOnboarding_() {
+  localStorage.setItem('mcc_nac_onboarded', '1');
+  var el = document.getElementById('nac-onboarding-overlay');
+  if (el && el.parentNode) el.parentNode.removeChild(el);
+}
+
 function startNACExam() {
   // Show NAC tutorial on first use, then proceed
   showNACTutorial(function() { startNACExamInner_(); });
@@ -9414,8 +9617,8 @@ function startNACExamInner_() {
   App.pbCurrentCase = 0;
   syncNACSidebarActive_();
 
-  // NAC is hands-free only
-  App.pbHandsFree = true;
+  App.nacVoiceMode = getNACVoiceMode_();
+  App.pbHandsFree = App.nacVoiceMode === 'hands-free';
   App.pbTTS = true;
   App.pbOpenAITTS = true;
   localStorage.setItem('mcc_pbTTS', '1');
@@ -9670,23 +9873,39 @@ function enterNACStation_() {
   }
   // Render the station UI (no TTS until doctor speaks)
   renderPBChat();
+  showNACOnboardingPopup_();
   // Start hands-free listening (slight delay to ensure DOM is ready for mic permission)
   if (App.pbHandsFree) setTimeout(function() { startHandsFreeListening_(); }, 500);
-  // Start 30-second idle nudge — if doctor doesn't speak, patient prompts them
-  if (App.nacIdleTimer) { clearTimeout(App.nacIdleTimer); App.nacIdleTimer = null; }
-  App.nacIdleTimer = setTimeout(function() {
-    if (!App.nacDoctorSpoke && App.nacActive && !App.pbDiagResolved) {
-      var nudges = [
-        "Uh... hi? Are you my doctor?",
-        "...so, are you gonna help me or...",
-        "Hello? Is everything okay?",
-        "Um... doc? I'm kinda in pain here...",
-        "...are you the doctor? Should I be worried that you're just standing there?"
-      ];
-      var nudge = nudges[Math.floor(Math.random() * nudges.length)];
+  // Start recurring idle nudge — patient speaks if doctor is silent for 30s
+  if (App.nacIdleTimer) { clearInterval(App.nacIdleTimer); App.nacIdleTimer = null; }
+  App._nacLastActivity = Date.now();
+  App.nacIdleTimer = setInterval(function() {
+    if (!App.nacActive || App.pbDiagResolved) { clearInterval(App.nacIdleTimer); return; }
+    if (Date.now() - App._nacLastActivity < 28000) return; // reset if recent activity
+    App._nacLastActivity = Date.now(); // prevent double-fire
+    // Use AI to generate a natural nudge (not scripted)
+    if (App._nacDirectMode && App._nacSystemPrompt) {
+      var nudgeMessages = App.pbHistory.filter(function(m) { return m.role === 'user' || m.role === 'assistant'; })
+        .map(function(m) { return { role: m.role, content: m.content }; });
+      var nudgePrompt = App.pbHistory.length === 0
+        ? 'The doctor just entered and has been standing there silently for 30 seconds. Say something brief to get their attention — you\'re a patient waiting for help. 1 sentence max.'
+        : 'The doctor has gone silent for 30 seconds. React naturally — maybe ask if they\'re still there, or mention your symptoms are getting worse. 1 sentence max. Stay in character.';
+      nudgeMessages.push({ role: 'user', content: '[SYSTEM: ' + nudgePrompt + ']' });
+      callAnthropicDirect_(App._nacSystemPrompt, nudgeMessages).then(function(response) {
+        response = response.replace(/```[\s\S]*?```/g, '').replace(/\[SYSTEM[^\]]*\]/gi, '').trim();
+        if (response && App.nacActive) {
+          App.nacDoctorSpoke = true;
+          App.pbHistory.push({ role: 'assistant', content: response });
+          renderPBChat();
+          // Speak it too
+          var voice = localStorage.getItem('mcc_tts_voice_override') || getOpenAIVoice_();
+          callTTSDirect_(response, voice, getOpenAISpeed_()).catch(function() {});
+        }
+      }).catch(function() {});
+    } else {
+      // Fallback for non-direct mode — still use AI via server if possible
       App.nacDoctorSpoke = true;
-      // Just add to history and render — don't touch the mic or TTS
-      App.pbHistory.push({ role: 'assistant', content: nudge });
+      App.pbHistory.push({ role: 'assistant', content: '...doc? You still there?' });
       renderPBChat();
     }
   }, 30000);
@@ -9723,6 +9942,7 @@ function stopNACTimer() {
 
 function skipNACStation_() {
   // Skip current station — mark as skipped and move to next
+  stopNACPttRecording_(false);
   stopHandsFree_();
   stopNACTimer();
   App.nacScores.push({
@@ -9744,6 +9964,7 @@ function skipNACStation_() {
 }
 
 function finishNACStation() {
+  stopNACPttRecording_(false);
   stopHandsFree_();
   stopNACTimer();
   // Record score
@@ -9792,6 +10013,7 @@ function pickNextRandomStation_() {
 
 function showNACSummary() {
   App.nacActive = false;
+  stopNACPttRecording_(false);
   VitalsEngine.stop();
 
   var el = document.getElementById('patientbot-content');
@@ -9967,7 +10189,7 @@ function showScorecardModal_() {
   document.body.insertAdjacentHTML('beforeend', h);
 }
 
-function endPBCase() { VitalsEngine.stop(); stopNACTimer(); App.pbMonitorAttached = false; App.pbCodeBlue = false; App.pbCaseId = null; App.pbHistory = []; App.pbSpecialty = null; App.pbPartialUsed = false; App.pbScorecard = null; App.pbScorecardLoading = false; App.pbScorecardError = false; App.pbScorecardShown = false; App.pbDrDataEval = null; App.pbDrDataEvalLoading = false; App.pbDrDataEvalError = false; App.pbDrDataConvHistory = []; App.nacActive = false; App.nacCurrentStation = 0; App.nacTotalStations = 0; showPatientBotSetup(); }
+function endPBCase() { VitalsEngine.stop(); stopNACTimer(); stopNACPttRecording_(false); stopHandsFree_(); App.pbMonitorAttached = false; App.pbCodeBlue = false; App.pbCaseId = null; App.pbHistory = []; App.pbSpecialty = null; App.pbPartialUsed = false; App.pbScorecard = null; App.pbScorecardLoading = false; App.pbScorecardError = false; App.pbScorecardShown = false; App.pbDrDataEval = null; App.pbDrDataEvalLoading = false; App.pbDrDataEvalError = false; App.pbDrDataConvHistory = []; App.nacActive = false; App.nacCurrentStation = 0; App.nacTotalStations = 0; showPatientBotSetup(); }
 
 function attachPBMonitor_() {
   App.pbMonitorAttached = true;
@@ -10583,7 +10805,14 @@ function renderNACStationUI_() {
   // ── Bottom: Voice controls ──
   if (!App.pbDiagResolved) {
     html += '<div style="padding:16px 20px;border-top:1px solid var(--border);background:var(--card);display:flex;flex-direction:column;align-items:center;gap:12px">';
-    if (App.pbHandsFree) {
+    var voiceMode = App.nacVoiceMode || getNACVoiceMode_();
+    var modePushClass = voiceMode === 'push-to-talk' ? ' active' : '';
+    var modeHandsClass = voiceMode === 'hands-free' ? ' active' : '';
+    html += '<div class="nac-voice-mode-toggle">';
+    html += '<button class="nac-voice-mode-btn' + modePushClass + '" onclick="setNACVoiceMode_(\'push-to-talk\')">Push-to-talk</button>';
+    html += '<button class="nac-voice-mode-btn' + modeHandsClass + '" onclick="setNACVoiceMode_(\'hands-free\')">Hands-free</button>';
+    html += '</div>';
+    if (voiceMode === 'hands-free') {
       html += '<div style="display:flex;align-items:center;gap:12px;width:100%;justify-content:center">';
       html += '<div id="hf-indicator" style="display:inline-flex;align-items:center;gap:8px;padding:8px 20px;border-radius:24px;background:rgba(198,40,40,0.1);border:2px solid #c62828;animation:pulse 1.5s infinite">';
       html += '<span style="display:inline-block;width:10px;height:10px;background:#c62828;border-radius:50%;animation:pulse 1.5s infinite"></span>';
@@ -10596,12 +10825,13 @@ function renderNACStationUI_() {
       html += '<div id="hf-interim-caption" style="min-height:18px;max-width:90%;font-size:12px;color:var(--text-light);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(App.pbInterimTranscript || '') + '</div>';
       html += '<div style="font-size:11px;color:var(--text-light);text-align:center">Speak naturally &bull; <strong>"my diagnosis is..."</strong> to diagnose &bull; <strong>"order..."</strong> for orders</div>';
     } else {
-      html += '<div style="display:flex;gap:8px;width:100%">';
-      html += '<textarea id="pb-input" placeholder="Talk to the patient..." rows="2" style="flex:1" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendPBMessage()}"></textarea>';
-      html += '<button class="btn btn-primary" onclick="sendPBMessage()">Send</button>';
+      html += '<button class="nac-ptt-button' + (App.nacPTTRecording ? ' recording' : '') + '" onclick="toggleNACPtt_()" title="' + (App.nacPTTRecording ? 'Stop and send' : 'Start recording') + '">&#x1F3A4;</button>';
+      html += '<div id="nac-ptt-caption" style="min-height:18px;max-width:92%;font-size:12px;color:var(--text-light);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(App.pbInterimTranscript || (App.nacPTTRecording ? 'Recording...' : 'Click mic to speak, click again to send')) + '</div>';
+      html += '<div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;width:100%">';
       html += '<button class="btn btn-warning" onclick="showDiagnoseModal()">Diagnose</button>';
       html += '<button class="btn" onclick="skipNACStation_()" style="background:transparent;color:var(--text-light);font-size:12px;padding:6px 12px;border:1px solid var(--border);border-radius:16px" title="Skip to next station">Skip &#x23ED;</button>';
       html += '</div>';
+      html += '<div style="font-size:11px;color:var(--text-light);text-align:center">Deepgram transcribes live while recording &bull; say <strong>"order CBC"</strong> &bull; tap Diagnose when ready</div>';
     }
     // Dev-only TTS controls (Tony mode)
     if (DEV_USERS.indexOf((App.guestId || '').replace('profile_', '')) !== -1) {
