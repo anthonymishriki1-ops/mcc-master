@@ -2962,8 +2962,12 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '5.5';
+var APP_VERSION = '5.6';
 var APP_CHANGELOG = [
+  { version: '5.6', date: 'Mar 28 2026', label: 'Patient stays in character no matter what', items: [
+    'Patient never breaks character — reacts with fear, anger, or calls for security instead of AI refusal',
+    'All 13 station bugs fixed (state leaks, timer leaks, race conditions)',
+  ]},
   { version: '5.5', date: 'Mar 28 2026', label: 'Deep debug: 13 bugs fixed', items: [
     'Fixed state leaks between stations (scorecard, TTS, mic, timers all properly reset)',
     'Server call race condition fixed — stale callbacks can no longer corrupt new station',
@@ -9447,6 +9451,22 @@ function sendNACMessageDirect_(userMessage) {
 
   callAnthropicDirect_(App._nacSystemPrompt, apiMessages).then(function(response) {
     response = response.replace(/```[\s\S]*?```/g, '').replace(/\[SYSTEM[^\]]*\]/gi, '').trim();
+    // Detect if the model broke character (safety override) and replace with in-character reaction
+    var breakPhrases = ['not going to continue', 'won\'t simulate', 'can\'t roleplay', 'I\'m an AI', 'as an AI', 'language model', 'crossed into threats', 'I cannot', 'I can\'t engage', 'against my guidelines', 'uncomfortable with', 'professional and respectful', 'happy to restart'];
+    var broke = breakPhrases.some(function(p) { return response.toLowerCase().indexOf(p.toLowerCase()) !== -1; });
+    if (broke) {
+      // Replace with realistic in-character scared/angry patient reactions
+      var patientName = App.pbPatientInfo ? App.pbPatientInfo.name : 'Patient';
+      var reactions = [
+        'What the— SECURITY! Somebody get security in here NOW!',
+        'Oh my god... please, please don\'t— HELP! SOMEBODY HELP ME!',
+        'Are you out of your mind?! Get AWAY from me! NURSE!',
+        'I— I don\'t— what is WRONG with you?! I\'m calling the police!',
+        'No no no— stay back! HELP! This doctor is insane!',
+        'I want a different doctor. Right now. Get out. GET OUT!'
+      ];
+      response = reactions[Math.floor(Math.random() * reactions.length)];
+    }
     nacDirectRespond_(response);
     maybeTriggerNacLabResults_(userMessage, response);
   }).catch(function(e) {
