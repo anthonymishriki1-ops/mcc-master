@@ -1684,7 +1684,8 @@ body.kb-open #bottom-nav { display: none !important; }
     align-items: start;
   }
   #nac-convo-box {
-    max-height: 50vh !important;
+    max-height: calc(100vh - 340px) !important;
+    min-height: 300px;
   }
 
   .flashcard {
@@ -2483,7 +2484,7 @@ body.kb-open #bottom-nav { display: none !important; }
     <div class="sidebar-footer">
       <button class="dark-mode-toggle" onclick="toggleDarkMode()" id="dark-mode-btn" title="Toggle dark mode" style="margin-top:8px">&#x1F319; Dark Mode</button>
       <button class="dark-mode-toggle" onclick="showNameEntry()" style="margin-top:6px">&#x1F465; Switch User</button>
-      <button class="dark-mode-toggle" onclick="startTutorial()" style="margin-top:6px" title="Replay the pronunciation &amp; translation guide">&#x2753; Help</button>
+      <button class="dark-mode-toggle" onclick="startTutorial()" style="margin-top:6px" title="Replay the audio &amp; translation guide">&#x2753; Help</button>
       <button class="dark-mode-toggle" id="copy-link-btn" onclick="copyAppLink_()" style="margin-top:6px" title="Copy MCC Master link to share">&#x1F517; Copy Link</button>
     </div>
   </nav>
@@ -2939,7 +2940,9 @@ var App = {
   nacTimerInterval: null,
   nacDifficulty: 'medium',
   nacVoiceMode: 'push-to-talk',
-  nacPTTRecording: false
+  nacPTTRecording: false,
+  nacLabResults: [],
+  nacIdleNudgeCount: 0
 };
 
 // Point values
@@ -2959,105 +2962,58 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '4.5';
+var APP_VERSION = '5.0';
 var APP_CHANGELOG = [
-  { version: '4.5', date: 'Mar 28 2026', label: 'NAC-OSCE bug fixes: random case, AI first reply, labs trigger, UI polish', items: [
-    'Fixed Random Case selection so Test 0 no longer falls back to Test 1',
-    'Removed scripted first patient reply shortcut — first patient response is now AI-generated from the doctor\'s actual opening',
-    'Fixed NAC sidebar highlighting so NAC-OSCE stays active in the left nav during stations',
-    'Added Skip button to NAC text mode controls',
-    'Added direct-mode lab generation for bloodwork orders (CBC/BMP/CMP/troponin/labs) and automatic Labs tab population',
-    'Fixed NAC header in Random Case mode to show "Random Case" instead of blank test number',
+  { version: '5.0', date: 'Mar 28 2026', label: 'Realistic patient speech', items: [
+    'Patient uses vocal sounds: "ugh", "ahh", "oww" mid-sentence',
+    'No more TTS silence from asterisk actions',
+    'Voice diagnosis and orders actually work now',
+    'Natural phrasing accepted for all commands',
   ]},
-  { version: '4.4', date: 'Mar 27 2026', label: 'NAC desktop: two-column layout + conversation auto-scroll', items: [
-    'Desktop: patient info on left, conversation on right — clinical workstation layout',
-    'Conversation box auto-scrolls to latest message',
-    'Desktop conversation box expands to 50vh (was 200px)',
-    'Conversation always visible, even with no messages yet',
+  { version: '4.6', date: 'Mar 28 2026', label: 'Text input + polish', items: [
+    'Text chat box in NAC stations',
+    'Cleaned up changelog',
+    '"Listen" replaces "pronunciation" in med terms',
+    'GAS backend redeployed with correct AI model',
   ]},
-  { version: '4.3', date: 'Mar 27 2026', label: 'BUG FIX: Anthropic model name corrected', items: [
-    'BUG FIX: Anthropic model was claude-sonnet-4-20250514 (invalid) — corrected to claude-sonnet-4-6',
-    'This was causing all AI patient responses to fail, breaking voice mode entirely',
+  { version: '4.5', date: 'Mar 28 2026', label: 'NAC bug fixes', items: [
+    'Random case, skip button, lab ordering fixes',
+    'Patient no longer speaks first',
+    'Desktop two-column layout',
+    'Context-aware idle nudges',
   ]},
-  { version: '4.2', date: 'Mar 27 2026', label: 'Random Case: infinite loop mode', items: [
-    'Random Case now keeps going — each station auto-picks a new random case instead of ending',
-    'BUG FIX: auto-merge was not triggering GitHub Pages deploy — fixed, future PRs deploy automatically',
+  { version: '4.4', date: 'Mar 27 2026', label: 'Desktop layout', items: [
+    'Two-column layout on desktop (patient info + conversation)',
+    'Conversation auto-scrolls',
+    'Context-aware idle nudges',
   ]},
-  { version: '4.1', date: 'Mar 26 2026', label: 'NAC UX: Random Case, Skip button, sidebar reorganization', items: [
-    'Random Case button — pick one random station from all 84 cases',
-    'Skip button in station UI — jump to next case mid-station',
-    'MCCQE Part I and NAC-OSCE grouped under EXAM PREP in sidebar',
-    'Shorter patient responses + interruption support',
+  { version: '4.0', date: 'Mar 26 2026', label: 'NAC-OSCE voice mode', items: [
+    'Deepgram real-time voice input (cross-browser)',
+    'Push-to-talk + hands-free modes',
+    'Direct Anthropic API calls (faster)',
+    'Random Case mode, Skip button',
+    'MCCQE Part I + NAC-OSCE under Exam Prep',
   ]},
-  { version: '4.0', date: 'Mar 26 2026', label: 'NAC-OSCE: Deepgram STT, direct Anthropic calls, doctor-speaks-first flow', items: [
-    'Deepgram WebSocket STT — real-time voice input, works cross-browser',
-    'Direct browser→Anthropic API calls — no GAS middleman, faster responses',
-    'Doctor speaks first — patient waits for you to introduce yourself',
-    'BP vitals display fixed from pregen data',
-    'Door prompt redesigned — no countdown timer, proper clinical info',
-    'API keys removed from settings page — managed via Dev Panel',
+  { version: '3.7', date: 'Mar 25 2026', label: 'NAC-OSCE launch', items: [
+    '84 stations across 7 practice tests',
+    'Clinical workstation UI with tabs',
+    'OSCE scorecard',
+    'Live vitals engine',
   ]},
-  { version: '3.9', date: 'Mar 25 2026', label: 'NAC-OSCE fix: station rendering, live vitals, TTS overlap', items: [
-    'Fixed NAC station showing "undefined" instead of clinical workstation UI',
-    'VitalsEngine now starts properly in NAC mode — live updating vitals',
-    'Fixed overlapping TTS audio when entering stations'
+  { version: '3.6', date: 'Mar 23 2026', label: 'Translations + glossary', items: [
+    'Auto-translate toggle for medical terms',
+    '500+ glossary terms',
+    'Audio playback for terms',
   ]},
-  { version: '3.8', date: 'Mar 25 2026', label: 'NAC-OSCE dedicated tutorial, clinical workstation UI', items: [
-    'NAC-OSCE has its own first-time tutorial — no more PatientBot walkthrough',
-    'Clinical workstation UI: vitals, results, doorway assessment — no chatbox',
-    'Version bump to 3.8'
+  { version: '3.0', date: 'Mar 23 2026', label: 'PatientBot + Dr. House', items: [
+    'Real-time vitals with drug effects',
+    'Dr. Data post-case review',
+    'Dr. House reverse role-play mode',
   ]},
-  { version: '3.7', date: 'Mar 25 2026', label: 'NAC-OSCE: 7 practice tests, hands-free voice mode, scorecard popup', items: [
-    'NAC-OSCE redesigned: 7 fixed practice tests (12 stations each, 84 total)',
-    'Hands-free voice mode auto-enabled for NAC stations',
-    'OSCE scorecard now shows as popup modal at eye level',
-    'Cache-busting headers added for reliable deploys'
-  ]},
-  { version: '3.6', date: 'Mar 23 2026', label: 'Auto-translate, 500+ glossary terms, TTS fix, Farsi flag, Refresh button', items: [
-    'Auto-translate toggle: one tap shows all term translations inline (localStorage persisted)',
-    'Glossary expanded to 500+ terms across all specialties',
-    'TTS deep fix: error handling, voice loading, onerror callback, unavailable toast',
-    'Farsi: replaced Islamic Republic flag with lion emoji across all UI',
-    'Refresh button: reload current view data without full page reload',
-    'Sticky bar padding: content no longer hidden behind fixed bottom bars',
-    'Persona firewall: DR_DATA_PERSONA_LOCK injected in all Dr. Data API calls',
-    'Dr. House: ironclad never-break-character rules with specific in-character responses',
-    'Language picker: cleaner modal with 4 options, proper button styles',
-  ]},
-  { version: '3.0', date: 'Mar 23 2026', label: 'PatientBot Overhaul: VitalsEngine, Dr. Data Review, Dr. House Mode', items: [
-    'VitalsEngine: real-time fluctuating vitals (HR ±3 bpm, SpO2 ±1%) — no monitor by default',
-    'Attach Monitor: vitals appear only after clicking + Attach Monitor in the Exam palette',
-    'BP cycles like a real NIBP cuff: Measuring... → reading every 20s',
-    '40+ drugs/procedures mapped to vital sign effects (epinephrine, morphine, fluids, O2, intubation, chest tube, etc.)',
-    'Dr. Data Post-Case Review: automatic case analysis after diagnosis, follow-up Q&A',
-    'Dr. House Mode: reverse role-play — you are the patient, House is skeptical/sarcastic doctor',
-    '25 conditions from common (UTI, pneumonia) to exotic (Behçet, kala-azar, Pott\'s spine, falciparum malaria)',
-    'House difficulty levels: Easy = common conditions, Expert = tropical/rare + gaslighting',
-    'Speech buttons repositioned next to English term (not translation); TTS resume fix',
-    'Dashboard auto-navigates on login (navigateTo fix)',
-    'Tutorial stripped to 2 lean sentences. No marketing.',
-  ]},
-  { version: '2.9', date: 'Mar 23 2026', label: 'Key Topics MCQ + Login Preloading + Tutorial Rewrite', items: [
-    'Key Topics "Quiz Me" now generates real A/B/C/D multiple-choice questions with correct/incorrect feedback',
-    'Login screen shows loading spinner while data preloads — no more blank flash after tapping Enter',
-    'Tutorial rewritten to focus on the new Pronunciation & Translation feature (5 focused steps)',
-    'Tutorial auto-shows once per user after login (mcc_tutorial_v3_ key)',
-    'Sidebar Copy Link button — share MCC Master URL with one tap',
-    'Dead code cleanup: removed dismissGuide() function',
-  ]},
-  { version: '2.8', date: 'Mar 23 2026', label: 'Flashcard UI + Med Term Overhaul', items: [
-    'FLASHCARD: Portrait mode — cards now fill ~52% of viewport height instead of a tiny fixed 220px box',
-    'FLASHCARD: Landscape phone support — cards adapt to rotated orientation with compact layout',
-    'FLASHCARD: Tapping a medical term no longer accidentally flips the card (stopPropagation guard added)',
-    'MED TERMS: Replaced floating hover panel with persistent INLINE pill — translation and 🔊/🐌 buttons appear right next to the word, never disappear',
-    'MED TERMS: Blue term text is now white on the purple card front so it\'s legible',
-    'MED TERMS: First-time tap hint banner — "Tap blue underlined words for pronunciation & translation" (dismisses after first use)',
-    'MED TERMS: Glossary expanded from 50 → 115+ terms covering cardiology, neuro, GI, hematology, endo, rheum, obs, onco, pharm — focus on pronunciation-tricky words for FMGs',
-  ]},
-  { version: '2.7', date: 'Mar 23 2026', label: 'PatientBot OSCE Scorecard Bug Fix', items: [
-    'BUG FIX: "substring is not a function" crash after diagnosis — getPBTranscript() was calling .substring() on object-typed message content (diagnosis_result, debrief, partial roles store objects, not strings)',
-    'BUG FIX: OSCE scorecard spinner would freeze forever if generateCaseDebrief failed — catch handler now clears the spinner and shows a Retry button instead of silently hanging',
-    'BUG FIX: scorecard auto-load would retry infinitely on failure — now blocked by pbScorecardError flag until user clicks Retry',
+  { version: '2.8', date: 'Mar 23 2026', label: 'Flashcards + med terms', items: [
+    'Better flashcard sizing (portrait + landscape)',
+    'Inline term translations with audio',
+    'Key Topics quiz mode',
   ]},
   { version: '2.6', date: 'Mar 23 2026', label: 'Med Term Click Panel + Pronunciation', items: [
     'TRANSLATION: Clicking a highlighted medical term now opens a persistent panel — no more blink/hover disappearing',
@@ -3152,7 +3108,8 @@ function navigateTo(page) {
   var target = document.getElementById('page-' + page);
   if (target) target.classList.add('active');
 
-  var link = document.querySelector('.nav-links [data-page="' + page + '"]');
+  var activeNavPage = (page === 'patientbot' && App.nacActive) ? 'nac-sim' : page;
+  var link = document.querySelector('.nav-links [data-page="' + activeNavPage + '"]');
   if (link) link.classList.add('active');
 
   App.currentPage = page;
@@ -3593,7 +3550,7 @@ function afterLogin_(displayName) {
 function startTutorial() {
   var steps = [
     {
-      title: 'Blue Terms: Tap for Pronunciation',
+      title: 'Blue Terms: Tap to Listen',
       text: 'Medical terms throughout the app are <span style="border-bottom:2px solid var(--accent);color:var(--accent);font-weight:600">underlined</span>. Tap one → 🔊 Normal speed, 🐌 Slow.',
       target: null
     },
@@ -5445,7 +5402,7 @@ function renderFlashcard() {
   // One-time tap hint for medical terms (dismissed after first tap or explicit close)
   if (App.glossary && !localStorage.getItem('mcc_medterm_hint_seen')) {
     html += '<div id="medterm-hint-banner" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;background:rgba(37,99,235,0.07);border:1px solid rgba(37,99,235,0.18);border-radius:10px;font-size:13px;color:var(--text);line-height:1.4">';
-    html += '&#x1F4A1; Tap <span style="color:#2563eb;font-weight:700;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px">blue underlined words</span> for pronunciation &amp; translation';
+    html += '&#x1F4A1; Tap <span style="color:#2563eb;font-weight:700;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px">blue underlined words</span> to hear audio &amp; translation';
     html += '<button onclick="dismissMedHint()" style="margin-left:auto;flex-shrink:0;background:none;border:none;cursor:pointer;font-size:17px;color:var(--text-light);padding:0;line-height:1">&#x2715;</button>';
     html += '</div>';
   }
@@ -6215,6 +6172,20 @@ function toggleNACPtt_() {
   else startNACPttRecording_();
 }
 
+function startNACPttHold_(evt) {
+  if (evt && evt.preventDefault) evt.preventDefault();
+  if (!App.nacActive || App.pbDiagResolved || App.nacVoiceMode !== 'push-to-talk') return false;
+  if (!App.nacPTTRecording) startNACPttRecording_();
+  return false;
+}
+
+function stopNACPttHold_(evt) {
+  if (evt && evt.preventDefault) evt.preventDefault();
+  if (!App.nacActive || App.pbDiagResolved || App.nacVoiceMode !== 'push-to-talk') return false;
+  if (App.nacPTTRecording) stopNACPttRecording_(true);
+  return false;
+}
+
 var _sttShouldRun = false;
 var _sttRestarting = false;
 var _sttRetryMs = 250;
@@ -6258,7 +6229,7 @@ function _setInterimCaption_(text) {
   var cap = document.getElementById('hf-interim-caption');
   if (cap) cap.textContent = App.pbInterimTranscript;
   var pttCap = document.getElementById('nac-ptt-caption');
-  if (pttCap) pttCap.textContent = App.pbInterimTranscript || (App.nacPTTRecording ? 'Recording...' : 'Click mic to speak, click again to send');
+  if (pttCap) pttCap.textContent = App.pbInterimTranscript || (App.nacPTTRecording ? 'Recording... release to send' : 'Hold mic to record • release to send');
 }
 
 function _setHFIndicatorState_(label, bg, color) {
@@ -6306,6 +6277,8 @@ function processPBTranscriptText_(text) {
     sendNACMessageDirect_(best);
     return;
   }
+
+  maybeTriggerNacLabResults_(best, '');
 
   App.pbHistory.push({ role: 'user', content: best });
   var target = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
@@ -6865,13 +6838,15 @@ function handleVoiceCommand_(text) {
   var t = text.trim();
   var tl = t.toLowerCase();
 
-  // ORDER / LABS / IMAGING — "order CBC", "I'm ordering a chest X-ray"
-  var orderM = tl.match(/^(?:i'?m ordering|i am ordering|ordering|order(?:ing)?)\s+(.+)/);
+  // ORDER / LABS / IMAGING — generous matching for natural speech
+  var orderM = tl.match(/(?:i'?m (?:gonna |going to )?order(?:ing)?|i am ordering|order(?:ing)?|can we (?:get|order|run)|let'?s (?:get|order|run|do)|run a|send off|get me|i'?d like to order|i want to order|we(?:'ll| will) need|i need|i'?m gonna order)\s+(?:a |an |the |some )?(.+)/);
   if (orderM) {
-    var item = orderM[1].replace(/^(a|an|the)\s+/i, '').trim();
-    showToast('🔊 Ordering: ' + item);
-    insertPBAction(item);
-    return true;
+    var item = orderM[1].replace(/^(a|an|the|some)\s+/i, '').replace(/\s*(please|thanks|thank you|for (?:me|the patient)|stat|urgent|asap)\.?$/i, '').trim();
+    if (item && item.length > 1) {
+      showToast('Ordering: ' + item);
+      insertPBAction(item);
+      return true;
+    }
   }
 
   // PRESCRIBE / MEDS — "prescribe amoxicillin 500mg", "I'm prescribing..."
@@ -6901,8 +6876,8 @@ function handleVoiceCommand_(text) {
     return true;
   }
 
-  // DIAGNOSE — "my diagnosis is X", "I'm diagnosing X", "the diagnosis is X"
-  var dxM = tl.match(/^(?:i'?m diagnosing|i am diagnosing|my diagnosis is|the diagnosis is|i think it(?:'s| is))\s+(.+)/);
+  // DIAGNOSE — "my diagnosis is X", "I'm diagnosing you with X", "the diagnosis is X", "diagnose X"
+  var dxM = tl.match(/^(?:i'?m diagnosing(?: (?:you|this|him|her|them|the patient))?(?: with)?|i am diagnosing(?: (?:you|this|him|her|them|the patient))?(?: with)?|my diagnosis is|the diagnosis is|i think (?:it(?:'s| is)|this is|the diagnosis is)|i(?:'m| am) going with|diagnos(?:e|is)(?::)?)\s+(.+)/);
   if (dxM) {
     var dx = dxM[1].trim();
     showToast('🔊 Diagnosing: ' + dx);
@@ -8843,7 +8818,14 @@ function insertPBAction(text) {
   if (panel) panel.style.display = 'none';
   var allTabs = document.querySelectorAll('.pb-action-tab');
   for (var i = 0; i < allTabs.length; i++) allTabs[i].classList.remove('active');
-  // Auto-send
+  // NAC mode: send directly through transcript pipeline (no #pb-input in NAC UI)
+  if (App.nacActive) {
+    App.nacDoctorSpoke = true;
+    App._nacLastActivity = Date.now();
+    processPBTranscriptText_(text);
+    return;
+  }
+  // Auto-send (standard PatientBot mode)
   var input = document.getElementById('pb-input');
   if (input) { input.value = text; }
   sendPBMessage();
@@ -9258,9 +9240,9 @@ function callAnthropicDirect_(systemPrompt, messages) {
 }
 
 function syncNACSidebarActive_() {
-  var items = document.querySelectorAll('.sidebar-nav li[data-page]');
+  var items = document.querySelectorAll('.nav-links li[data-page]');
   for (var i = 0; i < items.length; i++) items[i].classList.remove('active');
-  var nacItem = document.querySelector('.sidebar-nav li[data-page="nac-sim"]');
+  var nacItem = document.querySelector('.nav-links li[data-page="nac-sim"]');
   if (nacItem) nacItem.classList.add('active');
 }
 
@@ -9270,7 +9252,8 @@ function maybeTriggerNacLabResults_(doctorMessage, patientResponse) {
   if (!orderRegex.test(doctorMessage || '') && !responseRegex.test(patientResponse || '')) return;
   generateLabResults_(doctorMessage || patientResponse).then(function(labPayload) {
     if (!labPayload || !labPayload.testName || !Array.isArray(labPayload.values) || labPayload.values.length === 0) return;
-    App.pbHistory.push({ role: 'results', content: labPayload });
+    App.nacLabResults = App.nacLabResults || [];
+    App.nacLabResults.push(labPayload);
     renderPBChat();
   }).catch(function() {});
 }
@@ -9378,7 +9361,9 @@ function sendNACTextMessage_() {
   App.nacDoctorSpoke = true;
   App._nacLastActivity = Date.now();
   App._nacSilenceCount = 0;
-  _handleSttTranscript(msg);
+  // Call processPBTranscriptText_ directly — NOT _handleSttTranscript
+  // because _handleSttTranscript gates on _sttShouldRun (mic must be active)
+  processPBTranscriptText_(msg);
 }
 
 // ── NAC Direct Mode: send message without GAS ──
@@ -9427,7 +9412,9 @@ function nacDirectRespond_(text) {
   renderPBChat();
   var voice = getOpenAIVoice_();
   var speed = getOpenAISpeed_();
-  callTTSDirect_(text, voice, speed).then(function() {
+  // Strip asterisk actions from TTS (they cause silence) — keep in chat text
+  var ttsText = text.replace(/\*[^*]+\*/g, '').replace(/\s{2,}/g, ' ').trim();
+  callTTSDirect_(ttsText || text, voice, speed).then(function() {
     restartMicAfterResponse_();
   }).catch(function() {
     restartMicAfterResponse_();
@@ -9475,9 +9462,11 @@ function buildNACSystemPrompt_(station) {
     '7. NEVER apologize for being sick, for taking up the doctor\'s time, or for the doctor\'s behavior. If someone is rude to you, react like a real person — confused, offended, hurt, angry. NEVER say "I\'m sorry" to rudeness.\n\n' +
     'PATIENT REALISM:\n' +
     '- Sound like a REAL person. Use casual language: "yeah", "nah", "I dunno", "kinda".\n' +
-    '- Use filler words: "uhm", "uh", "like", "y\'know".\n' +
-    '- Use hesitations (dashes, ellipses). Trail off and restart.\n' +
-    '- Be an imperfect historian. Forget exact dates.\n' +
+    '- Use filler words and sounds: "uhm", "uh", "like", "y\'know", "umm", "hmm".\n' +
+    '- Use VOCAL pain sounds when in pain — actual sounds the TTS can say: "ugh", "ahh", "oww", "mmph", "oof", "ohh". Put them MID-SENTENCE: "It hurts right— ugh— right here."\n' +
+    '- NEVER use asterisk actions like *winces* or *groans* — TTS cannot speak those. Instead use SPOKEN descriptions: "...ahh, sorry, that really hurts" or just make the sound.\n' +
+    '- Use hesitations (dashes, ellipses). Trail off and restart. "It started... I think it was— no wait, maybe Tuesday?"\n' +
+    '- Be an imperfect historian. Forget exact dates. Mix up timelines.\n' +
     '- NEVER say "I appreciate the question" or "That\'s a good question."\n' +
     '- STOP ANSWERING QUESTIONS WITH QUESTIONS. Just answer directly.\n' +
     '- Vary response length. Many answers should be just a few words: "Yeah." "Nah." "Like a week ago?" "Right here." "I dunno."\n' +
@@ -9650,6 +9639,8 @@ function startNextNACStation() {
   // Clear stale patient info to prevent flash of wrong patient during loading
   App.pbPatientInfo = null;
   App.pbVitals = null;
+  App.nacLabResults = [];
+  App.nacIdleNudgeCount = 0;
   var station = App.nacStations[App.nacCurrentStation - 1];
 
   // Set PB specialty to the station's specialty
@@ -9878,6 +9869,8 @@ function enterNACStation_() {
   }
   // Hard reset at station entry so doctor always speaks first
   App.pbHistory = [];
+  App.nacLabResults = [];
+  App.nacIdleNudgeCount = 0;
   _setInterimCaption_('');
   // Doctor speaks first — don't auto-play patient's opening line
   App.nacDoctorSpoke = false;
@@ -9899,8 +9892,10 @@ function enterNACStation_() {
   App._nacLastActivity = Date.now();
   App.nacIdleTimer = setInterval(function() {
     if (!App.nacActive || App.pbDiagResolved) { clearInterval(App.nacIdleTimer); return; }
+    if (!App.nacDoctorSpoke && App.pbHistory.length === 0) return;
     if (Date.now() - App._nacLastActivity < 28000) return; // reset if recent activity
     App._nacLastActivity = Date.now(); // prevent double-fire
+    App.nacIdleNudgeCount = (App.nacIdleNudgeCount || 0) + 1;
     // Use AI to generate a natural nudge (not scripted)
     if (App._nacDirectMode && App._nacSystemPrompt) {
       var nudgeMessages = App.pbHistory.filter(function(m) { return m.role === 'user' || m.role === 'assistant'; })
@@ -9912,7 +9907,7 @@ function enterNACStation_() {
       } else {
         var lastMsg = '';
         for (var ni = App.pbHistory.length - 1; ni >= 0; ni--) {
-          if (App.pbHistory[ni].role === 'user') { lastMsg = App.pbHistory[ni].content; break; }
+          if (App.pbHistory[ni] && App.pbHistory[ni].role === 'user') { lastMsg = String(App.pbHistory[ni].content || ''); break; }
         }
         nudgePrompt = 'The doctor said "' + lastMsg.substring(0, 100) + '" and then went COMPLETELY SILENT for ' + (silenceCount * 30) + ' seconds. ' +
           'React like a REAL person would. You have full emotional range — confused, annoyed, worried, sarcastic, passive-aggressive, scared, impatient. ' +
@@ -10568,6 +10563,15 @@ function renderNACStationUI_() {
   // Ensure login screen is hidden
   var profilePage = document.getElementById('profile-select-page');
   if (profilePage) profilePage.style.display = 'none';
+  if (!App.nacCaseReady) {
+    el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:24px">' +
+      '<div style="text-align:center;max-width:320px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px">' +
+      '<div class="spinner" style="margin:0 auto 12px"></div>' +
+      '<div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">Loading station...</div>' +
+      '<div style="font-size:12px;color:var(--text-light)">Preparing patient profile, vitals, and checklist.</div>' +
+      '</div></div>';
+    return;
+  }
   if (!App.pbMonitorAttached) {
     App.pbMonitorAttached = true;
     VitalsEngine.start();
@@ -10595,7 +10599,9 @@ function renderNACStationUI_() {
   html += '</div></div>';
 
   // ── Count results for badge indicators ──
-  var labResults = App.pbHistory.filter(function(m) { return m.role === 'results' && m.content && !/(x.ray|ct\b|mri|ultrasound|echo|radio|scan|imaging)/i.test(m.content.testName || ''); });
+  var historyLabResults = App.pbHistory.filter(function(m) { return m.role === 'results' && m.content && !/(x.ray|ct\b|mri|ultrasound|echo|radio|scan|imaging)/i.test(m.content.testName || ''); });
+  var nacGeneratedLabs = (App.nacLabResults || []).map(function(r) { return { role: 'results', content: r, _nac: true }; });
+  var labResults = nacGeneratedLabs.concat(historyLabResults);
   var diResults = App.pbHistory.filter(function(m) { return m.role === 'results' && m.content && /(x.ray|ct\b|mri|ultrasound|echo|radio|scan|imaging)/i.test(m.content.testName || ''); });
   var examMsgs = App.pbHistory.filter(function(m) { return m.role === 'partial'; });
 
@@ -10709,7 +10715,13 @@ function renderNACStationUI_() {
       html += '<div style="background:' + bg + ';color:' + color + ';padding:8px 12px;border-radius:12px;font-size:13px;line-height:1.4">' + escapeHtml(typeof cm.content === 'string' ? cm.content : '') + '</div>';
       html += '</div>';
     }
-    html += '</div></div>';
+    html += '</div>';
+    // Text input inside the conversation card
+    html += '<div style="display:flex;gap:8px;margin-top:10px">';
+    html += '<input type="text" id="nac-text-input" class="search-bar" placeholder="Type a message..." style="flex:1;font-size:13px;padding:8px 12px;border-radius:20px" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendNACTextMessage_()}">';
+    html += '<button class="btn btn-primary" onclick="sendNACTextMessage_()" style="border-radius:20px;padding:6px 14px;font-size:13px">Send</button>';
+    html += '</div>';
+    html += '</div>';
     html += '</div>'; // end nac-overview-right
     html += '</div>'; // end nac-overview-grid
 
@@ -10863,19 +10875,17 @@ function renderNACStationUI_() {
       html += '<div id="hf-interim-caption" style="min-height:18px;max-width:90%;font-size:12px;color:var(--text-light);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(App.pbInterimTranscript || '') + '</div>';
       html += '<div style="font-size:11px;color:var(--text-light);text-align:center">Speak naturally &bull; <strong>"my diagnosis is..."</strong> to diagnose &bull; <strong>"order..."</strong> for orders</div>';
     } else {
-      html += '<button class="nac-ptt-button' + (App.nacPTTRecording ? ' recording' : '') + '" onclick="toggleNACPtt_()" title="' + (App.nacPTTRecording ? 'Stop and send' : 'Start recording') + '">&#x1F3A4;</button>';
-      html += '<div id="nac-ptt-caption" style="min-height:18px;max-width:92%;font-size:12px;color:var(--text-light);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(App.pbInterimTranscript || (App.nacPTTRecording ? 'Recording...' : 'Click mic to speak, click again to send')) + '</div>';
+      html += '<button class="nac-ptt-button' + (App.nacPTTRecording ? ' recording' : '') + '" ' +
+        'onmousedown="startNACPttHold_()" onmouseup="stopNACPttHold_()" onmouseleave="stopNACPttHold_()" ' +
+        'ontouchstart="startNACPttHold_(event)" ontouchend="stopNACPttHold_(event)" ontouchcancel="stopNACPttHold_(event)" ' +
+        'onclick="return false" title="' + (App.nacPTTRecording ? 'Release to send' : 'Hold to record') + '">&#x1F3A4;</button>';
+      html += '<div id="nac-ptt-caption" style="min-height:18px;max-width:92%;font-size:12px;color:var(--text-light);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(App.pbInterimTranscript || (App.nacPTTRecording ? 'Recording... release to send' : 'Hold mic to record • release to send')) + '</div>';
       html += '<div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;width:100%">';
       html += '<button class="btn btn-warning" onclick="showDiagnoseModal()">Diagnose</button>';
       html += '<button class="btn" onclick="skipNACStation_()" style="background:transparent;color:var(--text-light);font-size:12px;padding:6px 12px;border:1px solid var(--border);border-radius:16px" title="Skip to next station">Skip &#x23ED;</button>';
       html += '</div>';
       html += '<div style="font-size:11px;color:var(--text-light);text-align:center">Deepgram transcribes live while recording &bull; say <strong>"order CBC"</strong> &bull; tap Diagnose when ready</div>';
     }
-    // Text input — always available as fallback
-    html += '<div style="display:flex;gap:8px;width:100%;max-width:600px;margin-top:4px">';
-    html += '<input type="text" id="nac-text-input" class="search-bar" placeholder="Type a message..." style="flex:1;font-size:14px;padding:10px 14px;border-radius:20px" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendNACTextMessage_()}">';
-    html += '<button class="btn btn-primary" onclick="sendNACTextMessage_()" style="border-radius:20px;padding:8px 16px;font-size:14px">Send</button>';
-    html += '</div>';
     // Dev-only TTS controls (Tony mode)
     if (DEV_USERS.indexOf((App.guestId || '').replace('profile_', '')) !== -1) {
       var curModel = localStorage.getItem('mcc_tts_model') || 'tts-1';
@@ -11517,7 +11527,7 @@ var FALLBACK_GLOSSARY = [
   {Term:'biopsy',Category:'Pathology',Definition:'Removal of tissue for microscopic examination',fa:'بیوپسی / نمونه‌برداری',ar:'خزعة',fr:'biopsie'},
   {Term:'echocardiogram',Category:'Cardiology',Definition:'Ultrasound imaging of the heart',fa:'اکوکاردیوگرام / سونوگرافی قلب',ar:'صدى صوت القلب',fr:'échocardiogramme'},
   {Term:'electrocardiogram',Category:'Cardiology',Definition:'Recording of heart electrical activity',fa:'نوار قلب',ar:'تخطيط القلب',fr:'électrocardiogramme'},
-  // ── Extended set: pronunciation focus for non-native English speakers ──────
+  // ── Extended set: audio + translation for medical terms ──────
   {Term:'ischemia',Category:'Cardiology',Definition:'Insufficient blood supply to tissue',fa:'ایسکمی / کمبود خون‌رسانی',ar:'نقص التروية',fr:'ischémie'},
   {Term:'pericarditis',Category:'Cardiology',Definition:'Inflammation of the pericardium (sac around the heart)',fa:'پریکاردیت / التهاب پریکارد',ar:'التهاب التامور',fr:'péricardite'},
   {Term:'aortic stenosis',Category:'Cardiology',Definition:'Narrowing of the aortic valve opening',fa:'تنگی دریچه آئورت',ar:'تضيق الأبهر',fr:'sténose aortique'},
@@ -12138,8 +12148,8 @@ function toggleMedPanel(e) {
   var displayLabel = isAbbrev ? (dispTerm + ' (' + abbrevExpanded + ')') : dispTerm;
 
   var inner = '';
-  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(speakTerm) + ',1.0)" title="Pronounce (normal speed)">&#x1F50A;</button>';
-  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(speakTerm) + ',0.45)" title="Pronounce (slow — hear every syllable)">&#x1F40C;</button>';
+  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(speakTerm) + ',1.0)" title="Listen (normal)">&#x1F50A;</button>';
+  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(speakTerm) + ',0.45)" title="Listen (slow)">&#x1F40C;</button>';
   if (isAbbrev) {
     inner += '<span style="font-size:11px;color:var(--text-light);margin:0 3px;font-style:italic">' + escapeHtml(abbrevExpanded) + '</span>';
   }
@@ -12169,8 +12179,8 @@ function closeMedPanel() {
 
 function _patternPillInner_(termKey, data) {
   var inner = '';
-  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(termKey) + ',1.0)" title="Pronounce">&#x1F50A;</button>';
-  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(termKey) + ',0.45)" title="Pronounce slow">&#x1F40C;</button>';
+  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(termKey) + ',1.0)" title="Listen">&#x1F50A;</button>';
+  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(termKey) + ',0.45)" title="Listen (slow)">&#x1F40C;</button>';
   if (data) {
     var def = data.definition || data.Definition || '';
     var trans = data.translation || data.Translation || '';
