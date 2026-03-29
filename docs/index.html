@@ -2990,7 +2990,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '7.7';
+var APP_VERSION = '7.8';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3002,6 +3002,11 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '7.8', date: 'Mar 28 2026', label: 'Actions log + vitals react to procedures', items: [
+    'Exam tab shows all medications/procedures performed with timestamps',
+    'Painful procedures spike HR, BP, RR realistically',
+    'Actions log resets between stations',
+  ]},
   { version: '7.7', date: 'Mar 28 2026', label: 'Procedures happen, patients match your energy', items: [
     'ANY procedure you perform actually happens — patient reacts with pain, horror, anger',
     'Patients swear back when sworn at — mirrors doctor\'s energy',
@@ -4256,6 +4261,16 @@ var VitalsEngine = {
 
   getLatestBP: function() {
     return this._bpReadings.length > 0 ? this._bpReadings[this._bpReadings.length-1] : null;
+  },
+
+  // Apply a one-time delta to base vitals (e.g. pain spike from procedure)
+  applyDelta: function(d) {
+    if (d.hr) this._base.hr = Math.max(30, Math.min(220, this._base.hr + d.hr));
+    if (d.sbp) this._base.sbp = Math.max(40, Math.min(250, this._base.sbp + d.sbp));
+    if (d.dbp) this._base.dbp = Math.max(20, Math.min(160, this._base.dbp + (d.dbp || Math.round(d.sbp * 0.6))));
+    if (d.rr) this._base.rr = Math.max(4, Math.min(60, this._base.rr + d.rr));
+    if (d.spo2) this._base.spo2 = Math.max(0, Math.min(100, this._base.spo2 + d.spo2));
+    if (d.temp) this._base.temp = Math.max(32, Math.min(43, this._base.temp + d.temp));
   },
 
   _tick: function() {
@@ -9075,8 +9090,16 @@ function insertPBAction(text) {
   if (panel) panel.style.display = 'none';
   var allTabs = document.querySelectorAll('.pb-action-tab');
   for (var i = 0; i < allTabs.length; i++) allTabs[i].classList.remove('active');
-  // NAC mode: send directly through transcript pipeline (no #pb-input in NAC UI)
+  // NAC mode: track action + send through pipeline
   if (App.nacActive) {
+    // Track in actions log
+    if (!App.nacActions) App.nacActions = [];
+    App.nacActions.push({ action: text.replace(/\*/g, ''), time: Date.now() });
+    // Painful procedures spike vitals
+    var painWords = /castrat|amputat|incis|sutur|insert|catheter|needle|biopsy|drain|stapl|stitch|cut|slice|remov|extract|debrid/i;
+    if (painWords.test(text)) {
+      VitalsEngine.applyDelta({ hr: 15 + Math.floor(Math.random() * 20), sbp: 10 + Math.floor(Math.random() * 15), rr: 3 + Math.floor(Math.random() * 5) });
+    }
     App.nacDoctorSpoke = true;
     App._nacLastActivity = Date.now();
     processPBTranscriptText_(text);
@@ -10036,6 +10059,7 @@ function startNextNACStation() {
   App.nacCurrentStation++;
   App.pbCurrentCase = App.nacCurrentStation;
   App.nacNotes = ''; // fresh notepad each station
+  App.nacActions = []; // fresh actions log each station
   nacActiveTab = 'overview'; // reset to overview tab
   // Clear stale patient info to prevent flash of wrong patient during loading
   App.pbPatientInfo = null;
@@ -11492,6 +11516,20 @@ function renderNACStationUI_() {
         var content = typeof em.content === 'string' ? em.content : (em.content.results || em.content.testName || JSON.stringify(em.content));
         html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:10px">';
         html += '<div style="white-space:pre-wrap;font-size:13px;color:var(--text);line-height:1.6">' + escapeHtml(content) + '</div>';
+        html += '</div>';
+      }
+    }
+
+    // Active Medications / Procedures performed
+    var actions = App.nacActions || [];
+    if (actions.length > 0) {
+      html += '<div style="font-size:14px;font-weight:700;margin-top:20px;margin-bottom:10px;color:var(--text)">&#x1F489; Actions Performed</div>';
+      for (var ai = 0; ai < actions.length; ai++) {
+        var act = actions[ai];
+        var aTime = act.time ? new Date(act.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;margin-bottom:4px;background:var(--bg);border-radius:6px;border:1px solid var(--border)">';
+        html += '<span style="font-size:13px;color:var(--text)">' + escapeHtml(act.action) + '</span>';
+        html += '<span style="font-size:11px;color:var(--text-light)">' + aTime + '</span>';
         html += '</div>';
       }
     }
