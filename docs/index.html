@@ -4161,19 +4161,14 @@ var VitalsEngine = {
       succinylcholine: /\bsuccinylcholine\b|\bsux\b|\bsucchs\b/i,
       acetaminophen:  /\bacetaminophen\b|\bparacetamol\b|\btylenol\b/i,
     };
-    // Default doses when no number given (standard therapeutic dose in mcg)
-    var defaultDoses = {
-      fentanyl: 100, morphine: 5000, hydromorphone: 1000, propofol: 150000,
-      midazolam: 2000, lorazepam: 2000, potassium: 10000, kcl: 10000,
-      epinephrine: 300, norepinephrine: 500, lidocaine: 70000, insulin: 10000,
-      digoxin: 250, succinylcholine: 100000, acetaminophen: 1000000
-    };
     for (var drug in drugPatterns) {
       if (drugPatterns[drug].test(msg)) {
         var doseMcg = self._parseDoseMcg(msg);
-        // If no dose specified, use default therapeutic dose
-        if (doseMcg === null) doseMcg = defaultDoses[drug] || 0;
         var threshold = self.LETHAL_DOSES[drug];
+        // If a lethal drug is given with no numeric dose, assume a dangerous undocumented bolus (2x lethal)
+        if (doseMcg === null && threshold && threshold.lethal) {
+          doseMcg = threshold.lethal * 2;
+        }
         if (doseMcg > 0 && threshold) {
           // Accumulate cumulative dose for this drug across the case
           if (!self._cumulativeDoses[drug]) self._cumulativeDoses[drug] = 0;
@@ -10643,6 +10638,11 @@ function finishNACStation() {
   // Show INLINE results screen (replaces station UI entirely)
   App.nacStationEval = null;
   App.nacStationEvalLoading = true;
+  console.log('[NAC] finishNACStation: initial render attempt', {
+    currentStation: App.nacCurrentStation,
+    hasNacSimContent: !!document.getElementById('nac-sim-content'),
+    hasPatientBotContent: !!document.getElementById('patientbot-content')
+  });
   _renderNACResultsScreen(score, null); // render immediately with "loading" state
 
   // Fire off evaluation in background — updates the results screen when done
@@ -10653,6 +10653,10 @@ function finishNACStation() {
     stub.station = App.nacCurrentStation; stub.presentation = score.presentation; stub.specialty = score.specialty;
     App.nacScoreHistory.push(stub); _saveNACScoreHistory();
     App.nacStationEval = stub;
+    console.log('[NAC] finishNACStation: rendered fallback (no API key)', {
+      hasNacSimContent: !!document.getElementById('nac-sim-content'),
+      hasPatientBotContent: !!document.getElementById('patientbot-content')
+    });
     _renderNACResultsScreen(score, stub);
     return;
   }
@@ -10667,6 +10671,10 @@ function finishNACStation() {
     evalResult.pregenId = (App.nacStations && App.nacStations[App.nacCurrentStation - 1]) ? App.nacStations[App.nacCurrentStation - 1].pregenId : null;
     evalResult.timestamp = Date.now();
     App.nacScoreHistory.push(evalResult); _saveNACScoreHistory();
+    console.log('[NAC] finishNACStation: rendered evaluated scorecard', {
+      hasNacSimContent: !!document.getElementById('nac-sim-content'),
+      hasPatientBotContent: !!document.getElementById('patientbot-content')
+    });
     _renderNACResultsScreen(score, evalResult);
   }).catch(function(err) {
     App.nacStationEvalLoading = false;
@@ -10679,12 +10687,23 @@ function finishNACStation() {
     fallback.specialty = score.specialty;
     App.nacScoreHistory.push(fallback); _saveNACScoreHistory();
     App.nacStationEval = fallback;
+    console.log('[NAC] finishNACStation: rendered eval failure fallback', {
+      hasNacSimContent: !!document.getElementById('nac-sim-content'),
+      hasPatientBotContent: !!document.getElementById('patientbot-content')
+    });
     _renderNACResultsScreen(score, fallback);
   });
 }
 
 function _renderNACResultsScreen(score, evalResult) {
-  var el = document.getElementById('patientbot-content');
+  var nacEl = document.getElementById('nac-sim-content');
+  var pbEl = document.getElementById('patientbot-content');
+  var el = nacEl || pbEl;
+  console.log('[NAC] _renderNACResultsScreen target lookup', {
+    using: nacEl ? 'nac-sim-content' : (pbEl ? 'patientbot-content' : 'none'),
+    hasNacSimContent: !!nacEl,
+    hasPatientBotContent: !!pbEl
+  });
   if (!el) return;
   var isLast = (!App.nacRandomMode && App.nacCurrentStation >= App.nacTotalStations);
   var nextLabel = isLast ? 'View Final Results' : 'Next Station';
