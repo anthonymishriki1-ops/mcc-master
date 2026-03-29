@@ -2990,7 +2990,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '7.8';
+var APP_VERSION = '7.9';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3002,6 +3002,15 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '7.9', date: 'Mar 28 2026', label: 'My Scores page — all 84 stations tracked', items: [
+    'New "My Scores" button on NAC setup page',
+    'All 84 stations listed, grouped by Test 1-7',
+    'Completed stations show score /18 with color coding',
+    'Unattempted stations show N/A',
+    'Overall stats: stations done, remaining, average %',
+    'Per-test averages and completion counts',
+    'Scores saved to backend for cross-device sync',
+  ]},
   { version: '7.8', date: 'Mar 28 2026', label: 'Actions log + vitals react to procedures', items: [
     'Exam tab shows all medications/procedures performed with timestamps',
     'Painful procedures spike HR, BP, RR realistically',
@@ -9461,7 +9470,10 @@ function showNACSetup() {
   if (hasAnthropicKey && hasOpenAIKey) html += '&#x26A1; <strong>Direct mode active</strong> — fast responses, no server middleman<br>';
   html += '</div>';
 
-  html += '<button class="btn btn-success" style="width:100%;padding:14px;font-size:16px" onclick="startNACExam()">&#x1F3A4; Start NAC-OSCE Exam</button>';
+  html += '<div style="display:flex;gap:12px;margin-bottom:0">';
+  html += '<button class="btn btn-success" style="flex:1;padding:14px;font-size:16px" onclick="startNACExam()">&#x1F3A4; Start Exam</button>';
+  html += '<button class="btn btn-primary" style="padding:14px;font-size:16px" onclick="showNACScoresPage()">&#x1F4CA; My Scores</button>';
+  html += '</div>';
 
   // ── Past Scorecard History ──
   var history = _loadNACScoreHistory();
@@ -9509,6 +9521,110 @@ function showNACSetup() {
     }
     html += '</div>';
   }
+
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function showNACScoresPage() {
+  var el = document.getElementById('nac-sim-content');
+  var history = _loadNACScoreHistory();
+  // Index scores by pregenId for quick lookup
+  var scoreMap = {};
+  for (var si = 0; si < history.length; si++) {
+    var s = history[si];
+    if (s.pregenId) scoreMap[s.pregenId] = s;
+  }
+
+  var html = '<div style="max-width:800px;margin:0 auto">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">';
+  html += '<h2 style="margin:0;font-size:22px;color:var(--text)">&#x1F4CA; NAC-OSCE Scores</h2>';
+  html += '<button class="btn btn-outline btn-sm" onclick="showNACSetup()">&#x2190; Back</button>';
+  html += '</div>';
+
+  // Overall stats
+  var attempted = history.length;
+  var totalPossible = 0;
+  var totalEarned = 0;
+  for (var oi = 0; oi < history.length; oi++) {
+    totalEarned += (history[oi].total || 0);
+    totalPossible += 18;
+  }
+  var overallPct = totalPossible > 0 ? Math.round((totalEarned / totalPossible) * 100) : 0;
+  html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px">';
+  html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">';
+  html += '<div style="font-size:28px;font-weight:800;color:var(--primary)">' + attempted + '</div>';
+  html += '<div style="font-size:12px;color:var(--text-light)">Stations Done</div></div>';
+  html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">';
+  html += '<div style="font-size:28px;font-weight:800;color:var(--text)">' + (84 - attempted) + '</div>';
+  html += '<div style="font-size:12px;color:var(--text-light)">Remaining</div></div>';
+  html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">';
+  var oPctColor = overallPct >= 70 ? '#4caf50' : overallPct >= 50 ? '#ff9800' : '#f44336';
+  html += '<div style="font-size:28px;font-weight:800;color:' + oPctColor + '">' + overallPct + '%</div>';
+  html += '<div style="font-size:12px;color:var(--text-light)">Average</div></div>';
+  html += '</div>';
+
+  // Group by test
+  for (var ti = 0; ti < NAC_PRACTICE_TESTS.length; ti++) {
+    var test = NAC_PRACTICE_TESTS[ti];
+    var testScored = 0, testTotal = 0, testAttempted = 0;
+    html += '<div style="margin-bottom:20px">';
+    html += '<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--border)">Test ' + (ti + 1) + ' <span style="font-size:13px;font-weight:400;color:var(--text-light)">(' + test.length + ' stations)</span></div>';
+
+    for (var si2 = 0; si2 < test.length; si2++) {
+      var station = test[si2];
+      // Find score by matching presentation + specialty (since pregenId might not be saved in old scores)
+      var sc = null;
+      for (var hi = 0; hi < history.length; hi++) {
+        var h = history[hi];
+        if ((h.pregenId && h.pregenId === station.pregenId) ||
+            (h.presentation === station.presentation && h.specialty === station.specialty)) {
+          sc = h;
+          break;
+        }
+      }
+
+      var bg = sc ? 'var(--card)' : 'var(--bg)';
+      var border = sc ? 'var(--border)' : 'transparent';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;margin-bottom:4px;background:' + bg + ';border:1px solid ' + border + ';border-radius:8px">';
+      html += '<div style="flex:1;min-width:0">';
+      html += '<div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(station.presentation || '?') + '</div>';
+      html += '<div style="font-size:11px;color:var(--text-light)">' + escapeHtml(station.specialty || '') + '</div>';
+      html += '</div>';
+
+      if (sc) {
+        var total = sc.total || 0;
+        var pct = Math.round((total / 18) * 100);
+        var c = pct >= 70 ? '#4caf50' : pct >= 50 ? '#ff9800' : '#f44336';
+        html += '<div style="text-align:right;min-width:60px">';
+        html += '<div style="font-size:16px;font-weight:800;color:' + c + '">' + total + '/18</div>';
+        html += '<div style="font-size:10px;color:var(--text-light)">' + pct + '%</div>';
+        html += '</div>';
+        testAttempted++;
+        testScored += total;
+        testTotal += 18;
+      } else {
+        html += '<div style="font-size:13px;color:var(--text-light);font-style:italic;min-width:60px;text-align:right">N/A</div>';
+      }
+      html += '</div>';
+    }
+
+    // Test summary
+    if (testAttempted > 0) {
+      var testPct = Math.round((testScored / testTotal) * 100);
+      var tColor = testPct >= 70 ? '#4caf50' : testPct >= 50 ? '#ff9800' : '#f44336';
+      html += '<div style="display:flex;justify-content:space-between;padding:8px 14px;margin-top:4px;font-size:13px">';
+      html += '<span style="color:var(--text-light)">' + testAttempted + '/' + test.length + ' completed</span>';
+      html += '<span style="font-weight:700;color:' + tColor + '">Test avg: ' + testPct + '%</span>';
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  // Clear button
+  html += '<div style="text-align:center;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">';
+  html += '<button class="btn btn-outline btn-sm" onclick="if(confirm(\'Clear all scorecard history? This cannot be undone.\')){localStorage.removeItem(\'mcc_nac_scores_\'+(App.profile||\'guest\'));showNACScoresPage();}">Clear All Scores</button>';
+  html += '</div>';
 
   html += '</div>';
   el.innerHTML = html;
@@ -10511,6 +10627,7 @@ function finishNACStation() {
     evalResult.station = App.nacCurrentStation;
     evalResult.presentation = score.presentation;
     evalResult.specialty = score.specialty;
+    evalResult.pregenId = (App.nacStations && App.nacStations[App.nacCurrentStation - 1]) ? App.nacStations[App.nacCurrentStation - 1].pregenId : null;
     evalResult.timestamp = Date.now();
     App.nacScoreHistory.push(evalResult); _saveNACScoreHistory();
     _renderNACResultsScreen(score, evalResult);
@@ -10605,6 +10722,8 @@ function _saveNACScoreHistory() {
   try {
     var profile = App.profile || 'guest';
     localStorage.setItem('mcc_nac_scores_' + profile, JSON.stringify(App.nacScoreHistory || []));
+    // Also save to backend
+    serverCall('saveUserData', 'nac_scores', JSON.stringify(App.nacScoreHistory || [])).catch(function() {});
   } catch(e) {}
 }
 
