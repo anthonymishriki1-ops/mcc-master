@@ -2990,7 +2990,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '8.6';
+var APP_VERSION = '8.7';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -9980,7 +9980,10 @@ function sendNACMessageDirect_(userMessage) {
       ];
       response = reactions[Math.floor(Math.random() * reactions.length)];
     }
-    nacDirectRespond_(response);
+    // Check if doctor's message was a physical exam action — tag response accordingly
+    var examPattern = /\b(palpat|auscult|percuss|inspect|examine|feel|listen to|check|assess|look at|test reflex|cranial nerve|fundoscop|otoscop|ophthalmo|rectal|vaginal|speculum|digital|neuro exam|cardio exam|resp exam|abdo exam|msk exam)/i;
+    var isExam = examPattern.test(userMessage);
+    nacDirectRespond_(response, isExam ? 'partial' : 'assistant');
     maybeTriggerNacLabResults_(userMessage, response);
   }).catch(function(e) {
     App.pbHistory.push({ role: 'system', content: 'Error: ' + (e.message || String(e)) });
@@ -9990,8 +9993,8 @@ function sendNACMessageDirect_(userMessage) {
 }
 
 // Shared response handler: add to history, render, speak, restart mic
-function nacDirectRespond_(text) {
-  App.pbHistory.push({ role: 'assistant', content: text });
+function nacDirectRespond_(text, role) {
+  App.pbHistory.push({ role: role || 'assistant', content: text });
   renderPBChat();
   var voice = getOpenAIVoice_();
   var speed = getOpenAISpeed_();
