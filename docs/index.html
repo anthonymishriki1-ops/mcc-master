@@ -3088,7 +3088,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '9.1';
+var APP_VERSION = '9.2';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3100,6 +3100,12 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '9.2', date: 'Mar 29 2026', label: 'NAC scorecard + death state fixes', items: [
+    'Scorecard now renders on correct page (was invisible on wrong page)',
+    'Dead patient no longer carries over to next station',
+    'Idle timer stops when you navigate away from NAC',
+    'Trauma score resets between stations',
+  ]},
   { version: '9.1', date: 'Mar 29 2026', label: 'Desktop layout overhaul', items: [
     'Removed zoom widget — use browser zoom instead',
     'Content properly centered with max-widths on desktop',
@@ -3378,6 +3384,13 @@ var SKILL_MAP = [
 
 function navigateTo(page) {
   stopGameTimers_(page);
+
+  // Stop NAC idle timer + mic when navigating away from NAC/PatientBot
+  if (page !== 'patientbot' && page !== 'nac-sim' && App.nacActive) {
+    if (App.nacIdleTimer) { clearInterval(App.nacIdleTimer); App.nacIdleTimer = null; }
+    stopHandsFree_();
+    stopNACPttRecording_(false);
+  }
 
   // Stop quiz timer if navigating away from quiz
   if (page !== 'quiz' && App.quizTimerInterval) {
@@ -10471,6 +10484,11 @@ function startNextNACStation() {
   App._nacSilenceCount = 0;
   App._nacNudgeInFlight = false;
   App.nacPTTRecording = false;
+  App.pbCodeBlue = null; // reset death state from previous station
+  App.nacStationFinished = false; // allow finishNACStation to fire again
+  App.nacStationEvalLoading = false;
+  // Reset trauma accumulation
+  if (typeof VitalsEngine !== 'undefined' && VitalsEngine._traumaScore) VitalsEngine._traumaScore = 0;
   // Cancel any in-flight TTS
   if (App._ttsAudio) { try { App._ttsAudio.pause(); App._ttsAudio = null; } catch(e) {} }
   // Clear idle timer from previous station
@@ -10917,8 +10935,18 @@ function finishNACStation() {
 }
 
 function _renderNACResultsScreen(score, evalResult) {
+  // Ensure we're on the right page — NAC results should render to whichever page is active
   var nacEl = document.getElementById('nac-sim-content');
   var pbEl = document.getElementById('patientbot-content');
+  // Make sure the NAC page is visible
+  var nacPage = document.getElementById('page-nac-sim');
+  var pbPage = document.getElementById('page-patientbot');
+  if (nacPage && !nacPage.classList.contains('active')) {
+    // Switch to NAC page so results are visible
+    var allPages = document.querySelectorAll('.page');
+    for (var pi = 0; pi < allPages.length; pi++) allPages[pi].classList.remove('active');
+    nacPage.classList.add('active');
+  }
   var el = nacEl || pbEl;
   console.log('[NAC] _renderNACResultsScreen target lookup', {
     using: nacEl ? 'nac-sim-content' : (pbEl ? 'patientbot-content' : 'none'),
