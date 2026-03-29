@@ -3058,7 +3058,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '8.8';
+var APP_VERSION = '8.9';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3070,6 +3070,11 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '8.9', date: 'Mar 29 2026', label: 'Dead patients stop talking', items: [
+    'Patient no longer responds after death — all message paths blocked',
+    'Idle nudge timer stops when patient dies',
+    'Your messages still show in conversation but patient is silent',
+  ]},
   { version: '8.2', date: 'Mar 28 2026', label: 'Drug death works without specifying dose', items: [
     'Say "give fentanyl" without a dose → uses therapeutic dose, accumulates toward lethal threshold',
     'Multiple small doses now properly accumulate and eventually kill',
@@ -6646,6 +6651,12 @@ function _setHFIndicatorState_(label, bg, color) {
 function processPBTranscriptText_(text) {
   var best = text.trim();
   if (!best) return;
+  // Dead patients don't respond — block ALL paths
+  if (App.nacActive && App.pbHistory.some(function(m) { return m.role === 'death'; })) {
+    App.pbHistory.push({ role: 'user', content: best });
+    renderPBChat();
+    return;
+  }
 
   // Interrupt: if patient is speaking, kill the audio immediately
   if (App._ttsAudio) { try { App._ttsAudio.pause(); App._ttsAudio.currentTime = 0; } catch(e) {} App._ttsAudio = null; }
@@ -10041,6 +10052,13 @@ function sendNACTextMessage_() {
 // ── NAC Direct Mode: send message without GAS ──
 function sendNACMessageDirect_(userMessage) {
   if (!App.nacActive || !App._nacSystemPrompt) return;
+  // Dead patients don't talk
+  if (App.pbHistory.some(function(m) { return m.role === 'death'; })) {
+    App.pbHistory.push({ role: 'user', content: userMessage });
+    App.pbHistory.push({ role: 'system', content: 'The patient is deceased. No further interaction possible.', severity: 'critical' });
+    renderPBChat();
+    return;
+  }
 
   // Stop mic while processing (prevent hearing TTS playback)
   stopMicForProcessing_();
@@ -10708,6 +10726,8 @@ function enterNACStation_() {
   App._nacLastActivity = Date.now();
   App.nacIdleTimer = setInterval(function() {
     if (!App.nacActive || App.pbDiagResolved) { clearInterval(App.nacIdleTimer); return; }
+    // Dead patients don't nudge
+    if (App.pbHistory.some(function(m) { return m.role === 'death'; })) { clearInterval(App.nacIdleTimer); return; }
     if (!App.nacDoctorSpoke && App.pbHistory.length === 0) return;
     if (Date.now() - App._nacLastActivity < 28000) return; // reset if recent activity
     if (App._nacNudgeInFlight) return; // don't stack nudges
