@@ -2990,7 +2990,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '6.7';
+var APP_VERSION = '6.8';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3002,6 +3002,12 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '6.8', date: 'Mar 28 2026', label: 'Scorecard shows + saves history', items: [
+    'OSCE scorecard now reliably shows after every station',
+    'Scorecard history saved per profile — persists across sessions',
+    'Better error handling when API key missing — modal still shows',
+    'Loading toast while scorecard generates',
+  ]},
   { version: '6.7', date: 'Mar 28 2026', label: 'Lab ordering actually works now', items: [
     'Fixed: "order CBC", "order DOA screen" etc. now actually generate lab results',
     'Voice command handler was intercepting orders but not triggering lab generation',
@@ -9854,6 +9860,7 @@ function startNACExamInner_() {
   }
   App.nacActive = true;
   App.nacScores = [];
+  App.nacScoreHistory = _loadNACScoreHistory();
   App.nacTimerMinutes = App.nacTimerMinutes || 11;
   App.nacDifficulty = App.nacDifficulty || 'medium';
 
@@ -10311,18 +10318,63 @@ function finishNACStation() {
     logPBConversation('nac_timeout', {});
   }
 
+  // Initialize scorecard history
+  if (!App.nacScoreHistory) App.nacScoreHistory = [];
+
+  // Check if we have an API key for evaluation
+  var hasKey = !!localStorage.getItem('mcc_anthropic_key');
+  if (!hasKey) {
+    // No API key — show modal immediately with no eval, save stub to history
+    var stub = { historyTaking: 0, physicalExam: 0, communication: 0, clinicalReasoning: 0, investigations: 0, total: 0, summary: 'API key not available for evaluation.' };
+    stub.station = App.nacCurrentStation;
+    stub.presentation = score.presentation;
+    stub.specialty = score.specialty;
+    App.nacScoreHistory.push(stub);
+    _saveNACScoreHistory();
+    showNACStationScoreModal_(null);
+    return;
+  }
+
   App.nacStationEvalLoading = true;
+  showToast_('Generating OSCE scorecard...');
   var historyForEval = App.pbHistory.slice(-80);
   evaluateNACStationOSCE_(historyForEval).then(function(evalResult) {
     App.nacStationEvalLoading = false;
     App.nacStationEval = evalResult;
+    // Save to history
+    evalResult.station = App.nacCurrentStation;
+    evalResult.presentation = score.presentation;
+    evalResult.specialty = score.specialty;
+    evalResult.timestamp = Date.now();
+    App.nacScoreHistory.push(evalResult);
+    _saveNACScoreHistory();
     showNACStationScoreModal_(evalResult);
   }).catch(function(err) {
     App.nacStationEvalLoading = false;
     console.error('NAC station evaluation failed:', err);
-    showToast_('OSCE scorecard unavailable. You can still continue.');
+    var fallback = { historyTaking: 0, physicalExam: 0, communication: 0, clinicalReasoning: 0, investigations: 0, total: 0, summary: 'Evaluation failed: ' + (err.message || String(err)).substring(0, 100) };
+    fallback.station = App.nacCurrentStation;
+    fallback.presentation = score.presentation;
+    fallback.specialty = score.specialty;
+    App.nacScoreHistory.push(fallback);
+    _saveNACScoreHistory();
     showNACStationScoreModal_(null);
   });
+}
+
+function _saveNACScoreHistory() {
+  try {
+    var profile = App.profile || 'guest';
+    localStorage.setItem('mcc_nac_scores_' + profile, JSON.stringify(App.nacScoreHistory || []));
+  } catch(e) {}
+}
+
+function _loadNACScoreHistory() {
+  try {
+    var profile = App.profile || 'guest';
+    var raw = localStorage.getItem('mcc_nac_scores_' + profile);
+    return raw ? JSON.parse(raw) : [];
+  } catch(e) { return []; }
 }
 
 function advanceNACStation_() {
