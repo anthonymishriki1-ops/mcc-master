@@ -2990,7 +2990,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '7.1';
+var APP_VERSION = '7.2';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3002,6 +3002,11 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '7.2', date: 'Mar 28 2026', label: 'Drug engine now works in direct mode — patients can actually die', items: [
+    'BUG FIX: VitalsEngine.detectAndApply was never called in direct mode — drug deaths were impossible',
+    'Give lethal fentanyl dose → Code Blue, vitals crash, patient trails off mid-sentence',
+    'Drug interactions (opioid + benzo, MAOI + SSRI) now trigger in direct mode too',
+  ]},
   { version: '7.1', date: 'Mar 28 2026', label: 'Patients can deteriorate and die from clinical errors', items: [
     'Wrong drug, wrong dose, missed emergency → patient worsens realistically',
     'Progressive deterioration: dizzy → can\'t breathe → loses consciousness → death',
@@ -9636,6 +9641,22 @@ function sendNACMessageDirect_(userMessage) {
     if (m.role === 'user' || m.role === 'assistant') {
       apiMessages.push({ role: m.role, content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) });
     }
+  }
+
+  // Run drug/consequence engine on doctor's message BEFORE AI responds
+  VitalsEngine.detectAndApply(userMessage);
+
+  // Check if patient just died from the action
+  if (App.pbCodeBlue) {
+    var deathMsg = App.pbCodeBlue.reversible
+      ? 'I— I can\'t... breathe... something\'s... wrong...'
+      : 'I feel... really... wei...';
+    App.pbHistory.push({ role: 'assistant', content: deathMsg });
+    App.pbHistory.push({ role: 'death', content: 'CODE BLUE — Patient is in cardiac arrest.' });
+    renderPBChat();
+    var voice = getOpenAIVoice_();
+    callTTSDirect_(deathMsg, voice, getOpenAISpeed_()).catch(function(){});
+    return;
   }
 
   callAnthropicDirect_(App._nacSystemPrompt, apiMessages).then(function(response) {
