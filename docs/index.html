@@ -2990,7 +2990,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '7.5';
+var APP_VERSION = '7.6';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3002,6 +3002,11 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '7.6', date: 'Mar 28 2026', label: 'Patient death screen + scorecard', items: [
+    'Kill the patient → skull icon, cause of death, "Well... here\'s your scorecard anyway"',
+    'Shows whether death was reversible or irreversible',
+    'Scorecard still generates — so you learn from your fatal mistake',
+  ]},
   { version: '7.5', date: 'Mar 28 2026', label: 'Smarter patient: no asterisks, no narration, always answers', items: [
     'Asterisk actions (*winces*, *holds baby*) stripped from responses — TTS reads them as text',
     'Patient never narrates in third person or introduces themselves with a description',
@@ -10492,10 +10497,23 @@ function _renderNACResultsScreen(score, evalResult) {
   if (!el) return;
   var isLast = (!App.nacRandomMode && App.nacCurrentStation >= App.nacTotalStations);
   var nextLabel = isLast ? 'View Final Results' : 'Next Station';
+  var patientDied = !!App.pbCodeBlue;
   var h = '<div style="max-width:640px;margin:0 auto;padding:24px">';
   h += '<div style="text-align:center;margin-bottom:20px">';
-  h += '<div style="font-size:48px;margin-bottom:8px">&#x1F4CB;</div>';
-  h += '<h2 style="margin:0;font-size:24px;color:var(--text)">Station ' + App.nacCurrentStation + ' Complete</h2>';
+  if (patientDied) {
+    h += '<div style="font-size:48px;margin-bottom:8px">&#x1F480;</div>';
+    h += '<h2 style="margin:0;font-size:24px;color:#f44336">Patient Deceased</h2>';
+    h += '<p style="color:var(--text-light);margin:4px 0 0;font-size:14px">The patient died during this encounter.</p>';
+    var cause = App.pbCodeBlue.cause || 'clinical error';
+    h += '<div style="background:rgba(244,67,54,0.08);border:1px solid rgba(244,67,54,0.3);border-radius:10px;padding:12px 16px;margin-top:12px;text-align:left">';
+    h += '<div style="font-size:13px;color:#f44336;font-weight:600;margin-bottom:4px">Cause of Death</div>';
+    h += '<div style="font-size:14px;color:var(--text)">' + escapeHtml(cause) + (App.pbCodeBlue.reversible ? ' (potentially reversible)' : ' (irreversible)') + '</div>';
+    h += '</div>';
+    h += '<p style="color:var(--text-light);margin:16px 0 0;font-size:13px;font-style:italic">Well... here\'s your scorecard anyway.</p>';
+  } else {
+    h += '<div style="font-size:48px;margin-bottom:8px">&#x1F4CB;</div>';
+    h += '<h2 style="margin:0;font-size:24px;color:var(--text)">Station ' + App.nacCurrentStation + ' Complete</h2>';
+  }
   h += '<p style="color:var(--text-light);margin:4px 0 0;font-size:14px">' + escapeHtml(score.specialty || '') + ' — ' + escapeHtml(score.presentation || '') + '</p>';
   h += '</div>';
 
