@@ -2990,7 +2990,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '6.8';
+var APP_VERSION = '6.9';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3002,6 +3002,12 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '6.9', date: 'Mar 28 2026', label: 'Scorecard fix + Diagnosis scoring + voice confirm', items: [
+    'Scorecard modal z-index fixed (was hidden behind other elements)',
+    'Diagnosis added as 6th scoring domain (total now /18)',
+    'Non-empty system prompt for evaluator (fixes API error)',
+    'Verbal diagnosis now shows confirmation before submitting',
+  ]},
   { version: '6.8', date: 'Mar 28 2026', label: 'Scorecard shows + saves history', items: [
     'OSCE scorecard now reliably shows after every station',
     'Scorecard history saved per profile — persists across sessions',
@@ -7078,11 +7084,18 @@ function handleVoiceCommand_(text) {
   var dxM = tl.match(/^(?:i'?m diagnosing(?: (?:you|this|him|her|them|the patient))?(?: with)?|i am diagnosing(?: (?:you|this|him|her|them|the patient))?(?: with)?|my diagnosis is|the diagnosis is|i think (?:it(?:'s| is)|this is|the diagnosis is)|i(?:'m| am) going with|diagnos(?:e|is)(?::)?)\s+(.+)/);
   if (dxM) {
     var dx = dxM[1].trim();
-    showToast('🔊 Diagnosing: ' + dx);
     showDiagnoseModal();
     setTimeout(function() {
       var inp = document.getElementById('pb-diag-input');
       if (inp) { inp.value = dx; inp.focus(); }
+      // Add confirmation prompt above input
+      var modal = document.getElementById('pb-diag-input');
+      if (modal && modal.parentElement) {
+        var confirm = document.createElement('div');
+        confirm.style.cssText = 'background:rgba(255,152,0,0.1);border:1px solid #ff9800;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:14px;color:var(--text)';
+        confirm.innerHTML = '<strong>Confirm diagnosis:</strong> ' + escapeHtml(dx) + '<br><span style="font-size:12px;color:var(--text-light)">Click Submit to confirm, or edit above.</span>';
+        modal.parentElement.insertBefore(confirm, modal);
+      }
     }, 200);
     return true;
   }
@@ -10402,15 +10415,15 @@ function evaluateNACStationOSCE_(history) {
   var prompt = [
     'You are a strict NAC-OSCE examiner.',
     'Evaluate this student encounter and score each domain from 0 to 3 (integer only).',
-    'Domains: History Taking, Physical Exam, Communication, Clinical Reasoning, Investigations.',
+    'Domains: History Taking, Physical Exam, Communication, Clinical Reasoning, Investigations, Diagnosis.',
     'Use only evidence from transcript. If missing, score low.',
     'Return STRICT JSON with this schema and no extra text:',
-    '{"historyTaking":0,"physicalExam":0,"communication":0,"clinicalReasoning":0,"investigations":0,"summary":"max 2 short sentences"}',
+    '{"historyTaking":0,"physicalExam":0,"communication":0,"clinicalReasoning":0,"investigations":0,"diagnosis":0,"summary":"max 2 short sentences"}',
     '',
     'Transcript:',
     transcript || 'No meaningful interaction captured.'
   ].join('\n');
-  return callAnthropicDirect_('', [{ role: 'user', content: prompt }]).then(function(raw) {
+  return callAnthropicDirect_('You are a strict NAC-OSCE examiner. Return only valid JSON.', [{ role: 'user', content: prompt }]).then(function(raw) {
     var txt = String(raw || '').trim();
     var match = txt.match(/\{[\s\S]*\}/);
     var parsed = match ? JSON.parse(match[0]) : JSON.parse(txt);
@@ -10420,9 +10433,10 @@ function evaluateNACStationOSCE_(history) {
       communication: clampEvalScore_(parsed.communication),
       clinicalReasoning: clampEvalScore_(parsed.clinicalReasoning),
       investigations: clampEvalScore_(parsed.investigations),
+      diagnosis: clampEvalScore_(parsed.diagnosis),
       summary: String(parsed.summary || '').substring(0, 240)
     };
-    out.total = out.historyTaking + out.physicalExam + out.communication + out.clinicalReasoning + out.investigations;
+    out.total = out.historyTaking + out.physicalExam + out.communication + out.clinicalReasoning + out.investigations + out.diagnosis;
     return out;
   });
 }
@@ -10443,10 +10457,11 @@ function showNACStationScoreModal_(evalResult) {
     { key: 'physicalExam', label: 'Physical Exam', icon: '&#x1FA7A;' },
     { key: 'communication', label: 'Communication', icon: '&#x1F4AC;' },
     { key: 'clinicalReasoning', label: 'Clinical Reasoning', icon: '&#x1F9E0;' },
-    { key: 'investigations', label: 'Investigations', icon: '&#x1F52C;' }
+    { key: 'investigations', label: 'Investigations', icon: '&#x1F52C;' },
+    { key: 'diagnosis', label: 'Diagnosis', icon: '&#x1F3AF;' }
   ];
   var h = '';
-  h += '<div id="nac-station-score-modal" role="dialog" aria-modal="true" aria-labelledby="nac-station-score-title" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.65);padding:16px">';
+  h += '<div id="nac-station-score-modal" role="dialog" aria-modal="true" aria-labelledby="nac-station-score-title" style="position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.65);padding:16px">';
   h += '<div style="background:var(--card);color:var(--text);border-radius:18px;max-width:520px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,0.3)">';
   h += '<h3 id="nac-station-score-title" style="margin:0 0 8px;font-size:22px">NAC OSCE Station Scorecard</h3>';
   h += '<p style="margin:0 0 16px;color:var(--text-light);font-size:14px">Station ' + App.nacCurrentStation + ' complete.</p>';
@@ -10459,7 +10474,7 @@ function showNACStationScoreModal_(evalResult) {
       h += '<span style="font-size:14px">' + r.icon + ' ' + r.label + '</span><strong style="font-size:14px">' + v + '/3</strong></div>';
     }
     h += '</div>';
-    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><span style="font-size:13px;color:var(--text-light)">Total</span><strong style="font-size:18px">' + evalResult.total + '/15</strong></div>';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><span style="font-size:13px;color:var(--text-light)">Total</span><strong style="font-size:18px">' + evalResult.total + '/18</strong></div>';
     if (evalResult.summary) h += '<div style="font-size:13px;color:var(--text-light);margin-bottom:14px;line-height:1.5">' + escapeHtml(evalResult.summary) + '</div>';
   } else {
     h += '<div style="font-size:13px;color:var(--text-light);margin-bottom:14px">Evaluation was unavailable for this station.</div>';
