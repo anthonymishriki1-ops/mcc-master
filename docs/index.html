@@ -1733,6 +1733,25 @@ body.kb-open #bottom-nav { display: none !important; }
     margin-right: auto;
   }
 
+  /* Sidebar collapse button — desktop only */
+  #sidebar-collapse-btn {
+    display: flex !important;
+  }
+  #sidebar.sidebar-collapsed {
+    width: 0;
+    min-width: 0;
+    padding: 0;
+    overflow: hidden;
+    border: none;
+  }
+  #sidebar.sidebar-collapsed + #content,
+  #content.sidebar-collapsed {
+    margin-left: 0 !important;
+  }
+  #sidebar.sidebar-collapsed #sidebar-collapse-btn {
+    right: -36px;
+  }
+
   /* NAC desktop: two-column overview, taller conversation */
   .nac-overview-grid {
     display: grid;
@@ -2542,6 +2561,7 @@ a:focus-visible {
 
   <!-- Sidebar -->
   <nav id="sidebar">
+    <button id="sidebar-collapse-btn" onclick="toggleSidebarCollapse()" aria-label="Collapse sidebar" title="Collapse sidebar" style="display:none;position:absolute;top:12px;right:-14px;width:28px;height:28px;border-radius:50%;background:var(--primary);color:white;border:2px solid var(--bg);cursor:pointer;font-size:14px;z-index:11;align-items:center;justify-content:center">&#x276E;</button>
     <div class="sidebar-header">
       <h1>MCC Master</h1>
       <p id="user-email">Loading...</p>
@@ -2582,6 +2602,11 @@ a:focus-visible {
       <li data-page="devpanel" onclick="navigateTo('devpanel')" id="nav-dev" style="display:none;border-top:1px solid rgba(255,255,255,0.1);margin-top:8px;color:#ff9800">&#x1F6E0; Dev Panel</li>
     </ul>
     <div class="sidebar-footer">
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:8px 0">
+        <button onclick="adjustTextSize(-10)" style="width:32px;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:white;cursor:pointer;font-size:14px;font-weight:700" title="Decrease text size">A-</button>
+        <span id="text-size-label" style="font-size:12px;color:rgba(255,255,255,0.6);min-width:36px;text-align:center">100%</span>
+        <button onclick="adjustTextSize(10)" style="width:32px;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:white;cursor:pointer;font-size:16px;font-weight:700" title="Increase text size">A+</button>
+      </div>
       <button class="dark-mode-toggle" onclick="toggleDarkMode()" id="dark-mode-btn" title="Toggle dark mode" style="margin-top:8px">&#x1F319; Dark Mode</button>
       <button class="dark-mode-toggle" onclick="showNameEntry()" style="margin-top:6px">&#x1F465; Switch User</button>
       <button class="dark-mode-toggle" onclick="startTutorial()" style="margin-top:6px" title="Replay the audio &amp; translation guide">&#x2753; Help</button>
@@ -3088,7 +3113,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '9.2';
+var APP_VERSION = '9.3';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3100,6 +3125,11 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '9.3', date: 'Mar 29 2026', label: 'Sidebar collapse + text size controls', items: [
+    'Collapse sidebar on desktop — click the arrow button on sidebar edge',
+    'Text size A-/A+ buttons in sidebar — adjusts content from 70% to 150%',
+    'Both settings saved and restored across sessions',
+  ]},
   { version: '9.2', date: 'Mar 29 2026', label: 'NAC scorecard + death state fixes', items: [
     'Scorecard now renders on correct page (was invisible on wrong page)',
     'Dead patient no longer carries over to next station',
@@ -3479,6 +3509,35 @@ function toggleSidebar() {
   document.getElementById('sidebar').classList.toggle('open');
 }
 
+function toggleSidebarCollapse() {
+  var sidebar = document.getElementById('sidebar');
+  var content = document.getElementById('content');
+  var btn = document.getElementById('sidebar-collapse-btn');
+  var collapsed = sidebar.classList.toggle('sidebar-collapsed');
+  if (content) content.classList.toggle('sidebar-collapsed', collapsed);
+  if (btn) btn.innerHTML = collapsed ? '&#x276F;' : '&#x276E;';
+  localStorage.setItem('mcc_sidebar_collapsed', collapsed ? '1' : '0');
+}
+
+function adjustTextSize(delta) {
+  var current = parseFloat(localStorage.getItem('mcc_text_size') || '100');
+  current = Math.max(70, Math.min(150, current + delta));
+  localStorage.setItem('mcc_text_size', String(current));
+  document.getElementById('content').style.fontSize = current + '%';
+  var label = document.getElementById('text-size-label');
+  if (label) label.textContent = Math.round(current) + '%';
+}
+
+function initTextSize() {
+  var size = parseFloat(localStorage.getItem('mcc_text_size') || '100');
+  var content = document.getElementById('content');
+  if (content && size !== 100) content.style.fontSize = size + '%';
+  // Restore sidebar collapse state
+  if (localStorage.getItem('mcc_sidebar_collapsed') === '1') {
+    toggleSidebarCollapse();
+  }
+}
+
 function toggleDarkMode() {
   var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   if (isDark) {
@@ -3809,6 +3868,8 @@ function afterLogin_(displayName) {
 
   var profilePage = document.getElementById('profile-select-page');
   if (profilePage) profilePage.remove();
+  // Restore text size and sidebar collapse state
+  initTextSize();
 
   document.getElementById('user-email').textContent = displayName;
 
