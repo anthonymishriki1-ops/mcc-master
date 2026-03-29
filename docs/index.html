@@ -2990,7 +2990,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '7.9';
+var APP_VERSION = '8.0';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3002,6 +3002,11 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '8.0', date: 'Mar 28 2026', label: 'Lab results reflect what you actually did', items: [
+    'Tox screen now shows positive for drugs you administered (fentanyl, cannabis, etc.)',
+    'Lab generator gets full context: drugs given, procedures done, conversation history',
+    'Code Blue status passed to lab generator — results reflect cardiac arrest',
+  ]},
   { version: '7.9', date: 'Mar 28 2026', label: 'My Scores page — all 84 stations tracked', items: [
     'New "My Scores" button on NAC setup page',
     'All 84 stations listed, grouped by Test 1-7',
@@ -9727,11 +9732,24 @@ function generateLabResults_(orderText) {
     '{"testName":"string","values":[{"name":"string","value":"string","unit":"string","flag":"normal|high|low|critical"}]}. ' +
     'For imaging/ECG/procedure reports, use descriptive findings as "value" (e.g. name:"Chest X-ray", value:"Bilateral infiltrates, cardiomegaly", unit:"", flag:"critical"). ' +
     'Match findings to the diagnosis and vitals. Include 3-10 values with clinically coherent ranges/interpretation. No markdown, no code blocks.';
+  // Build context from actions performed and recent conversation
+  var actionsCtx = '';
+  if (App.nacActions && App.nacActions.length > 0) {
+    actionsCtx = '\nDrugs/procedures administered this encounter: ' + App.nacActions.map(function(a) { return a.action; }).join(', ');
+  }
+  var recentMsgs = '';
+  if (App.pbHistory && App.pbHistory.length > 0) {
+    var last5 = App.pbHistory.filter(function(m) { return m.role === 'user' || m.role === 'assistant'; }).slice(-5);
+    recentMsgs = '\nRecent conversation: ' + last5.map(function(m) { return (m.role === 'user' ? 'Doctor' : 'Patient') + ': ' + (typeof m.content === 'string' ? m.content : '').substring(0, 100); }).join(' | ');
+  }
+  var codeBlueCtx = App.pbCodeBlue ? '\nPATIENT IS IN CODE BLUE / CARDIAC ARREST from: ' + (App.pbCodeBlue.cause || 'unknown') : '';
   var userPrompt =
     'Diagnosis: ' + dx + '\n' +
     'Patient: ' + (p.name || 'Unknown') + ', age ' + (p.age || '?') + ', sex ' + (p.sex || '?') + '\n' +
-    'Vitals: HR ' + (vd.hr || '?') + ', BP ' + (bp ? (bp.sbp + '/' + bp.dbp) : (p.bp || '?')) + ', RR ' + (vd.rr || '?') + ', Temp ' + (vd.temp || '?') + ', SpO2 ' + (vd.spo2 || '?') + '\n' +
-    'Order text: ' + (orderText || 'General bloodwork');
+    'Vitals: HR ' + (vd.hr || '?') + ', BP ' + (bp ? (bp.sbp + '/' + bp.dbp) : (p.bp || '?')) + ', RR ' + (vd.rr || '?') + ', Temp ' + (vd.temp || '?') + ', SpO2 ' + (vd.spo2 || '?') +
+    actionsCtx + recentMsgs + codeBlueCtx + '\n' +
+    'Order text: ' + (orderText || 'General bloodwork') +
+    '\nIMPORTANT: Lab results MUST reflect what was actually administered. If fentanyl was given, tox screen MUST show opioids positive. If cannabis was given, tox screen MUST show THC positive. Results must be consistent with the actual encounter.';
   return fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
