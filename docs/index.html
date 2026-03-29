@@ -3094,7 +3094,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '9.1';
+var APP_VERSION = '9.2';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3106,6 +3106,10 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '9.2', date: 'Mar 29 2026', label: 'Dead patient no longer haunts next station', items: [
+    'Fixed: death state (Code Blue, pbDiagResolved) now fully cleared between stations',
+    'Next patient starts alive with fresh vitals',
+  ]},
   { version: '9.1', date: 'Mar 29 2026', label: 'Desktop layout overhaul', items: [
     'Removed zoom widget — use browser zoom instead',
     'Content properly centered with max-widths on desktop',
@@ -10482,6 +10486,7 @@ function startNextNACStation() {
   App.pbPartialUsed = false;
   App.pbMonitorAttached = false;
   App.pbHistory = [];
+  App.pbCodeBlue = null; // clear death state from previous station
   App.nacStationMsg = '';
   App.pbScorecard = null;
   App.pbScorecardLoading = false;
