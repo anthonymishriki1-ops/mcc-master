@@ -3058,7 +3058,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '8.7';
+var APP_VERSION = '8.8';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -13758,39 +13758,228 @@ function updateFlagStatus_(issueId, status) {
 var SPEED_DX_LEADERBOARD_KEY = 'mcc_speeddx_leaderboard';
 var VITALS_EMERGENCY_SCENARIOS = [
   {
-    vignette: '62M crushing chest pain, diaphoresis, hypotension after sildenafil.',
-    vitals: 'HR 42 | BP 78/46 | RR 22 | SpO2 93% | Temp 36.7°C',
-    options: ['Give sublingual nitroglycerin', 'Start IV fluids + atropine, prepare pacing', 'Discharge with PPI', 'Give adenosine rapid push'],
+    vignette: '68M brought by EMS after witnessed collapse at home. Wife reports he clutched his chest and became unresponsive 5 minutes ago. Bystander CPR was started immediately and no shocks have been delivered yet.',
+    vitals: 'HR 0 | BP -/- | SpO2 --% | RR 0 | Temp 36.4°C',
+    options: ['Pause compressions and intubate first before any rhythm check', 'Continue high-quality CPR, attach monitor/defibrillator, and run ACLS for pulseless arrest', 'Give sublingual nitroglycerin because chest pain was reported', 'Transfer to CT head before initiating resuscitation'],
     correct: 1,
-    reason: 'Inferior STEMI with bradycardic shock + PDE5 use. Avoid nitrates; stabilize perfusion and chronotropy.'
+    reason: 'Classic out-of-hospital cardiac arrest: immediate ACLS with uninterrupted CPR and rhythm-directed shocks/meds is lifesaving.'
   },
   {
-    vignette: '24F post-op day 1, sudden dyspnea and pleuritic pain.',
-    vitals: 'HR 136 | BP 92/58 | RR 34 | SpO2 84% | Temp 37.2°C',
-    options: ['Immediate therapeutic anticoagulation for presumed massive PE', 'Give oral azithromycin', 'Ask to walk and reassess tomorrow', 'Intubate without oxygen first'],
+    vignette: '54F found pulseless on telemetry ward after sudden syncope. Nurse notes coarse VF on monitor and no pulse on check. Defibrillator is at bedside and crash cart is open.',
+    vitals: 'HR 0 (VF) | BP -/- | SpO2 --% | RR 0 | Temp 36.8°C',
+    options: ['Deliver immediate unsynchronized defibrillation and resume compressions for 2 minutes', 'Start dopamine infusion before any shock', 'Give adenosine rapid push for ventricular fibrillation', 'Wait for cardiology consult before treating'],
     correct: 0,
-    reason: 'Unstable likely PE: treat emergently; oxygen and anticoagulation while escalating.'
+    reason: 'Shockable arrest rhythm requires immediate defibrillation plus ongoing CPR.'
   },
   {
-    vignette: '70F fever + confusion, warm extremities, probable urosepsis.',
-    vitals: 'HR 124 | BP 82/48 | RR 30 | SpO2 91% | Temp 39.3°C',
-    options: ['30 mL/kg crystalloids + broad-spectrum IV antibiotics now', 'Wait for final culture before treatment', 'Give propranolol for tachycardia', 'Start insulin drip first'],
+    vignette: '27M receives IV cefazolin in PACU and within minutes develops diffuse urticaria, hoarseness, and stridor. He is anxious, clutching his throat, and says he cannot breathe. Staff report rapidly worsening facial swelling.',
+    vitals: 'HR 142 | BP 72/40 | SpO2 82% | RR 34 | Temp 36.9°C',
+    options: ['Give IM epinephrine to lateral thigh immediately, high-flow oxygen, and prepare airway support', 'Administer IV diphenhydramine alone and observe for 30 minutes', 'Start oral prednisone and delay other interventions', 'Give IV furosemide for dyspnea'],
     correct: 0,
-    reason: 'Septic shock: early fluids and antibiotics are time-critical.'
+    reason: 'Anaphylactic shock with airway compromise is treated first with immediate IM epinephrine.'
   },
   {
-    vignette: '19M known type 1 DM, vomiting, Kussmaul breathing.',
-    vitals: 'HR 118 | BP 96/60 | RR 32 | SpO2 98% | Temp 37.0°C',
-    options: ['IV fluids, check potassium, then insulin infusion', 'Give bicarbonate first for all DKA', 'Oral metformin and discharge', 'Immediate loop diuretic'],
+    vignette: '33F with known peanut allergy accidentally ate dessert at a wedding. She now has wheeze, hypotension, vomiting, and lip edema despite using her old epinephrine auto-injector once. EMS reports worsening respiratory distress en route.',
+    vitals: 'HR 138 | BP 78/44 | SpO2 86% | RR 32 | Temp 36.7°C',
+    options: ['Repeat IM epinephrine, aggressive IV fluids, bronchodilator support, and close airway reassessment', 'Give lorazepam because anxiety is driving tachycardia', 'Treat as isolated asthma and avoid epinephrine', 'Discharge after antihistamine because one auto-injector was used'],
     correct: 0,
-    reason: 'DKA first steps: volume resuscitation and potassium-guided insulin.'
+    reason: 'Refractory anaphylaxis often needs repeat epinephrine and shock management.'
   },
   {
-    vignette: '58M wheeze, silent chest episodes, speaking 1-2 words.',
-    vitals: 'HR 132 | BP 150/90 | RR 36 | SpO2 82% | Temp 36.8°C',
-    options: ['Nebulized salbutamol/ipratropium + steroids + oxygen', 'Send for outpatient spirometry first', 'Give cough syrup and reassess in 24h', 'Start beta-blocker for HR control'],
+    vignette: '22M arrives after stab wound to left chest. He is agitated with severe dyspnea, tracheal deviation, distended neck veins, and absent breath sounds on the left. Team cannot wait for imaging.',
+    vitals: 'HR 148 | BP 76/42 | SpO2 79% | RR 38 | Temp 36.2°C',
+    options: ['Immediate needle decompression followed by tube thoracostomy on the affected side', 'Send urgently for CT chest to confirm diagnosis before intervention', 'Start heparin for presumed pulmonary embolism', 'Give morphine and observe for spontaneous improvement'],
     correct: 0,
-    reason: 'Impending respiratory failure from severe asthma: immediate bronchodilation and oxygen.'
+    reason: 'Tension pneumothorax is a clinical diagnosis; immediate decompression is required.'
+  },
+  {
+    vignette: '64F intubated in ICU suddenly becomes hypotensive with rising peak airway pressures. Right hemithorax is hyperexpanded with absent breath sounds after central line insertion. Cardiac monitor shows worsening tachycardia.',
+    vitals: 'HR 136 | BP 68/38 | SpO2 81% | RR set 20 (poor ventilation) | Temp 37.1°C',
+    options: ['Perform immediate right-sided decompression and then place a chest tube', 'Increase PEEP and sedation while waiting for portable X-ray', 'Administer tPA for possible embolic stroke', 'Give metoprolol to reduce tachycardia'],
+    correct: 0,
+    reason: 'Post-procedure tension pneumothorax with obstructive shock needs immediate decompression.'
+  },
+  {
+    vignette: '41F on postpartum day 4 has abrupt pleuritic chest pain and syncope while walking. She is pale, diaphoretic, and markedly dyspneic with clear lungs. Family history includes prior VTE.',
+    vitals: 'HR 144 | BP 82/50 | SpO2 83% | RR 36 | Temp 37.0°C',
+    options: ['Treat as high-risk PE with immediate resuscitation and urgent anticoagulation/thrombolysis pathway', 'Delay therapy until D-dimer returns', 'Give broad-spectrum antibiotics for presumed pneumonia', 'Request outpatient V/Q scan and discharge'],
+    correct: 0,
+    reason: 'Massive PE with instability requires immediate life-saving PE protocol, not delayed workup.'
+  },
+  {
+    vignette: '59M with metastatic cancer develops sudden dyspnea and near-syncope on the ward. Bedside ultrasound shows RV strain and no pericardial effusion. He remains hypotensive despite oxygen.',
+    vitals: 'HR 132 | BP 84/48 | SpO2 85% | RR 30 | Temp 36.6°C',
+    options: ['Activate massive PE management with immediate anticoagulation and reperfusion consideration', 'Give large-dose diuretic for tachypnea', 'Treat as panic attack and provide reassurance only', 'Withhold treatment until CT angiography is available tomorrow'],
+    correct: 0,
+    reason: 'Hemodynamic collapse with RV strain strongly suggests massive PE requiring emergent treatment.'
+  },
+  {
+    vignette: '16M with type 1 diabetes stopped insulin during viral illness and now has abdominal pain with repeated vomiting. He is drowsy, severely dehydrated, and breathing deeply with fruity odor. Parents report 2 days of progressive lethargy.',
+    vitals: 'HR 128 | BP 88/54 | SpO2 98% | RR 34 (Kussmaul) | Temp 37.4°C',
+    options: ['Start isotonic fluids, check potassium urgently, then begin insulin infusion when safe', 'Push sodium bicarbonate first regardless of pH and potassium', 'Give subcutaneous long-acting insulin only and discharge', 'Restrict fluids to avoid cerebral edema in all ages'],
+    correct: 0,
+    reason: 'DKA resuscitation begins with fluids and potassium-guided insulin strategy.'
+  },
+  {
+    vignette: '24F with insulin pump failure presents confused after 1 day of polyuria and polydipsia. She has dry mucosa, diffuse abdominal tenderness, and rapid deep respirations. Triage glucose is unreadably high.',
+    vitals: 'HR 134 | BP 90/56 | SpO2 97% | RR 32 | Temp 37.1°C',
+    options: ['Aggressive IV crystalloid, electrolyte correction, insulin infusion, and frequent anion gap monitoring', 'Administer oral hypoglycemic agent and observe', 'Delay treatment until ketone assay finalized in lab', 'Treat as isolated gastroenteritis with antiemetics only'],
+    correct: 0,
+    reason: 'Pump failure can precipitate severe DKA requiring protocolized ICU-style management.'
+  },
+  {
+    vignette: '72F from long-term care arrives febrile and confused with foul-smelling urine. She has mottled skin, delayed capillary refill, and low urine output. Staff report mental status decline over 12 hours.',
+    vitals: 'HR 126 | BP 80/46 | SpO2 90% | RR 31 | Temp 39.2°C',
+    options: ['Obtain cultures quickly but give broad-spectrum IV antibiotics and 30 mL/kg crystalloid immediately', 'Wait for final culture susceptibilities before any antimicrobials', 'Use beta-blocker to control tachycardia first', 'Begin insulin infusion despite normal glucose'],
+    correct: 0,
+    reason: 'Septic shock treatment is time-critical: early fluids and broad antibiotics save lives.'
+  },
+  {
+    vignette: '48M on chemotherapy presents with rigors and confusion after central line infection concern. He is hypotensive despite initial bolus and lactate is markedly elevated. Nurses report rapidly worsening perfusion.',
+    vitals: 'HR 138 | BP 74/40 | SpO2 92% | RR 33 | Temp 38.9°C',
+    options: ['Escalate sepsis bundle with repeat fluids, broad-spectrum antimicrobials, and start vasopressor support for persistent MAP <65', 'Stop all fluids and give antihypertensives', 'Treat as isolated fever with acetaminophen only', 'Discharge with oral cephalexin'],
+    correct: 0,
+    reason: 'Persistent hypotension after fluid challenge indicates septic shock needing vasopressors.'
+  },
+  {
+    vignette: '67M with atrial fibrillation develops sudden right-sided weakness and aphasia 35 minutes ago. Family confirms exact last-known-well time while he was eating dinner. Airway is protected but speech is incomprehensible.',
+    vitals: 'HR 108 (irregular) | BP 198/108 | SpO2 95% | RR 20 | Temp 36.8°C',
+    options: ['Activate stroke protocol immediately: urgent non-contrast head CT and reperfusion eligibility pathway', 'Lower BP rapidly to normal with IV labetalol before imaging', 'Give aspirin and discharge for outpatient MRI', 'Delay workup until deficits persist for 24 hours'],
+    correct: 0,
+    reason: 'Hyperacute focal deficits need immediate stroke code and imaging for thrombolysis/thrombectomy decisions.'
+  },
+  {
+    vignette: '74F suddenly collapsed with left gaze deviation and dense right hemiplegia. She has severe headache and repeated vomiting in triage. Daughter says she was normal 20 minutes earlier.',
+    vitals: 'HR 96 | BP 224/118 | SpO2 94% | RR 22 | Temp 37.0°C',
+    options: ['Prioritize emergent head CT to distinguish ischemic vs hemorrhagic stroke before definitive therapy', 'Administer empiric thrombolytic before any imaging', 'Treat headache only and reassess tomorrow', 'Send directly to rehabilitation unit'],
+    correct: 0,
+    reason: 'Imaging first is mandatory to guide safe acute stroke treatment.'
+  },
+  {
+    vignette: '29M with epilepsy has ongoing generalized tonic-clonic activity for 7 minutes in ED. He remains unresponsive between convulsions and has no IV access yet. Family confirms medication nonadherence for a week.',
+    vitals: 'HR 146 | BP 168/98 | SpO2 86% | RR ineffective | Temp 37.5°C',
+    options: ['Treat as status epilepticus: immediate benzodiazepine, airway/oxygen support, then second-line antiseizure therapy', 'Wait until seizure reaches 30 minutes before medications', 'Give haloperidol to calm movements', 'Send for EEG before giving any abortive therapy'],
+    correct: 0,
+    reason: 'Status epilepticus requires immediate seizure termination and airway stabilization.'
+  },
+  {
+    vignette: '46F in alcohol withdrawal has continuous convulsive activity despite two prehospital benzodiazepine doses. She is cyanotic during episodes and intermittently apneic. Team is preparing for RSI if refractory.',
+    vitals: 'HR 152 | BP 182/102 | SpO2 84% | RR 8 (agonal between seizures) | Temp 38.0°C',
+    options: ['Escalate refractory status protocol with airway control and additional IV antiseizure therapy', 'Give oral thiamine only and observe', 'Restrain physically without medication', 'Delay intervention until serum drug levels return'],
+    correct: 0,
+    reason: 'Refractory status can rapidly cause hypoxic injury; aggressive protocolized escalation is required.'
+  },
+  {
+    vignette: '31M found unresponsive beside empty fentanyl packets in washroom. Pupils are pinpoint and respirations are shallow with cyanosis. Friend reports last seen normal 10 minutes ago.',
+    vitals: 'HR 52 | BP 84/50 | SpO2 74% | RR 4 | Temp 35.9°C',
+    options: ['Open airway, provide bag-mask ventilation, and give naloxone with rapid reassessment', 'Give flumazenil empirically as first-line antidote', 'Wait for toxicology confirmation before reversing', 'Intubate without pre-oxygenation or ventilation support'],
+    correct: 0,
+    reason: 'Opioid toxidrome with respiratory failure requires immediate ventilation and naloxone.'
+  },
+  {
+    vignette: '43F is obtunded after being found with multiple methadone tablets. She has hypoventilation, miosis, and rising end-tidal CO2 despite oxygen by mask. EMS gave no antidote yet.',
+    vitals: 'HR 56 | BP 90/54 | SpO2 81% | RR 5 | Temp 36.1°C',
+    options: ['Titrate naloxone while supporting ventilation and monitor for recurrent respiratory depression', 'Administer activated charcoal without airway protection', 'Treat as panic attack and discharge', 'Give high-dose beta-blocker for bradycardia'],
+    correct: 0,
+    reason: 'Long-acting opioid overdose often needs repeated naloxone and close airway monitoring.'
+  },
+  {
+    vignette: '35M brought after high-speed MVC with open femur fracture and abdominal distension. Skin is cool and clammy, and he is increasingly confused. FAST exam is positive for free fluid.',
+    vitals: 'HR 150 | BP 70/38 | SpO2 92% | RR 32 | Temp 35.5°C',
+    options: ['Activate massive transfusion protocol, control hemorrhage urgently, and limit crystalloids', 'Give only 3 liters normal saline before blood products', 'Delay blood until full CT pan-scan completed', 'Start therapeutic heparin immediately'],
+    correct: 0,
+    reason: 'Hemorrhagic shock in trauma needs rapid blood product resuscitation and source control.'
+  },
+  {
+    vignette: '58F with melena now has hematemesis and near-syncope in resuscitation bay. She is pale, diaphoretic, and passing large-volume maroon stool. Two large-bore IVs are being placed.',
+    vitals: 'HR 142 | BP 76/44 | SpO2 90% | RR 30 | Temp 36.0°C',
+    options: ['Resuscitate with blood products, start hemorrhage protocol, and arrange emergent endoscopic/hemostatic control', 'Give oral iron and outpatient GI referral', 'Start diuretics for tachypnea', 'Delay transfusion until hemoglobin repeats in 6 hours'],
+    correct: 0,
+    reason: 'Active exsanguinating GI bleed with shock needs immediate transfusion and definitive hemostasis.'
+  },
+  {
+    vignette: '63M with crushing chest pain becomes bradycardic and hypotensive after nitroglycerin from paramedics. ECG shows inferior STEMI pattern and lungs are clear. He is cool but still mentating.',
+    vitals: 'HR 38 | BP 72/44 | SpO2 93% | RR 22 | Temp 36.6°C',
+    options: ['Give cautious IV fluids, atropine, and prepare transcutaneous pacing while activating cath lab', 'Administer more nitroglycerin for persistent pain', 'Start high-dose beta-blocker despite shock', 'Discharge once pain improves slightly'],
+    correct: 0,
+    reason: 'Inferior/RV MI with brady-shock worsens with nitrates; preload and chronotropy support are key.'
+  },
+  {
+    vignette: '76F with complete heart block in ED complains of dizziness and chest pressure. She is intermittently syncopal with poor perfusion and cool extremities. Monitor shows ventricular escape rhythm in the 20s.',
+    vitals: 'HR 24 | BP 64/36 | SpO2 90% | RR 24 | Temp 36.3°C',
+    options: ['Start immediate transcutaneous pacing with vasopressor/chronotropic bridge and definitive pacing plan', 'Give adenosine to speed AV conduction', 'Observe because bradycardia can be normal in elderly', 'Use carotid massage repeatedly'],
+    correct: 0,
+    reason: 'Unstable high-grade AV block requires emergent pacing, not AV nodal blockade.'
+  },
+  {
+    vignette: '28M with severe asthma cannot complete sentences and has a nearly silent chest. He has used his inhaler repeatedly without relief and now appears exhausted. Accessory muscles are prominent.',
+    vitals: 'HR 140 | BP 148/86 | SpO2 80% | RR 38 | Temp 36.7°C',
+    options: ['Immediate high-flow oxygen, repeated bronchodilators, systemic steroids, and prepare for impending respiratory failure', 'Send for outpatient spirometry then reassess', 'Give propranolol for tachycardia control', 'Delay treatment until chest X-ray completed'],
+    correct: 0,
+    reason: 'Near-fatal asthma needs immediate aggressive bronchodilator and airway strategy.'
+  },
+  {
+    vignette: '69M with COPD on home oxygen presents somnolent with severe dyspnea and asterixis. Family says he has become progressively confused over 24 hours. Exam reveals poor air movement and hyperinflation.',
+    vitals: 'HR 118 | BP 94/58 | SpO2 78% on 2L NC | RR 10 (fatiguing) | Temp 37.3°C',
+    options: ['Escalate to controlled oxygen, bronchodilators, steroids, and noninvasive ventilation with close ABG monitoring', 'Turn oxygen off completely to preserve hypoxic drive', 'Give only cough suppressant and discharge', 'Administer large-volume sedatives for agitation'],
+    correct: 0,
+    reason: 'Impending hypercapnic respiratory failure in COPD requires ventilatory support and bronchodilation.'
+  },
+  {
+    vignette: '32F at 34 weeks gestation develops tonic-clonic seizure in triage with severe headache and visual changes. She had rising blood pressures this week and new edema. Fetal monitor is being prepared.',
+    vitals: 'HR 124 | BP 208/118 | SpO2 89% | RR 26 | Temp 37.1°C',
+    options: ['Treat eclampsia immediately with magnesium sulfate, blood pressure control, and urgent obstetric escalation', 'Use carbamazepine only and arrange outpatient follow-up', 'Delay treatment until urine protein is confirmed', 'Give thrombolytics for presumed stroke'],
+    correct: 0,
+    reason: 'Eclampsia is a maternal-fetal emergency requiring magnesium and definitive obstetric management.'
+  },
+  {
+    vignette: '55M with cirrhosis has fever, abdominal pain, and confusion after paracentesis delay. He is jaundiced with tense ascites and diffuse tenderness. Family reports progressive lethargy since morning.',
+    vitals: 'HR 130 | BP 82/48 | SpO2 91% | RR 28 | Temp 38.8°C',
+    options: ['Treat presumed spontaneous bacterial peritonitis with immediate IV antibiotics, fluids, and albumin support', 'Wait for ascitic culture growth before any treatment', 'Start beta-blocker for portal hypertension first', 'Discharge with oral laxative only'],
+    correct: 0,
+    reason: 'SBP with septic shock physiology needs urgent empiric therapy and hemodynamic support.'
+  },
+  {
+    vignette: '61M on warfarin for mechanical valve presents with sudden severe headache, vomiting, and collapse. He is drowsy with unequal pupils and rapidly declining GCS. Family says symptoms started 30 minutes ago.',
+    vitals: 'HR 58 | BP 232/124 | SpO2 92% | RR 18 | Temp 36.9°C',
+    options: ['Activate intracranial hemorrhage pathway with urgent CT, airway readiness, BP control, and anticoagulation reversal', 'Give immediate thrombolysis before imaging', 'Discharge with migraine medication', 'Lower BP to normal range within minutes using any oral agent'],
+    correct: 0,
+    reason: 'Possible hemorrhagic stroke on anticoagulation requires immediate imaging and reversal strategy.'
+  },
+  {
+    vignette: '47M collapses after smoke inhalation in apartment fire and arrives confused with soot around nares. He has profound lactic acidosis and hypotension despite oxygen. Burn team suspects cyanide toxicity.',
+    vitals: 'HR 128 | BP 86/50 | SpO2 99% | RR 30 | Temp 37.2°C',
+    options: ['Provide 100% oxygen, support circulation, and administer empiric hydroxocobalamin for suspected cyanide poisoning', 'Rely on pulse oximetry alone to rule out inhalational toxicity', 'Give naloxone as definitive treatment', 'Delay treatment until toxicology lab confirms cyanide level'],
+    correct: 0,
+    reason: 'Cyanide toxicity after smoke inhalation is treated empirically when clinical suspicion is high.'
+  },
+  {
+    vignette: '45F with ESRD missed dialysis for 4 days and now reports weakness with near-syncope. ECG shows wide QRS and peaked T waves. She is nauseated and progressively lethargic.',
+    vitals: 'HR 34 | BP 78/46 | SpO2 95% | RR 24 | Temp 36.5°C',
+    options: ['Stabilize myocardium with IV calcium, shift potassium intracellularly, and arrange emergent dialysis', 'Give potassium supplements for bradycardia', 'Start adenosine rapid push', 'Observe until morning rounds'],
+    correct: 0,
+    reason: 'Life-threatening hyperkalemia requires immediate membrane stabilization and potassium-lowering therapy.'
+  },
+  {
+    vignette: '38M with known adrenal insufficiency stopped steroids during gastroenteritis and now presents with profound weakness and vomiting. He is confused, dehydrated, and has diffuse abdominal pain. Family reports progressive collapse over the day.',
+    vitals: 'HR 122 | BP 70/40 | SpO2 94% | RR 26 | Temp 38.1°C',
+    options: ['Treat adrenal crisis now with IV hydrocortisone, aggressive isotonic fluids, and correction of glucose/electrolytes', 'Wait for cortisol results before giving steroids', 'Start insulin drip for stress hyperglycemia only', 'Use diuretics for hypotension-related edema'],
+    correct: 0,
+    reason: 'Suspected adrenal crisis is treated immediately; do not delay steroids for confirmatory testing.'
+  },
+  {
+    vignette: '26F with type 1 diabetes is found confused and diaphoretic after missing meals but taking insulin. She is combative, tremulous, and then becomes less responsive. Fingerstick glucose reads 1.9 mmol/L.',
+    vitals: 'HR 132 | BP 104/62 | SpO2 97% | RR 24 | Temp 36.6°C',
+    options: ['Give immediate IV dextrose (or IM glucagon if no IV), then reassess airway and repeat glucose', 'Start insulin infusion to correct sympathetic surge', 'Observe because tachycardia suggests anxiety only', 'Administer sodium bicarbonate first'],
+    correct: 0,
+    reason: 'Severe symptomatic hypoglycemia requires immediate glucose replacement.'
+  },
+  {
+    vignette: '67M with known abdominal aortic aneurysm has abrupt tearing back pain and syncope. Abdomen is pulsatile and he is rapidly becoming obtunded. No trauma history is reported.',
+    vitals: 'HR 146 | BP 62/34 | SpO2 90% | RR 30 | Temp 35.8°C',
+    options: ['Activate ruptured AAA pathway with permissive hypotension, blood products, and emergent vascular surgery transfer to OR', 'Give full-dose heparin and arrange outpatient ultrasound', 'Delay surgery until blood pressure normalizes with crystalloids alone', 'Discharge if pain temporarily improves'],
+    correct: 0,
+    reason: 'Ruptured AAA is a time-critical hemorrhagic catastrophe requiring immediate operative pathway.'
   }
 ];
 
