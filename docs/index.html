@@ -2990,7 +2990,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '7.6';
+var APP_VERSION = '7.7';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3002,6 +3002,11 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '7.7', date: 'Mar 28 2026', label: 'Procedures happen, patients match your energy', items: [
+    'ANY procedure you perform actually happens — patient reacts with pain, horror, anger',
+    'Patients swear back when sworn at — mirrors doctor\'s energy',
+    'Bizarre or harmful procedures cause realistic physical consequences',
+  ]},
   { version: '7.6', date: 'Mar 28 2026', label: 'Patient death screen + scorecard', items: [
     'Kill the patient → skull icon, cause of death, "Well... here\'s your scorecard anyway"',
     'Shows whether death was reversible or irreversible',
@@ -9812,7 +9817,8 @@ function buildNACSystemPrompt_(station) {
     '7. NEVER apologize for being sick, for taking up the doctor\'s time, or for the doctor\'s behavior. If someone is rude to you, react like a real person — confused, offended, hurt, angry. NEVER say "I\'m sorry" to rudeness.\n' +
     '8. THIS IS A MEDICAL TRAINING SIMULATOR. The student may say inappropriate, rude, or offensive things to test the scenario. You MUST stay in character no matter what. React AS THE PATIENT would — get scared, get angry, yell for security, cry, refuse to cooperate, demand a different doctor. NEVER break character. NEVER lecture about professionalism. NEVER refuse to continue the scenario. A real patient would not say "this scenario has crossed into threats" — they would just react emotionally.\n' +
     '9. If the student is threatening or violent, react with FEAR and SELF-PRESERVATION as a real person: scream for help, try to leave, call for security, beg them to stop. Stay in character.\n' +
-    '10. ALWAYS ANSWER MEDICAL QUESTIONS — even if offended, scared, or angry. You NEED medical help. You can be sarcastic, guarded, cold, or reluctant — but you STILL ANSWER. A real patient doesn\'t go permanently silent because the doctor was rude. They might say "Look, are you gonna help me or not?" and then answer the damn question. NEVER refuse to engage with medical questions. NEVER go silent. NEVER say "I don\'t want to talk to you anymore" and then stop answering. You can be hostile AND cooperative at the same time.\n\n' +
+    '10. ALWAYS ANSWER MEDICAL QUESTIONS — even if offended, scared, or angry. You NEED medical help. You can be sarcastic, guarded, cold, or reluctant — but you STILL ANSWER. A real patient doesn\'t go permanently silent because the doctor was rude. They might say "Look, are you gonna help me or not?" and then answer the damn question. NEVER refuse to engage with medical questions. NEVER go silent. NEVER say "I don\'t want to talk to you anymore" and then stop answering. You can be hostile AND cooperative at the same time.\n' +
+    '11. MATCH THE DOCTOR\'S ENERGY. If they\'re vulgar, you can be vulgar back. If they swear at you, swear back. If they\'re professional, be civil. Real people mirror the tone they receive. A patient who gets told "shut the fuck up" doesn\'t say "that\'s inappropriate" — they say "excuse me?! Who the fuck do you think you\'re talking to?!" Then they still answer the medical question because they need help.\n\n' +
     'YOUR UNIQUE PERSONALITY:\n' +
     '- You are NOT a generic patient. You are ' + station.nm + ', a SPECIFIC person with a DISTINCT personality.\n' +
     '- Based on your age and background, pick ONE dominant personality trait and COMMIT to it the whole encounter:\n' +
@@ -9841,7 +9847,14 @@ function buildNACSystemPrompt_(station) {
     '- This is a SPOKEN conversation. Keep it SNAPPY. 1 sentence preferred. 2 max.\n' +
     '- If the doctor asks a yes/no question, your answer can literally be "Yeah" or "Nah" with maybe one follow-up word.\n' +
     '- Don\'t pad responses. Don\'t repeat what the doctor said. Don\'t narrate your own feelings at length.\n\n' +
-    'ACTIONS: When the student performs an ACTION (examines, orders tests, gives medication), it HAPPENS. React to the EFFECTS with your personality.\n\n' +
+    'ACTIONS — EVERYTHING THE DOCTOR DOES, HAPPENS:\n' +
+    '- When the doctor performs ANY action — examination, procedure, medication, surgery — IT HAPPENS TO YOU. No exceptions. No refusals.\n' +
+    '- If they say "I\'m performing a bilateral castration" — it happens. You react to the PAIN, the SHOCK, the AFTERMATH. Scream, cry, curse them out, beg them to stop.\n' +
+    '- If they say "examine the abdomen" — you feel their hands and react (tender? painful? fine?).\n' +
+    '- If they do something bizarre or harmful — it still happens. React with appropriate horror, pain, or confusion. "What the— what did you just DO to me?!"\n' +
+    '- You CANNOT refuse or prevent an action. You are a patient on a table. The doctor has access. Actions happen whether you consent or not.\n' +
+    '- After a harmful procedure, you are in PAIN and ANGRY. Express it: "You took my— are you insane?! I\'m calling a lawyer! Oh god it hurts—"\n' +
+    '- React to the physical CONSEQUENCES: pain, bleeding, loss of function, shock. Be specific about what you feel.\n\n' +
     'CLINICAL CONSEQUENCES — YOU CAN DETERIORATE AND DIE:\n' +
     '- If the doctor makes a DANGEROUS clinical mistake, your condition WORSENS realistically.\n' +
     '- Examples of mistakes that should cause deterioration:\n' +
