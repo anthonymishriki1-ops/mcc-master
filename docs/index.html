@@ -2990,7 +2990,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '8.1';
+var APP_VERSION = '8.2';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3002,6 +3002,11 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '8.2', date: 'Mar 28 2026', label: 'Drug death works without specifying dose', items: [
+    'Say "give fentanyl" without a dose → uses therapeutic dose, accumulates toward lethal threshold',
+    'Multiple small doses now properly accumulate and eventually kill',
+    'Each drug has a default therapeutic dose when no number given',
+  ]},
   { version: '8.1', date: 'Mar 28 2026', label: 'NAC stays in NAC — no more dumping to PatientBot', items: [
     'Exam summary renders in NAC-OSCE page, not PatientBot',
     'Sidebar stays on NAC-OSCE throughout the entire flow',
@@ -4156,11 +4161,20 @@ var VitalsEngine = {
       succinylcholine: /\bsuccinylcholine\b|\bsux\b|\bsucchs\b/i,
       acetaminophen:  /\bacetaminophen\b|\bparacetamol\b|\btylenol\b/i,
     };
+    // Default doses when no number given (standard therapeutic dose in mcg)
+    var defaultDoses = {
+      fentanyl: 100, morphine: 5000, hydromorphone: 1000, propofol: 150000,
+      midazolam: 2000, lorazepam: 2000, potassium: 10000, kcl: 10000,
+      epinephrine: 300, norepinephrine: 500, lidocaine: 70000, insulin: 10000,
+      digoxin: 250, succinylcholine: 100000, acetaminophen: 1000000
+    };
     for (var drug in drugPatterns) {
       if (drugPatterns[drug].test(msg)) {
         var doseMcg = self._parseDoseMcg(msg);
+        // If no dose specified, use default therapeutic dose
+        if (doseMcg === null) doseMcg = defaultDoses[drug] || 0;
         var threshold = self.LETHAL_DOSES[drug];
-        if (doseMcg !== null && threshold) {
+        if (doseMcg > 0 && threshold) {
           // Accumulate cumulative dose for this drug across the case
           if (!self._cumulativeDoses[drug]) self._cumulativeDoses[drug] = 0;
           self._cumulativeDoses[drug] += doseMcg;
