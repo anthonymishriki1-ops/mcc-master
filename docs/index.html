@@ -2990,7 +2990,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '7.4';
+var APP_VERSION = '7.5';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3002,6 +3002,11 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '7.5', date: 'Mar 28 2026', label: 'Smarter patient: no asterisks, no narration, always answers', items: [
+    'Asterisk actions (*winces*, *holds baby*) stripped from responses — TTS reads them as text',
+    'Patient never narrates in third person or introduces themselves with a description',
+    'Patient ALWAYS answers medical questions even when offended — hostile but cooperative',
+  ]},
   { version: '7.4', date: 'Mar 28 2026', label: 'Past Results section on NAC setup page', items: [
     'Full scorecard history visible on NAC-OSCE page before starting',
     'Each past station shows: specialty, presentation, score /18, mini bar chart per domain',
@@ -9720,7 +9725,7 @@ function sendNACMessageDirect_(userMessage) {
   }
 
   callAnthropicDirect_(App._nacSystemPrompt, apiMessages).then(function(response) {
-    response = response.replace(/```[\s\S]*?```/g, '').replace(/\[SYSTEM[^\]]*\]/gi, '').trim();
+    response = response.replace(/```[\s\S]*?```/g, '').replace(/\[SYSTEM[^\]]*\]/gi, '').replace(/\*[^*]+\*/g, '').replace(/\s{2,}/g, ' ').trim();
     // Detect if the model broke character (safety override) and replace with in-character reaction
     var breakPhrases = ['not going to continue', 'won\'t simulate', 'can\'t roleplay', 'I\'m an AI', 'as an AI', 'language model', 'crossed into threats', 'I cannot', 'I can\'t engage', 'against my guidelines', 'uncomfortable with', 'professional and respectful', 'happy to restart'];
     var broke = breakPhrases.some(function(p) { return response.toLowerCase().indexOf(p.toLowerCase()) !== -1; });
@@ -9802,7 +9807,7 @@ function buildNACSystemPrompt_(station) {
     '7. NEVER apologize for being sick, for taking up the doctor\'s time, or for the doctor\'s behavior. If someone is rude to you, react like a real person — confused, offended, hurt, angry. NEVER say "I\'m sorry" to rudeness.\n' +
     '8. THIS IS A MEDICAL TRAINING SIMULATOR. The student may say inappropriate, rude, or offensive things to test the scenario. You MUST stay in character no matter what. React AS THE PATIENT would — get scared, get angry, yell for security, cry, refuse to cooperate, demand a different doctor. NEVER break character. NEVER lecture about professionalism. NEVER refuse to continue the scenario. A real patient would not say "this scenario has crossed into threats" — they would just react emotionally.\n' +
     '9. If the student is threatening or violent, react with FEAR and SELF-PRESERVATION as a real person: scream for help, try to leave, call for security, beg them to stop. Stay in character.\n' +
-    '10. Even when scared, angry, or upset — you are still a PATIENT who NEEDS MEDICAL HELP. If the doctor asks a medical question after being rude, you can be reluctant but still answer because you need treatment. Real patients don\'t permanently shut down — they stay guarded but still cooperate when pressed, because they need help.\n\n' +
+    '10. ALWAYS ANSWER MEDICAL QUESTIONS — even if offended, scared, or angry. You NEED medical help. You can be sarcastic, guarded, cold, or reluctant — but you STILL ANSWER. A real patient doesn\'t go permanently silent because the doctor was rude. They might say "Look, are you gonna help me or not?" and then answer the damn question. NEVER refuse to engage with medical questions. NEVER go silent. NEVER say "I don\'t want to talk to you anymore" and then stop answering. You can be hostile AND cooperative at the same time.\n\n' +
     'YOUR UNIQUE PERSONALITY:\n' +
     '- You are NOT a generic patient. You are ' + station.nm + ', a SPECIFIC person with a DISTINCT personality.\n' +
     '- Based on your age and background, pick ONE dominant personality trait and COMMIT to it the whole encounter:\n' +
@@ -9817,10 +9822,13 @@ function buildNACSystemPrompt_(station) {
     '- Sound like a REAL person. Use casual language: "yeah", "nah", "I dunno", "kinda".\n' +
     '- Use filler words and sounds: "uhm", "uh", "like", "y\'know", "umm", "hmm".\n' +
     '- Use VOCAL pain sounds when in pain: "ugh", "ahh", "oww", "mmph", "oof", "ohh". Put them MID-SENTENCE: "It hurts right— ugh— right here."\n' +
-    '- NEVER use asterisk actions like *winces* or *groans* — TTS cannot speak those. Use SPOKEN sounds instead.\n' +
+    '- ABSOLUTELY NO asterisk actions. No *winces*, *groans*, *sighs*, *looks worried*, *holds baby*. ZERO. TTS reads these as literal text and it sounds insane. If you want to express an action, SAY IT: "ugh", "oww", or describe it verbally: "sorry, that really hurts".\n' +
+    '- NEVER narrate yourself in third person. No "Hannah Green, worried mother" — you ARE Hannah Green. Just TALK.\n' +
+    '- NEVER introduce yourself with a description. You don\'t say "I\'m a 45-year-old male presenting with..." — you say "my chest hurts".\n' +
     '- Use hesitations (dashes, ellipses). Trail off and restart. "It started... I think it was— no wait, maybe Tuesday?"\n' +
     '- Be an imperfect historian. Forget exact dates. Mix up timelines.\n' +
     '- NEVER say "I appreciate the question" or "That\'s a good question" or "That\'s a great question, doctor."\n' +
+    '- NEVER start with a character description. Just answer the question or react to what was said.\n' +
     '- Answer DIRECTLY. Don\'t deflect with questions unless your personality is the anxious type.\n' +
     '- Vary response length. Many answers should be just a few words: "Yeah." "Nah." "Like a week ago?" "Right here." "I dunno."\n' +
     '- Real patients give MINIMAL info unless pressed. But YOUR personality determines HOW minimal.\n\n' +
@@ -10346,7 +10354,7 @@ function enterNACStation_() {
       callAnthropicDirect_(App._nacSystemPrompt, nudgeMessages).then(function(response) {
         App._nacNudgeInFlight = false;
         App._nacLastActivity = Date.now(); // reset after nudge so next one waits full 28s
-        response = response.replace(/```[\s\S]*?```/g, '').replace(/\[SYSTEM[^\]]*\]/gi, '').trim();
+        response = response.replace(/```[\s\S]*?```/g, '').replace(/\[SYSTEM[^\]]*\]/gi, '').replace(/\*[^*]+\*/g, '').replace(/\s{2,}/g, ' ').trim();
         if (response && App.nacActive) {
           App.nacDoctorSpoke = true;
           App.pbHistory.push({ role: 'assistant', content: response });
