@@ -1573,6 +1573,11 @@ body.kb-open #bottom-nav { display: none !important; }
   }
 
   #sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    overflow-y: auto;
     width: var(--sidebar-width);
   }
 
@@ -1601,6 +1606,9 @@ body.kb-open #bottom-nav { display: none !important; }
   }
 
   #content {
+    margin-left: var(--sidebar-width);
+    height: 100vh;
+    overflow-y: auto;
     padding: 48px 64px;
     max-width: 1400px;
   }
@@ -1628,8 +1636,12 @@ body.kb-open #bottom-nav { display: none !important; }
   }
 
   .stat-grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 24px;
+  }
+
+  .quick-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .stat-card {
@@ -1673,7 +1685,9 @@ body.kb-open #bottom-nav { display: none !important; }
   }
 
   .flashcard-container {
-    max-width: 720px;
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
   }
 
   /* NAC desktop: two-column overview, taller conversation */
@@ -1712,8 +1726,24 @@ body.kb-open #bottom-nav { display: none !important; }
   }
 
   .chat-container {
-    max-width: 100%;
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
     height: calc(100vh - 180px);
+  }
+
+  #quiz-content {
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  #patientbot-content .pb-setup,
+  #patientbot-content #nac-setup-content .card,
+  #patientbot-content #house-setup-content .card {
+    max-width: 700px;
+    margin-left: auto;
+    margin-right: auto;
   }
 
   .chat-messages {
