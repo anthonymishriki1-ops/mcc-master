@@ -2990,7 +2990,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '7.3';
+var APP_VERSION = '7.4';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3002,6 +3002,13 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '7.4', date: 'Mar 28 2026', label: 'Past Results section on NAC setup page', items: [
+    'Full scorecard history visible on NAC-OSCE page before starting',
+    'Each past station shows: specialty, presentation, score /18, mini bar chart per domain',
+    'Color-coded: green (70%+), orange (50-70%), red (below 50%)',
+    'AI summary shown for each station',
+    'Clear history button if you want a fresh start',
+  ]},
   { version: '7.3', date: 'Mar 28 2026', label: 'Better random variety + read definitions aloud', items: [
     'Random Case avoids repeating last 10 stations and same specialty back-to-back',
     'New 📖 button on glossary terms reads the definition aloud (free browser TTS)',
@@ -9417,6 +9424,54 @@ function showNACSetup() {
   html += '</div>';
 
   html += '<button class="btn btn-success" style="width:100%;padding:14px;font-size:16px" onclick="startNACExam()">&#x1F3A4; Start NAC-OSCE Exam</button>';
+
+  // ── Past Scorecard History ──
+  var history = _loadNACScoreHistory();
+  if (history.length > 0) {
+    html += '<div style="margin-top:24px;border-top:2px solid var(--border);padding-top:20px">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">';
+    html += '<h3 style="margin:0;font-size:18px;color:var(--text)">&#x1F4CA; Past Results (' + history.length + ')</h3>';
+    html += '<button class="btn btn-sm btn-outline" onclick="if(confirm(\'Clear all scorecard history?\')){localStorage.removeItem(\'mcc_nac_scores_\'+(App.profile||\'guest\'));showNACSetup();}">Clear</button>';
+    html += '</div>';
+    // Show most recent first
+    for (var hi = history.length - 1; hi >= Math.max(0, history.length - 20); hi--) {
+      var sc = history[hi];
+      var total = sc.total || 0;
+      var pct = Math.round((total / 18) * 100);
+      var pctColor = pct >= 70 ? '#4caf50' : pct >= 50 ? '#ff9800' : '#f44336';
+      var dateStr = sc.timestamp ? new Date(sc.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+      html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:8px">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+      html += '<div>';
+      html += '<strong style="font-size:14px;color:var(--text)">' + escapeHtml(sc.presentation || 'Station ' + (sc.station || '?')) + '</strong>';
+      if (sc.specialty) html += '<span style="font-size:12px;color:var(--text-light);margin-left:8px">' + escapeHtml(sc.specialty) + '</span>';
+      html += '</div>';
+      html += '<div style="font-size:20px;font-weight:800;color:' + pctColor + '">' + total + '<span style="font-size:13px;font-weight:400;color:var(--text-light)">/18</span></div>';
+      html += '</div>';
+      // Mini bar chart
+      var domains = [
+        { k: 'historyTaking', l: 'Hx' }, { k: 'physicalExam', l: 'PE' },
+        { k: 'communication', l: 'Comm' }, { k: 'clinicalReasoning', l: 'CR' },
+        { k: 'investigations', l: 'Inv' }, { k: 'diagnosis', l: 'Dx' }
+      ];
+      html += '<div style="display:flex;gap:4px;align-items:flex-end;height:28px">';
+      for (var di = 0; di < domains.length; di++) {
+        var dv = sc[domains[di].k] || 0;
+        var dh = Math.max(4, Math.round((dv / 3) * 28));
+        var dc = dv === 0 ? '#ef5350' : dv === 1 ? '#ff9800' : dv === 2 ? '#66bb6a' : '#2e7d32';
+        html += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">';
+        html += '<div style="width:100%;height:' + dh + 'px;background:' + dc + ';border-radius:3px"></div>';
+        html += '<span style="font-size:8px;color:var(--text-light)">' + domains[di].l + '</span>';
+        html += '</div>';
+      }
+      html += '</div>';
+      if (sc.summary) html += '<div style="font-size:11px;color:var(--text-light);margin-top:6px;line-height:1.4">' + escapeHtml(sc.summary) + '</div>';
+      if (dateStr) html += '<div style="font-size:10px;color:var(--text-light);margin-top:4px;opacity:0.6">' + dateStr + '</div>';
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
   html += '</div>';
   el.innerHTML = html;
 }
