@@ -2398,6 +2398,11 @@ body.kb-open #bottom-nav { display: none !important; }
 
 @media (max-width: 768px) {
   .changelog-btn { bottom: 68px; right: 8px; padding: 4px 8px; font-size: 10px; }
+  .game-shell { max-width: 100%; margin: 0; }
+}
+
+@media (min-width: 769px) {
+  .game-shell { max-width: 700px; margin: 0 auto; }
 }
 
 .flag-btn {
@@ -2490,6 +2495,10 @@ a:focus-visible {
       <li class="nav-group-label">PRACTICE</li>
       <li data-page="patientbot" onclick="navigateTo('patientbot')">&#x1F3E5; PatientBot</li>
       <li data-page="house" onclick="navigateTo('house')">&#x1F9E0; Dr. House</li>
+
+      <li class="nav-group-label">GAMES</li>
+      <li data-page="speeddx" onclick="navigateTo('speeddx')">&#x26A1; Speed Dx</li>
+      <li data-page="vitals-emergency" onclick="navigateTo('vitals-emergency')">&#x1F6A8; Vital Signs Emergency</li>
 
       <li class="nav-group-label">EXAM PREP</li>
       <li data-page="quiz" onclick="navigateTo('quiz')">&#x1F4CB; MCCQE Part I</li>
@@ -2680,6 +2689,19 @@ a:focus-visible {
       </div>
       <div id="patientbot-content"></div>
       <div id="pb-library-content" style="display:none"></div>
+    </div>
+
+
+    <!-- SPEED DX -->
+    <div id="page-speeddx" class="page">
+      <div class="page-header"><h2>&#x26A1; Speed Dx</h2></div>
+      <div id="speeddx-content"></div>
+    </div>
+
+    <!-- VITAL SIGNS EMERGENCY -->
+    <div id="page-vitals-emergency" class="page">
+      <div class="page-header"><h2>&#x1F6A8; Vital Signs Emergency</h2></div>
+      <div id="vitals-emergency-content"></div>
     </div>
 
     <!-- LEADERBOARD -->
@@ -2970,7 +2992,23 @@ var App = {
   nacLabResults: [],
   nacIdleNudgeCount: 0,
   nacStationEvalLoading: false,
-  nacStationEval: null
+  nacStationEval: null,
+
+  // Games
+  speedDxCards: [],
+  speedDxRound: null,
+  speedDxTimer: null,
+  speedDxSeconds: 0,
+  speedDxStreak: 0,
+  speedDxBestStreak: 0,
+  speedDxScore: 0,
+
+  vitalsEmergencyRound: 1,
+  vitalsEmergencyScenario: null,
+  vitalsEmergencyTimer: null,
+  vitalsEmergencyTimeLeft: 5,
+  vitalsEmergencyActive: false,
+  vitalsEmergencyBest: 0
 };
 
 // Point values
@@ -3269,6 +3307,8 @@ var SKILL_MAP = [
 // =============================================
 
 function navigateTo(page) {
+  stopGameTimers_(page);
+
   // Stop quiz timer if navigating away from quiz
   if (page !== 'quiz' && App.quizTimerInterval) {
     clearInterval(App.quizTimerInterval);
@@ -3342,6 +3382,8 @@ function navigateTo(page) {
     case 'house': showHouseSetup(); break;
     case 'mccqe-sim': showMCCQESetup(); break;
     case 'nac-sim': showNACSetup(); break;
+    case 'speeddx': showSpeedDx(); break;
+    case 'vitals-emergency': showVitalSignsEmergency(); break;
 
     case 'leaderboard': loadLeaderboard(); break;
     case 'achievements': loadAchievements(); break;
@@ -13676,6 +13718,288 @@ function updateFlagStatus_(issueId, status) {
     }
     filterDevFlags_();
   }).catch(function(e) { showToast('Error: ' + (e.message || String(e))); });
+}
+
+
+// =============================================
+// GAMES
+// =============================================
+
+var SPEED_DX_LEADERBOARD_KEY = 'mcc_speeddx_leaderboard';
+var VITALS_EMERGENCY_SCENARIOS = [
+  {
+    vignette: '62M crushing chest pain, diaphoresis, hypotension after sildenafil.',
+    vitals: 'HR 42 | BP 78/46 | RR 22 | SpO2 93% | Temp 36.7°C',
+    options: ['Give sublingual nitroglycerin', 'Start IV fluids + atropine, prepare pacing', 'Discharge with PPI', 'Give adenosine rapid push'],
+    correct: 1,
+    reason: 'Inferior STEMI with bradycardic shock + PDE5 use. Avoid nitrates; stabilize perfusion and chronotropy.'
+  },
+  {
+    vignette: '24F post-op day 1, sudden dyspnea and pleuritic pain.',
+    vitals: 'HR 136 | BP 92/58 | RR 34 | SpO2 84% | Temp 37.2°C',
+    options: ['Immediate therapeutic anticoagulation for presumed massive PE', 'Give oral azithromycin', 'Ask to walk and reassess tomorrow', 'Intubate without oxygen first'],
+    correct: 0,
+    reason: 'Unstable likely PE: treat emergently; oxygen and anticoagulation while escalating.'
+  },
+  {
+    vignette: '70F fever + confusion, warm extremities, probable urosepsis.',
+    vitals: 'HR 124 | BP 82/48 | RR 30 | SpO2 91% | Temp 39.3°C',
+    options: ['30 mL/kg crystalloids + broad-spectrum IV antibiotics now', 'Wait for final culture before treatment', 'Give propranolol for tachycardia', 'Start insulin drip first'],
+    correct: 0,
+    reason: 'Septic shock: early fluids and antibiotics are time-critical.'
+  },
+  {
+    vignette: '19M known type 1 DM, vomiting, Kussmaul breathing.',
+    vitals: 'HR 118 | BP 96/60 | RR 32 | SpO2 98% | Temp 37.0°C',
+    options: ['IV fluids, check potassium, then insulin infusion', 'Give bicarbonate first for all DKA', 'Oral metformin and discharge', 'Immediate loop diuretic'],
+    correct: 0,
+    reason: 'DKA first steps: volume resuscitation and potassium-guided insulin.'
+  },
+  {
+    vignette: '58M wheeze, silent chest episodes, speaking 1-2 words.',
+    vitals: 'HR 132 | BP 150/90 | RR 36 | SpO2 82% | Temp 36.8°C',
+    options: ['Nebulized salbutamol/ipratropium + steroids + oxygen', 'Send for outpatient spirometry first', 'Give cough syrup and reassess in 24h', 'Start beta-blocker for HR control'],
+    correct: 0,
+    reason: 'Impending respiratory failure from severe asthma: immediate bronchodilation and oxygen.'
+  }
+];
+
+function stopGameTimers_(nextPage) {
+  if (nextPage !== 'speeddx' && App.speedDxTimer) {
+    clearInterval(App.speedDxTimer);
+    App.speedDxTimer = null;
+  }
+  if (nextPage !== 'vitals-emergency' && App.vitalsEmergencyTimer) {
+    clearInterval(App.vitalsEmergencyTimer);
+    App.vitalsEmergencyTimer = null;
+  }
+}
+
+function getSpeedDxPrompt_(card) {
+  if (!card) return '';
+  var src = String(card.front || card.back || '').replace(/\s+/g, ' ').trim();
+  if (!src) return 'Clinical clue unavailable.';
+  return src.length > 180 ? src.slice(0, 177) + '...' : src;
+}
+
+function getSpeedDxAnswer_(card) {
+  if (!card) return '';
+  var topic = (card.topic || '').trim();
+  if (topic) return topic.toLowerCase();
+  var back = String(card.back || '').trim();
+  if (!back) return '';
+  var first = back.split(/[.\n]/)[0];
+  return first.toLowerCase();
+}
+function showSpeedDx() {
+  var el = document.getElementById('speeddx-content');
+  if (!el) return;
+
+  if (!App.speedDxCards || App.speedDxCards.length === 0) {
+    var fromApp = (App.flashcardsAll && App.flashcardsAll.length) ? Promise.resolve(App.flashcardsAll) : serverCall('getFlashcards', 'All');
+    el.innerHTML = '<div class="card game-shell" style="text-align:center;padding:28px"><div class="spinner"></div><p style="margin-top:10px">Loading cases...</p></div>';
+    fromApp.then(function(cards) {
+      App.speedDxCards = (cards || []).filter(function(c) { return (c.front || c.back) && (c.topic || c.back); });
+      if (!App.speedDxCards.length) {
+        el.innerHTML = '<div class="card game-shell"><p class="empty-state">No flashcards available for Speed Dx yet.</p></div>';
+        return;
+      }
+      if (!App.speedDxRound) startSpeedDxRound();
+      else renderSpeedDx();
+    }).catch(function(err) {
+      el.innerHTML = '<div class="card game-shell"><p>Error loading flashcards: ' + escapeHtml(err.message || String(err)) + '</p></div>';
+    });
+    return;
+  }
+
+  if (!App.speedDxRound) startSpeedDxRound();
+  else renderSpeedDx();
+}
+
+function startSpeedDxRound() {
+  if (!App.speedDxCards || !App.speedDxCards.length) return;
+  var pick = App.speedDxCards[Math.floor(Math.random() * App.speedDxCards.length)];
+  App.speedDxRound = { card: pick, answer: getSpeedDxAnswer_(pick) };
+  App.speedDxSeconds = 0;
+  if (App.speedDxTimer) clearInterval(App.speedDxTimer);
+  App.speedDxTimer = setInterval(function() {
+    App.speedDxSeconds += 0.1;
+    var timerEl = document.getElementById('speeddx-timer');
+    if (timerEl) timerEl.textContent = App.speedDxSeconds.toFixed(1) + 's';
+  }, 100);
+  renderSpeedDx('New case. Type the most likely diagnosis.');
+}
+
+function submitSpeedDxGuess() {
+  if (!App.speedDxRound) return;
+  var input = document.getElementById('speeddx-answer');
+  if (!input) return;
+  var guess = (input.value || '').trim().toLowerCase();
+  if (!guess) return;
+
+  var answer = App.speedDxRound.answer || '';
+  var correct = answer && (answer.indexOf(guess) !== -1 || guess.indexOf(answer) !== -1);
+
+  if (correct) {
+    var timeFactor = Math.max(1, Math.round(100 - (App.speedDxSeconds * 6)));
+    App.speedDxStreak += 1;
+    App.speedDxBestStreak = Math.max(App.speedDxBestStreak, App.speedDxStreak);
+    var roundScore = timeFactor * App.speedDxStreak;
+    App.speedDxScore += roundScore;
+    saveSpeedDxScore_();
+    startSpeedDxRound();
+    renderSpeedDx('✅ Correct! +' + roundScore + ' (Speed ' + timeFactor + ' × Streak ' + App.speedDxStreak + ')');
+  } else {
+    if (App.speedDxTimer) { clearInterval(App.speedDxTimer); App.speedDxTimer = null; }
+    var correctAnswer = (App.speedDxRound.card && (App.speedDxRound.card.topic || App.speedDxRound.card.back)) || 'N/A';
+    App.speedDxStreak = 0;
+    renderSpeedDx('❌ Not quite. Correct answer: ' + correctAnswer);
+  }
+}
+
+function resetSpeedDx() {
+  App.speedDxScore = 0;
+  App.speedDxStreak = 0;
+  App.speedDxRound = null;
+  if (App.speedDxTimer) { clearInterval(App.speedDxTimer); App.speedDxTimer = null; }
+  startSpeedDxRound();
+}
+
+function speedDxLeaderboard_() {
+  try {
+    var raw = JSON.parse(localStorage.getItem(SPEED_DX_LEADERBOARD_KEY) || '[]');
+    return Array.isArray(raw) ? raw : [];
+  } catch (e) { return []; }
+}
+
+function saveSpeedDxScore_() {
+  var name = (sessionStorage.getItem('mcc_name') || sessionStorage.getItem('mcc_profile') || 'You').trim();
+  var list = speedDxLeaderboard_();
+  list.push({ name: name || 'You', score: App.speedDxScore, streak: App.speedDxBestStreak, at: Date.now() });
+  list.sort(function(a, b) { return (b.score || 0) - (a.score || 0); });
+  localStorage.setItem(SPEED_DX_LEADERBOARD_KEY, JSON.stringify(list.slice(0, 10)));
+}
+
+function renderSpeedDx(msg) {
+  var el = document.getElementById('speeddx-content');
+  if (!el) return;
+  if (!App.speedDxRound) {
+    el.innerHTML = '<div class="card game-shell" style="text-align:center"><p>No round active.</p><button class="btn btn-primary" onclick="startSpeedDxRound()">Start</button></div>';
+    return;
+  }
+
+  var lb = speedDxLeaderboard_();
+  var html = '<div class="card game-shell">';
+  html += '<p style="font-size:13px;color:var(--text-light);margin-bottom:8px">Score = speed × streak. Faster + consecutive correct = massive points.</p>';
+  html += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">';
+  html += '<div class="badge" style="font-size:13px">Timer: <strong id="speeddx-timer">' + App.speedDxSeconds.toFixed(1) + 's</strong></div>';
+  html += '<div class="badge" style="font-size:13px">Streak: <strong>' + App.speedDxStreak + '</strong></div>';
+  html += '<div class="badge" style="font-size:13px">Score: <strong>' + App.speedDxScore + '</strong></div>';
+  html += '</div>';
+  if (msg) html += '<div style="margin-bottom:10px;font-size:13px;font-weight:600;color:var(--text-light)">' + escapeHtml(msg) + '</div>';
+  html += '<div style="padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--bg);font-weight:600;margin-bottom:10px">' + escapeHtml(getSpeedDxPrompt_(App.speedDxRound.card)) + '</div>';
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+  html += '<input id="speeddx-answer" type="text" placeholder="Type diagnosis..." style="flex:1;min-width:220px" onkeydown="if(event.key===\'Enter\')submitSpeedDxGuess()">';
+  html += '<button class="btn btn-primary" onclick="submitSpeedDxGuess()">Submit</button>';
+  html += '<button class="btn btn-outline" onclick="resetSpeedDx()">Reset</button>';
+  html += '</div>';
+  html += '<div style="margin-top:18px"><h3 style="font-size:16px;margin-bottom:8px">🏆 Leaderboard</h3>';
+  if (!lb.length) html += '<p class="empty-state" style="margin:0">No scores yet — start a streak.</p>';
+  else {
+    html += '<div>';
+    for (var i = 0; i < lb.length; i++) {
+      var row = lb[i];
+      html += '<div style="display:flex;justify-content:space-between;padding:6px 0;border-top:' + (i ? '1px solid var(--border)' : 'none') + '">';
+      html += '<span>' + (i + 1) + '. ' + escapeHtml(row.name || 'Player') + '</span>';
+      html += '<strong>' + (row.score || 0) + ' pts</strong></div>';
+    }
+    html += '</div>';
+  }
+  html += '</div></div>';
+  el.innerHTML = html;
+}
+
+function showVitalSignsEmergency() {
+  var el = document.getElementById('vitals-emergency-content');
+  if (!el) return;
+  if (!App.vitalsEmergencyScenario) startVitalsEmergency();
+  else renderVitalsEmergency();
+}
+
+function startVitalsEmergency() {
+  App.vitalsEmergencyRound = 1;
+  App.vitalsEmergencyBest = Math.max(App.vitalsEmergencyBest || 0, 0);
+  launchVitalsRound_();
+}
+
+function launchVitalsRound_() {
+  var idx = Math.floor(Math.random() * VITALS_EMERGENCY_SCENARIOS.length);
+  App.vitalsEmergencyScenario = VITALS_EMERGENCY_SCENARIOS[idx];
+  App.vitalsEmergencyTimeLeft = Math.max(1.8, 5 - ((App.vitalsEmergencyRound - 1) * 0.35));
+  App.vitalsEmergencyActive = true;
+
+  if (App.vitalsEmergencyTimer) clearInterval(App.vitalsEmergencyTimer);
+  App.vitalsEmergencyTimer = setInterval(function() {
+    App.vitalsEmergencyTimeLeft = Math.max(0, App.vitalsEmergencyTimeLeft - 0.1);
+    var t = document.getElementById('vse-timer');
+    if (t) t.textContent = App.vitalsEmergencyTimeLeft.toFixed(1) + 's';
+    if (App.vitalsEmergencyTimeLeft <= 0) {
+      clearInterval(App.vitalsEmergencyTimer);
+      App.vitalsEmergencyTimer = null;
+      vitalsEmergencyDie_('⏱️ Too slow. The patient died while waiting.');
+    }
+  }, 100);
+
+  renderVitalsEmergency();
+}
+
+function chooseVitalsEmergency(idx) {
+  if (!App.vitalsEmergencyActive || !App.vitalsEmergencyScenario) return;
+  var sc = App.vitalsEmergencyScenario;
+  if (App.vitalsEmergencyTimer) { clearInterval(App.vitalsEmergencyTimer); App.vitalsEmergencyTimer = null; }
+
+  if (idx === sc.correct) {
+    App.vitalsEmergencyRound += 1;
+    App.vitalsEmergencyBest = Math.max(App.vitalsEmergencyBest || 0, App.vitalsEmergencyRound - 1);
+    renderVitalsEmergency('✅ Stabilized. Next patient incoming... Faster now.');
+    setTimeout(launchVitalsRound_, 550);
+  } else {
+    vitalsEmergencyDie_('💀 Wrong move. ' + sc.reason);
+  }
+}
+
+function vitalsEmergencyDie_(message) {
+  App.vitalsEmergencyActive = false;
+  renderVitalsEmergency(message || '💀 Patient died.');
+}
+
+function renderVitalsEmergency(msg) {
+  var el = document.getElementById('vitals-emergency-content');
+  if (!el) return;
+  var sc = App.vitalsEmergencyScenario;
+  if (!sc) {
+    el.innerHTML = '<div class="card game-shell" style="text-align:center"><button class="btn btn-primary" onclick="startVitalsEmergency()">Start</button></div>';
+    return;
+  }
+
+  var html = '<div class="card game-shell">';
+  html += '<p style="font-size:13px;color:var(--text-light);margin-bottom:10px">Pick the life-saving intervention before time runs out. Wrong answer = patient dies.</p>';
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">';
+  html += '<div class="badge">Round: <strong>' + App.vitalsEmergencyRound + '</strong></div>';
+  html += '<div class="badge">Best: <strong>' + (App.vitalsEmergencyBest || 0) + '</strong></div>';
+  html += '<div class="badge" style="color:' + (App.vitalsEmergencyTimeLeft <= 1.5 ? 'var(--error)' : 'var(--text)') + '">Timer: <strong id="vse-timer">' + App.vitalsEmergencyTimeLeft.toFixed(1) + 's</strong></div>';
+  html += '</div>';
+  if (msg) html += '<div style="margin-bottom:10px;font-size:13px;font-weight:700;color:' + (msg.indexOf('✅') === 0 ? 'var(--success)' : 'var(--error)') + '">' + escapeHtml(msg) + '</div>';
+  html += '<div style="padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);margin-bottom:8px"><strong>Presentation:</strong> ' + escapeHtml(sc.vignette) + '</div>';
+  html += '<div style="padding:12px;border-radius:10px;border:1px solid var(--error);background:rgba(185,28,28,0.06);font-weight:800;margin-bottom:12px">🚨 ' + escapeHtml(sc.vitals) + '</div>';
+  for (var i = 0; i < sc.options.length; i++) {
+    html += '<button class="btn ' + (App.vitalsEmergencyActive ? 'btn-outline' : 'btn-outline') + '" style="display:block;width:100%;text-align:left;margin-bottom:8px" onclick="chooseVitalsEmergency(' + i + ')" ' + (App.vitalsEmergencyActive ? '' : 'disabled') + '>' + (i + 1) + '. ' + escapeHtml(sc.options[i]) + '</button>';
+  }
+  if (!App.vitalsEmergencyActive) {
+    html += '<button class="btn btn-primary" style="margin-top:8px" onclick="startVitalsEmergency()">Restart</button>';
+  }
+  html += '</div>';
+  el.innerHTML = html;
 }
 
 // =============================================
