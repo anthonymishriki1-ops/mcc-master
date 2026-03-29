@@ -13994,43 +13994,147 @@ function stopGameTimers_(nextPage) {
   }
 }
 
-function getSpeedDxPrompt_(card) {
-  if (!card) return '';
-  var src = String(card.front || card.back || '').replace(/\s+/g, ' ').trim();
-  if (!src) return 'Clinical clue unavailable.';
-  return src.length > 180 ? src.slice(0, 177) + '...' : src;
+var SPEED_DX_CASES = [
+  { vignette: '45M, crushing chest pain radiating to left arm, diaphoresis, ST elevation in II/III/aVF.', dx: 'STEMI' },
+  { vignette: '67F, sudden tearing chest pain to back, pulse deficit between arms, widened mediastinum.', dx: 'Aortic dissection' },
+  { vignette: '72M, exertional syncope, crescendo-decrescendo systolic murmur at right upper sternal border.', dx: 'Aortic stenosis' },
+  { vignette: '23F, pleuritic chest pain better leaning forward, diffuse ST elevation after viral illness.', dx: 'Acute pericarditis' },
+  { vignette: '31F postpartum day 3, dyspnea, orthopnea, S3, bilateral crackles.', dx: 'Peripartum cardiomyopathy' },
+  { vignette: '64M, irregularly irregular pulse, no P waves, palpitations and fatigue.', dx: 'Atrial fibrillation' },
+  { vignette: '58M smoker, hypotension, JVD, muffled heart sounds after stab wound.', dx: 'Cardiac tamponade' },
+  { vignette: '26M tall thin, sudden unilateral pleuritic pain, hyperresonance, absent breath sounds.', dx: 'Primary spontaneous pneumothorax' },
+  { vignette: '69F, fever, productive cough, focal crackles, lobar consolidation on CXR.', dx: 'Community-acquired pneumonia' },
+  { vignette: '54M COPD, severe dyspnea, prolonged expiration, pursed-lip breathing.', dx: 'COPD exacerbation' },
+  { vignette: '22F, episodic wheeze/cough at night, improved with salbutamol.', dx: 'Asthma' },
+  { vignette: '34F, sudden dyspnea after long-haul flight, tachycardia, pleuritic pain.', dx: 'Pulmonary embolism' },
+  { vignette: '41M, fever, night sweats, hemoptysis, upper lobe cavitary lesion, recent shelter stay.', dx: 'Pulmonary tuberculosis' },
+  { vignette: '78M, chronic smoker, weight loss, SIADH, central hilar mass.', dx: 'Small cell lung cancer' },
+  { vignette: '61M, abrupt severe epigastric pain radiating to back, elevated lipase.', dx: 'Acute pancreatitis' },
+  { vignette: '48F, RUQ pain after fatty meal, fever, positive Murphy sign.', dx: 'Acute cholecystitis' },
+  { vignette: '52M, hematemesis after cirrhosis, hypotension, melena.', dx: 'Esophageal variceal bleed' },
+  { vignette: '35F, chronic abdominal pain + diarrhea + weight loss, skip lesions on colonoscopy.', dx: 'Crohn disease' },
+  { vignette: '29M, bloody diarrhea, urgency, continuous colonic inflammation from rectum.', dx: 'Ulcerative colitis' },
+  { vignette: '66M, painless jaundice, weight loss, palpable non-tender gallbladder.', dx: 'Pancreatic adenocarcinoma' },
+  { vignette: '57M, dysphagia to solids then liquids, weight loss, distal esophageal mass.', dx: 'Esophageal cancer' },
+  { vignette: '43F, heartburn, regurgitation worse supine, normal exam.', dx: 'GERD' },
+  { vignette: '68M, fever, jaundice, RUQ pain, hypotension and confusion.', dx: 'Acute cholangitis' },
+  { vignette: '24F, right lower quadrant pain migrating from periumbilical area, rebound tenderness.', dx: 'Acute appendicitis' },
+  { vignette: '76M, abrupt left-sided weakness and aphasia, CT head without bleed.', dx: 'Ischemic stroke' },
+  { vignette: '59M, thunderclap headache, neck stiffness, blood in subarachnoid space on CT.', dx: 'Subarachnoid hemorrhage' },
+  { vignette: '28F, unilateral pulsatile headache, photophobia, nausea, visual aura.', dx: 'Migraine with aura' },
+  { vignette: '72M, resting tremor, bradykinesia, cogwheel rigidity, shuffling gait.', dx: 'Parkinson disease' },
+  { vignette: '33F, optic neuritis, internuclear ophthalmoplegia, multiple periventricular plaques.', dx: 'Multiple sclerosis' },
+  { vignette: '40M, ascending weakness after diarrhea, areflexia, albuminocytologic dissociation.', dx: 'Guillain-Barre syndrome' },
+  { vignette: '21F, fever, confusion, seizure, temporal lobe MRI hyperintensity.', dx: 'HSV encephalitis' },
+  { vignette: '63M, severe unilateral eye pain, fixed mid-dilated pupil, halos around lights.', dx: 'Acute angle-closure glaucoma' },
+  { vignette: '74F, progressive memory loss, impaired ADLs, hippocampal atrophy.', dx: 'Alzheimer disease' },
+  { vignette: '27M, flank pain radiating to groin, hematuria, writhing discomfort.', dx: 'Ureteric stone' },
+  { vignette: '65M diabetic, edema, nephrotic-range proteinuria, declining GFR.', dx: 'Diabetic nephropathy' },
+  { vignette: '81M, confusion, severe dehydration, glucose 42 mmol/L, minimal ketones.', dx: 'Hyperosmolar hyperglycemic state' },
+  { vignette: '19F type 1 diabetes, abdominal pain, Kussmaul respirations, anion gap acidosis.', dx: 'Diabetic ketoacidosis' },
+  { vignette: '32F, weight loss, tremor, heat intolerance, diffuse goiter, lid lag.', dx: 'Graves disease' },
+  { vignette: '44F, fatigue, weight gain, constipation, cold intolerance, high TSH.', dx: 'Primary hypothyroidism' },
+  { vignette: '39M, truncal obesity, purple striae, proximal muscle weakness, hypertension.', dx: 'Cushing syndrome' },
+  { vignette: '36F postpartum hemorrhage, failure to lactate, amenorrhea, hypotension.', dx: 'Sheehan syndrome' },
+  { vignette: '69F, back pain, anemia, hypercalcemia, renal dysfunction, lytic lesions.', dx: 'Multiple myeloma' },
+  { vignette: '24M, acute monoarthritis of first MTP after binge drinking, needle-shaped crystals.', dx: 'Gout' },
+  { vignette: '57F, symmetric MCP/PIP pain, morning stiffness >1 hour, positive anti-CCP.', dx: 'Rheumatoid arthritis' },
+  { vignette: '71F, knee pain worsened with activity, brief morning stiffness, osteophytes on X-ray.', dx: 'Osteoarthritis' },
+  { vignette: '14M, knee pain/swelling after sports injury, positive Lachman test.', dx: 'ACL tear' },
+  { vignette: '8M, fever, migratory arthritis, carditis, chorea after untreated strep throat.', dx: 'Acute rheumatic fever' },
+  { vignette: '2M, barking cough, inspiratory stridor, worse at night, steeple sign.', dx: 'Croup' },
+  { vignette: '6F, fever, bilateral conjunctivitis, strawberry tongue, cervical LAD, hand swelling.', dx: 'Kawasaki disease' },
+  { vignette: '3-week-old male, non-bilious projectile vomiting, olive-shaped epigastric mass.', dx: 'Hypertrophic pyloric stenosis' },
+  { vignette: '7-year-old, periorbital edema, cola-colored urine after impetigo.', dx: 'Post-streptococcal glomerulonephritis' },
+  { vignette: '5-year-old with pallor, bruising, recurrent infections, blasts on peripheral smear.', dx: 'Acute lymphoblastic leukemia' },
+  { vignette: '28F, amenorrhea, galactorrhea, elevated prolactin, pituitary microadenoma.', dx: 'Prolactinoma' },
+  { vignette: '25F sexually active, lower abdominal pain, cervical motion tenderness, fever.', dx: 'Pelvic inflammatory disease' },
+  { vignette: '30F, first-trimester vaginal bleeding, open cervical os, retained products on ultrasound.', dx: 'Incomplete abortion' },
+  { vignette: '34F at 33 weeks, painless vaginal bleeding, placenta covering os on ultrasound.', dx: 'Placenta previa' },
+  { vignette: '29F at 36 weeks, painful bleeding, uterine tenderness, fetal distress.', dx: 'Placental abruption' },
+  { vignette: '24F postpartum day 5, fever, uterine tenderness, foul lochia.', dx: 'Postpartum endometritis' },
+  { vignette: '26M, reduced sleep, grandiosity, pressured speech, risky spending for 10 days.', dx: 'Manic episode' },
+  { vignette: '37F, depressed mood, anhedonia, insomnia, guilt, low energy for 2 months.', dx: 'Major depressive disorder' },
+  { vignette: '30M, recurrent panic attacks with palpitations, fear of future attacks.', dx: 'Panic disorder' },
+  { vignette: '23F, intrusive contamination thoughts, repetitive handwashing >2 hours/day.', dx: 'Obsessive-compulsive disorder' },
+  { vignette: '46M, tremor, diaphoresis, agitation, hallucinations 48h after last drink.', dx: 'Delirium tremens' }
+];
+
+function normalizeDxText_(text) {
+  return String(text || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function getSpeedDxAnswer_(card) {
-  if (!card) return '';
-  var topic = (card.topic || '').trim();
-  if (topic) return topic.toLowerCase();
-  var back = String(card.back || '').trim();
-  if (!back) return '';
-  var first = back.split(/[.\n]/)[0];
-  return first.toLowerCase();
+function levenshtein_(a, b) {
+  a = normalizeDxText_(a); b = normalizeDxText_(b);
+  if (!a || !b) return Math.max(a.length, b.length);
+  var dp = new Array(b.length + 1);
+  for (var j = 0; j <= b.length; j++) dp[j] = j;
+  for (var i = 1; i <= a.length; i++) {
+    var prev = dp[0];
+    dp[0] = i;
+    for (var k = 1; k <= b.length; k++) {
+      var tmp = dp[k];
+      var cost = a[i - 1] === b[k - 1] ? 0 : 1;
+      dp[k] = Math.min(dp[k] + 1, dp[k - 1] + 1, prev + cost);
+      prev = tmp;
+    }
+  }
+  return dp[b.length];
 }
+
+function speedDxAliases_(dx) {
+  var key = normalizeDxText_(dx);
+  var groups = [
+    ['stemi', 'mi', 'myocardial infarction', 'acute myocardial infarction', 'heart attack', 'acs'],
+    ['pulmonary embolism', 'pe'],
+    ['diabetic ketoacidosis', 'dka'],
+    ['hyperosmolar hyperglycemic state', 'hhs', 'hhnk'],
+    ['gastroesophageal reflux disease', 'gerd', 'acid reflux'],
+    ['obsessive compulsive disorder', 'ocd'],
+    ['acute lymphoblastic leukemia', 'all'],
+    ['guillain barre syndrome', 'gbs'],
+    ['rheumatoid arthritis', 'ra'],
+    ['ulcerative colitis', 'uc'],
+    ['placenta previa', 'placenta praevia']
+  ];
+  for (var i = 0; i < groups.length; i++) {
+    var normalized = groups[i].map(normalizeDxText_);
+    if (normalized.indexOf(key) !== -1) return normalized;
+  }
+  return [key];
+}
+
+function isSpeedDxCorrectGuess_(guess, answer) {
+  var g = normalizeDxText_(guess);
+  var a = normalizeDxText_(answer);
+  if (!g || !a) return false;
+  if (g === a || g.indexOf(a) !== -1 || a.indexOf(g) !== -1) return true;
+
+  var aliasGuess = speedDxAliases_(g);
+  var aliasAnswer = speedDxAliases_(a);
+  for (var i = 0; i < aliasGuess.length; i++) {
+    if (aliasAnswer.indexOf(aliasGuess[i]) !== -1) return true;
+  }
+
+  var gt = g.split(' ');
+  var at = a.split(' ');
+  if (gt.length && at.length && gt[0].length > 4 && at[0].length > 4) {
+    if (gt[0].indexOf(at[0]) === 0 || at[0].indexOf(gt[0]) === 0) return true;
+  }
+
+  return (Math.max(g.length, a.length) >= 6) && levenshtein_(g, a) <= 2;
+}
+
+function getSpeedDxPrompt_(item) {
+  return item ? (item.vignette || 'Clinical clue unavailable.') : '';
+}
+
 function showSpeedDx() {
   var el = document.getElementById('speeddx-content');
   if (!el) return;
-
   if (!App.speedDxCards || App.speedDxCards.length === 0) {
-    var fromApp = (App.flashcardsAll && App.flashcardsAll.length) ? Promise.resolve(App.flashcardsAll) : serverCall('getFlashcards', 'All');
-    el.innerHTML = '<div class="card game-shell" style="text-align:center;padding:28px"><div class="spinner"></div><p style="margin-top:10px">Loading cases...</p></div>';
-    fromApp.then(function(cards) {
-      App.speedDxCards = (cards || []).filter(function(c) { return (c.front || c.back) && (c.topic || c.back); });
-      if (!App.speedDxCards.length) {
-        el.innerHTML = '<div class="card game-shell"><p class="empty-state">No flashcards available for Speed Dx yet.</p></div>';
-        return;
-      }
-      if (!App.speedDxRound) startSpeedDxRound();
-      else renderSpeedDx();
-    }).catch(function(err) {
-      el.innerHTML = '<div class="card game-shell"><p>Error loading flashcards: ' + escapeHtml(err.message || String(err)) + '</p></div>';
-    });
-    return;
+    App.speedDxCards = SPEED_DX_CASES.slice();
   }
-
   if (!App.speedDxRound) startSpeedDxRound();
   else renderSpeedDx();
 }
@@ -14038,7 +14142,7 @@ function showSpeedDx() {
 function startSpeedDxRound() {
   if (!App.speedDxCards || !App.speedDxCards.length) return;
   var pick = App.speedDxCards[Math.floor(Math.random() * App.speedDxCards.length)];
-  App.speedDxRound = { card: pick, answer: getSpeedDxAnswer_(pick) };
+  App.speedDxRound = { card: pick, answer: pick.dx };
   App.speedDxSeconds = 0;
   if (App.speedDxTimer) clearInterval(App.speedDxTimer);
   App.speedDxTimer = setInterval(function() {
@@ -14053,11 +14157,11 @@ function submitSpeedDxGuess() {
   if (!App.speedDxRound) return;
   var input = document.getElementById('speeddx-answer');
   if (!input) return;
-  var guess = (input.value || '').trim().toLowerCase();
+  var guess = (input.value || '').trim();
   if (!guess) return;
 
   var answer = App.speedDxRound.answer || '';
-  var correct = answer && (answer.indexOf(guess) !== -1 || guess.indexOf(answer) !== -1);
+  var correct = isSpeedDxCorrectGuess_(guess, answer);
 
   if (correct) {
     var timeFactor = Math.max(1, Math.round(100 - (App.speedDxSeconds * 6)));
@@ -14070,7 +14174,7 @@ function submitSpeedDxGuess() {
     renderSpeedDx('✅ Correct! +' + roundScore + ' (Speed ' + timeFactor + ' × Streak ' + App.speedDxStreak + ')');
   } else {
     if (App.speedDxTimer) { clearInterval(App.speedDxTimer); App.speedDxTimer = null; }
-    var correctAnswer = (App.speedDxRound.card && (App.speedDxRound.card.topic || App.speedDxRound.card.back)) || 'N/A';
+    var correctAnswer = (App.speedDxRound.card && App.speedDxRound.card.dx) || 'N/A';
     App.speedDxStreak = 0;
     renderSpeedDx('❌ Not quite. Correct answer: ' + correctAnswer);
   }
@@ -14118,7 +14222,7 @@ function renderSpeedDx(msg) {
   if (msg) html += '<div style="margin-bottom:10px;font-size:13px;font-weight:600;color:var(--text-light)">' + escapeHtml(msg) + '</div>';
   html += '<div style="padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--bg);font-weight:600;margin-bottom:10px">' + escapeHtml(getSpeedDxPrompt_(App.speedDxRound.card)) + '</div>';
   html += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
-  html += '<input id="speeddx-answer" type="text" placeholder="Type diagnosis..." style="flex:1;min-width:220px" onkeydown="if(event.key===\'Enter\')submitSpeedDxGuess()">';
+  html += '<input id="speeddx-answer" type="text" placeholder="Type diagnosis..." style="flex:1;min-width:220px" onkeydown="if(event.key==='Enter')submitSpeedDxGuess()">';
   html += '<button class="btn btn-primary" onclick="submitSpeedDxGuess()">Submit</button>';
   html += '<button class="btn btn-outline" onclick="resetSpeedDx()">Reset</button>';
   html += '</div>';
