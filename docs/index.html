@@ -2990,7 +2990,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '8.0';
+var APP_VERSION = '8.1';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3002,6 +3002,11 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '8.1', date: 'Mar 28 2026', label: 'NAC stays in NAC — no more dumping to PatientBot', items: [
+    'Exam summary renders in NAC-OSCE page, not PatientBot',
+    'Sidebar stays on NAC-OSCE throughout the entire flow',
+    'End exam → NAC summary with scores, not PatientBot setup',
+  ]},
   { version: '8.0', date: 'Mar 28 2026', label: 'Lab results reflect what you actually did', items: [
     'Tox screen now shows positive for drugs you administered (fentanyl, cannabis, etc.)',
     'Lab generator gets full context: drugs given, procedures done, conversation history',
@@ -10877,10 +10882,20 @@ function pickNextRandomStation_() {
 
 function showNACSummary() {
   App.nacActive = false;
+  App.nacStationFinished = false;
   stopNACPttRecording_(false);
+  stopHandsFree_();
   VitalsEngine.stop();
+  if (App.nacIdleTimer) { clearInterval(App.nacIdleTimer); App.nacIdleTimer = null; }
 
-  var el = document.getElementById('patientbot-content');
+  // Show all content sections, hide patientbot, show nac-sim
+  var pages = document.querySelectorAll('.page-content');
+  for (var pi = 0; pi < pages.length; pi++) pages[pi].style.display = 'none';
+  var nacPage = document.getElementById('nac-sim-content');
+  if (nacPage) nacPage.style.display = 'block';
+  // Update sidebar highlight
+  syncNACSidebarActive_();
+  var el = nacPage;
   var scores = App.nacScores;
   var correct = scores.filter(function(s) { return s.correct; }).length;
   var total = scores.length;
