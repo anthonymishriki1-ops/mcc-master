@@ -1581,6 +1581,38 @@ body.kb-open #bottom-nav { display: none !important; }
     width: var(--sidebar-width);
   }
 
+  #sidebar.sidebar-collapsed {
+    transform: translateX(-100%);
+  }
+
+  #sidebar.sidebar-collapsed ~ #content {
+    margin-left: 0 !important;
+  }
+
+  /* Show restore button when sidebar is collapsed */
+  #sidebar-restore-btn {
+    display: none;
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 200;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 40px;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+
+  #sidebar.sidebar-collapsed ~ #sidebar-restore-btn {
+    display: block;
+  }
+
   .sidebar-header {
     padding: 36px 28px 28px;
   }
@@ -2561,7 +2593,7 @@ a:focus-visible {
 
   <!-- Sidebar -->
   <nav id="sidebar">
-    <button id="sidebar-collapse-btn" onclick="toggleSidebarCollapse()" aria-label="Collapse sidebar" title="Collapse sidebar" style="display:none;position:absolute;top:12px;right:-14px;width:28px;height:28px;border-radius:50%;background:var(--primary);color:white;border:2px solid var(--bg);cursor:pointer;font-size:14px;z-index:11;align-items:center;justify-content:center">&#x276E;</button>
+    <button id="sidebar-collapse-btn" onclick="toggleSidebarCollapse()" aria-label="Collapse sidebar" title="Collapse sidebar" style="position:absolute;top:12px;right:-14px;width:28px;height:28px;border-radius:50%;background:var(--primary);color:white;border:2px solid var(--bg);cursor:pointer;font-size:14px;z-index:11;display:flex;align-items:center;justify-content:center">&#x276E;</button>
     <div class="sidebar-header">
       <h1>MCC Master</h1>
       <p id="user-email">Loading...</p>
@@ -2613,6 +2645,7 @@ a:focus-visible {
       <button class="dark-mode-toggle" id="copy-link-btn" onclick="copyAppLink_()" style="margin-top:6px" title="Copy MCC Master link to share">&#x1F517; Copy Link</button>
     </div>
   </nav>
+  <button id="sidebar-restore-btn" onclick="toggleSidebarCollapse()" aria-label="Show sidebar" title="Show sidebar">&#x2630;</button>
 
   <!-- Zoom controls removed — browser zoom is sufficient -->
   <!-- Auto-Translate Toggle + Language Picker -->
@@ -3113,7 +3146,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '9.3';
+var APP_VERSION = '9.4';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3125,6 +3158,11 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '9.4', date: 'Mar 29 2026', label: 'Sidebar toggle actually works now', items: [
+    'Sidebar collapse button visible on desktop — click arrow on sidebar edge',
+    'Hamburger button appears when sidebar is hidden — click to restore',
+    'State saved across sessions',
+  ]},
   { version: '9.3', date: 'Mar 29 2026', label: 'Sidebar collapse + text size controls', items: [
     'Collapse sidebar on desktop — click the arrow button on sidebar edge',
     'Text size A-/A+ buttons in sidebar — adjusts content from 70% to 150%',
