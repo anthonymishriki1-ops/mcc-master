@@ -3058,7 +3058,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '8.9';
+var APP_VERSION = '9.0';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -14291,7 +14291,7 @@ function renderSpeedDx(msg) {
   if (msg) html += '<div style="margin-bottom:10px;font-size:13px;font-weight:600;color:var(--text-light)">' + escapeHtml(msg) + '</div>';
   html += '<div style="padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--bg);font-weight:600;margin-bottom:10px">' + escapeHtml(getSpeedDxPrompt_(App.speedDxRound.card)) + '</div>';
   html += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
-  html += '<input id="speeddx-answer" type="text" placeholder="Type diagnosis..." style="flex:1;min-width:220px" onkeydown="if(event.key==='Enter')submitSpeedDxGuess()">';
+  html += '<input id="speeddx-answer" type="text" placeholder="Type diagnosis..." style="flex:1;min-width:220px" onkeydown="if(event.key===&#39;Enter&#39;)submitSpeedDxGuess()">';
   html += '<button class="btn btn-primary" onclick="submitSpeedDxGuess()">Submit</button>';
   html += '<button class="btn btn-outline" onclick="resetSpeedDx()">Reset</button>';
   html += '</div>';
