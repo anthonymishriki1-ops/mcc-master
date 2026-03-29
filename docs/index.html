@@ -1684,7 +1684,48 @@ body.kb-open #bottom-nav { display: none !important; }
     padding: 28px 32px;
   }
 
+  /* Desktop layout: center content, max-widths for readability */
+  #content {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .stat-grid {
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 20px;
+  }
+
+  .pb-setup {
+    max-width: 700px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .chat-container {
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .quiz-container, #quiz-content, #mccqe-sim-content {
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  #house-content {
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
   .flashcard-container {
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  #speed-dx-content, #vitals-emergency-content {
     max-width: 800px;
     margin-left: auto;
     margin-right: auto;
@@ -2554,12 +2595,7 @@ a:focus-visible {
     </div>
   </nav>
 
-  <!-- Zoom Controls -->
-  <div id="zoom-controls" style="position:fixed;top:58px;right:16px;z-index:999;display:flex;align-items:center;gap:4px;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:3px 8px;box-shadow:0 1px 4px rgba(0,0,0,0.1);font-size:13px;opacity:0.7;transition:opacity 0.2s" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.7'">
-    <button onclick="adjustZoom(-10)" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 6px;color:var(--text);font-weight:700" title="Zoom out" aria-label="Zoom out">-</button>
-    <span id="zoom-level" style="min-width:36px;text-align:center;font-size:11px;color:var(--text-light);cursor:pointer" onclick="resetZoom()" title="Click to reset">100%</span>
-    <button onclick="adjustZoom(10)" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 6px;color:var(--text);font-weight:700" title="Zoom in" aria-label="Zoom in">+</button>
-  </div>
+  <!-- Zoom controls removed — browser zoom is sufficient -->
   <!-- Auto-Translate Toggle + Language Picker -->
   <div id="auto-translate-toggle" style="position:fixed;top:104px;right:10px;z-index:999;flex-direction:column;align-items:stretch;gap:4px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:6px 10px;box-shadow:0 2px 8px rgba(0,0,0,0.12);font-size:11px;opacity:0.85;transition:opacity 0.2s" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.85'">
     <select id="lang-select" onchange="setLanguage(this.value)" title="Translation language" style="border:none;background:transparent;color:var(--text);font-size:11px;font-family:inherit;cursor:pointer;outline:none;padding:0;max-width:120px">
@@ -3058,7 +3094,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '9.0';
+var APP_VERSION = '9.1';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3070,6 +3106,11 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '9.1', date: 'Mar 29 2026', label: 'Desktop layout overhaul', items: [
+    'Removed zoom widget — use browser zoom instead',
+    'Content properly centered with max-widths on desktop',
+    'Dashboard cards, quiz, chat, games all reflow for wide screens',
+  ]},
   { version: '8.9', date: 'Mar 29 2026', label: 'Dead patients stop talking', items: [
     'Patient no longer responds after death — all message paths blocked',
     'Idle nudge timer stops when patient dies',
@@ -3445,20 +3486,10 @@ function applyZoom_(pct) {
     if (w) w.style.zoom = inv.toString();
   });
 }
-function adjustZoom(delta) {
-  var current = parseInt(localStorage.getItem('mcc_zoom') || '100');
-  var next = Math.max(70, Math.min(150, current + delta));
-  localStorage.setItem('mcc_zoom', next);
-  applyZoom_(next);
-}
-function resetZoom() {
-  localStorage.setItem('mcc_zoom', '100');
-  applyZoom_(100);
-}
-(function() {
-  var saved = parseInt(localStorage.getItem('mcc_zoom') || '100');
-  applyZoom_(saved);
-})();
+function adjustZoom() {} // removed — use browser zoom
+function resetZoom() {}
+// Reset any saved zoom to 100% (no body.style.zoom distortion)
+(function() { document.body.style.zoom = ''; localStorage.removeItem('mcc_zoom'); })();
 
 function toggleDarkMode() {
   var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
