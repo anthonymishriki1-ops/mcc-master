@@ -2990,7 +2990,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '8.5';
+var APP_VERSION = '8.6';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3492,6 +3492,10 @@ function patchApiResult_(fn, result) {
       // Fix dermoid cyst: choristoma, not hamartoma
       if (/dermoid/i.test(c.front) && /hamartoma/i.test(c.back)) {
         c.back = c.back.replace(/hamartoma/gi, 'choristoma');
+      }
+      // Fix cervical cancer screening — update to current guidelines (flagged by roxana 3/27/2026)
+      if (/cervical cancer screening/i.test(c.front) && /70/i.test(c.front)) {
+        c.back = 'Cervical cancer screening can stop at age 65\u201369 with one negative HPV test (or at 70 if negative co-testing). Continue screening to age 74 only if immunocompromised or prior abnormal results requiring surveillance. Updated per current Canadian screening guidelines.';
       }
     });
   }
