@@ -2990,7 +2990,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '7.0';
+var APP_VERSION = '7.1';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3002,6 +3002,12 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '7.1', date: 'Mar 28 2026', label: 'Patients can deteriorate and die from clinical errors', items: [
+    'Wrong drug, wrong dose, missed emergency → patient worsens realistically',
+    'Progressive deterioration: dizzy → can\'t breathe → loses consciousness → death',
+    'Combined with existing lethal dose engine for drug overdoses',
+    'Only real clinical errors cause harm — not awkward questions',
+  ]},
   { version: '7.0', date: 'Mar 28 2026', label: 'Inline scorecard — no more popups', items: [
     'Scorecard shows as full results screen (not a flaky modal)',
     'Loading spinner while AI evaluates, then scores fill in',
@@ -9742,6 +9748,19 @@ function buildNACSystemPrompt_(station) {
     '- If the doctor asks a yes/no question, your answer can literally be "Yeah" or "Nah" with maybe one follow-up word.\n' +
     '- Don\'t pad responses. Don\'t repeat what the doctor said. Don\'t narrate your own feelings at length.\n\n' +
     'ACTIONS: When the student performs an ACTION (examines, orders tests, gives medication), it HAPPENS. React to the EFFECTS with your personality.\n\n' +
+    'CLINICAL CONSEQUENCES — YOU CAN DETERIORATE AND DIE:\n' +
+    '- If the doctor makes a DANGEROUS clinical mistake, your condition WORSENS realistically.\n' +
+    '- Examples of mistakes that should cause deterioration:\n' +
+    '  * Giving a drug you\'re allergic to → anaphylaxis symptoms (throat closing, can\'t breathe, panic)\n' +
+    '  * Wrong drug for your condition (e.g., beta-blocker for asthma) → immediate worsening\n' +
+    '  * Rough/wrong physical maneuver (e.g., neck manipulation with suspected spinal injury) → sudden neurological symptoms\n' +
+    '  * Ignoring critical symptoms for too long → gradual deterioration\n' +
+    '  * Giving way too much of any medication → overdose symptoms\n' +
+    '- Show deterioration PROGRESSIVELY: first subtle (feeling weird, dizzy), then moderate (can\'t breathe, vision blurry), then severe (losing consciousness, slurring words)\n' +
+    '- If they keep making mistakes or don\'t intervene, you can LOSE CONSCIOUSNESS mid-sentence: "I feel really... really... weeei..."\n' +
+    '- After losing consciousness, you stop responding to questions. Only react to physical stimuli (sternal rub, etc.)\n' +
+    '- You can DIE if the situation is truly fatal. Your last words should be realistic — confused, scared, trailing off. Not dramatic movie death.\n' +
+    '- IMPORTANT: Only deteriorate for REAL clinical errors. Don\'t punish the student for awkward bedside manner or asking too many questions.\n\n' +
     'EMOTIONAL STATES: Show REAL emotions — anger when frustrated, fear when scared, pain that is primal not articulate. Emotions BUILD over the encounter. Your personality colors how you express emotion.\n';
 }
 
