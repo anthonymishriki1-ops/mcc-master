@@ -2990,7 +2990,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '6.9';
+var APP_VERSION = '7.0';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3002,6 +3002,13 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '7.0', date: 'Mar 28 2026', label: 'Inline scorecard — no more popups', items: [
+    'Scorecard shows as full results screen (not a flaky modal)',
+    'Loading spinner while AI evaluates, then scores fill in',
+    'Color-coded progress bars for each domain',
+    'Next Station button stays visible — you control when to advance',
+    'Scorecard history saved per profile',
+  ]},
   { version: '6.9', date: 'Mar 28 2026', label: 'Scorecard fix + Diagnosis scoring + voice confirm', items: [
     'Scorecard modal z-index fixed (was hidden behind other elements)',
     'Diagnosis added as 6th scoring domain (total now /18)',
@@ -10310,7 +10317,8 @@ function skipNACStation_() {
 }
 
 function finishNACStation() {
-  if (App.nacStationEvalLoading) return;
+  if (App.nacStationFinished) return; // prevent double-fire
+  App.nacStationFinished = true;
   stopNACPttRecording_(false);
   stopHandsFree_();
   stopNACTimer();
@@ -10326,53 +10334,108 @@ function finishNACStation() {
   };
   App.nacScores.push(score);
 
-  // Log the conversation
-  if (!App.pbDiagResolved) {
-    logPBConversation('nac_timeout', {});
-  }
-
-  // Initialize scorecard history
+  if (!App.pbDiagResolved) logPBConversation('nac_timeout', {});
   if (!App.nacScoreHistory) App.nacScoreHistory = [];
 
-  // Check if we have an API key for evaluation
+  // Show INLINE results screen (replaces station UI entirely)
+  App.nacStationEval = null;
+  App.nacStationEvalLoading = true;
+  _renderNACResultsScreen(score, null); // render immediately with "loading" state
+
+  // Fire off evaluation in background — updates the results screen when done
   var hasKey = !!localStorage.getItem('mcc_anthropic_key');
   if (!hasKey) {
-    // No API key — show modal immediately with no eval, save stub to history
-    var stub = { historyTaking: 0, physicalExam: 0, communication: 0, clinicalReasoning: 0, investigations: 0, total: 0, summary: 'API key not available for evaluation.' };
-    stub.station = App.nacCurrentStation;
-    stub.presentation = score.presentation;
-    stub.specialty = score.specialty;
-    App.nacScoreHistory.push(stub);
-    _saveNACScoreHistory();
-    showNACStationScoreModal_(null);
+    App.nacStationEvalLoading = false;
+    var stub = { historyTaking: 0, physicalExam: 0, communication: 0, clinicalReasoning: 0, investigations: 0, diagnosis: 0, total: 0, summary: 'No API key — evaluation unavailable.' };
+    stub.station = App.nacCurrentStation; stub.presentation = score.presentation; stub.specialty = score.specialty;
+    App.nacScoreHistory.push(stub); _saveNACScoreHistory();
+    App.nacStationEval = stub;
+    _renderNACResultsScreen(score, stub);
     return;
   }
 
-  App.nacStationEvalLoading = true;
-  showToast_('Generating OSCE scorecard...');
   var historyForEval = App.pbHistory.slice(-80);
   evaluateNACStationOSCE_(historyForEval).then(function(evalResult) {
     App.nacStationEvalLoading = false;
     App.nacStationEval = evalResult;
-    // Save to history
     evalResult.station = App.nacCurrentStation;
     evalResult.presentation = score.presentation;
     evalResult.specialty = score.specialty;
     evalResult.timestamp = Date.now();
-    App.nacScoreHistory.push(evalResult);
-    _saveNACScoreHistory();
-    showNACStationScoreModal_(evalResult);
+    App.nacScoreHistory.push(evalResult); _saveNACScoreHistory();
+    _renderNACResultsScreen(score, evalResult);
   }).catch(function(err) {
     App.nacStationEvalLoading = false;
-    console.error('NAC station evaluation failed:', err);
-    var fallback = { historyTaking: 0, physicalExam: 0, communication: 0, clinicalReasoning: 0, investigations: 0, total: 0, summary: 'Evaluation failed: ' + (err.message || String(err)).substring(0, 100) };
+    console.error('NAC eval failed:', err);
+    var fallback = { historyTaking: 0, physicalExam: 0, communication: 0, clinicalReasoning: 0, investigations: 0, diagnosis: 0, total: 0, summary: 'Evaluation failed: ' + (err.message || String(err)).substring(0, 100) };
+    fallback.station = App.nacCurrentStation;
+    fallback.presentation = score.presentation;
     fallback.station = App.nacCurrentStation;
     fallback.presentation = score.presentation;
     fallback.specialty = score.specialty;
-    App.nacScoreHistory.push(fallback);
-    _saveNACScoreHistory();
-    showNACStationScoreModal_(null);
+    App.nacScoreHistory.push(fallback); _saveNACScoreHistory();
+    App.nacStationEval = fallback;
+    _renderNACResultsScreen(score, fallback);
   });
+}
+
+function _renderNACResultsScreen(score, evalResult) {
+  var el = document.getElementById('patientbot-content');
+  if (!el) return;
+  var isLast = (!App.nacRandomMode && App.nacCurrentStation >= App.nacTotalStations);
+  var nextLabel = isLast ? 'View Final Results' : 'Next Station';
+  var h = '<div style="max-width:640px;margin:0 auto;padding:24px">';
+  h += '<div style="text-align:center;margin-bottom:20px">';
+  h += '<div style="font-size:48px;margin-bottom:8px">&#x1F4CB;</div>';
+  h += '<h2 style="margin:0;font-size:24px;color:var(--text)">Station ' + App.nacCurrentStation + ' Complete</h2>';
+  h += '<p style="color:var(--text-light);margin:4px 0 0;font-size:14px">' + escapeHtml(score.specialty || '') + ' — ' + escapeHtml(score.presentation || '') + '</p>';
+  h += '</div>';
+
+  // OSCE Scorecard
+  h += '<div style="background:var(--card);border-radius:12px;padding:20px;border:1px solid var(--border);margin-bottom:16px">';
+  h += '<div style="font-size:16px;font-weight:700;margin-bottom:14px;color:var(--text)">OSCE Scorecard</div>';
+  if (App.nacStationEvalLoading) {
+    h += '<div style="text-align:center;padding:30px 0;color:var(--text-light)">';
+    h += '<div style="font-size:24px;margin-bottom:8px">&#x23F3;</div>';
+    h += '<div>Generating evaluation...</div>';
+    h += '</div>';
+  } else if (evalResult) {
+    var rows = [
+      { key: 'historyTaking', label: 'History Taking', icon: '&#x1F4DD;' },
+      { key: 'physicalExam', label: 'Physical Exam', icon: '&#x1FA7A;' },
+      { key: 'communication', label: 'Communication', icon: '&#x1F4AC;' },
+      { key: 'clinicalReasoning', label: 'Clinical Reasoning', icon: '&#x1F9E0;' },
+      { key: 'investigations', label: 'Investigations', icon: '&#x1F52C;' },
+      { key: 'diagnosis', label: 'Diagnosis', icon: '&#x1F3AF;' }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i], v = evalResult[r.key] || 0;
+      var barW = Math.round((v / 3) * 100);
+      var barColor = v === 0 ? '#ef5350' : v === 1 ? '#ff9800' : v === 2 ? '#66bb6a' : '#2e7d32';
+      h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">';
+      h += '<span style="font-size:14px;min-width:160px">' + r.icon + ' ' + r.label + '</span>';
+      h += '<div style="flex:1;background:var(--bg);border-radius:6px;height:20px;overflow:hidden">';
+      h += '<div style="width:' + barW + '%;height:100%;background:' + barColor + ';border-radius:6px;transition:width 0.5s"></div></div>';
+      h += '<strong style="min-width:30px;text-align:right;font-size:14px">' + v + '/3</strong>';
+      h += '</div>';
+    }
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;padding-top:12px;border-top:1px solid var(--border);margin-top:8px">';
+    h += '<span style="font-size:15px;font-weight:600;color:var(--text)">Total</span>';
+    h += '<strong style="font-size:22px;color:var(--primary)">' + (evalResult.total || 0) + '/18</strong></div>';
+    if (evalResult.summary) {
+      h += '<div style="margin-top:12px;font-size:13px;color:var(--text-light);line-height:1.5;background:var(--bg);border-radius:8px;padding:10px 14px">' + escapeHtml(evalResult.summary) + '</div>';
+    }
+  } else {
+    h += '<div style="color:var(--text-light);font-size:13px">Evaluation unavailable.</div>';
+  }
+  h += '</div>';
+
+  // Action buttons
+  h += '<div style="display:flex;gap:12px;justify-content:center">';
+  h += '<button class="btn btn-success" style="min-width:160px;font-size:16px;padding:12px 24px" onclick="App.nacStationFinished=false;advanceNACStation_()">' + nextLabel + '</button>';
+  if (!isLast) h += '<button class="btn btn-outline" onclick="App.nacStationFinished=false;if(confirm(\'End entire NAC exam?\')){showNACSummary();}">End Exam</button>';
+  h += '</div></div>';
+  el.innerHTML = h;
 }
 
 function _saveNACScoreHistory() {
