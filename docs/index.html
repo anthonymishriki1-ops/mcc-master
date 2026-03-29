@@ -2990,7 +2990,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '7.2';
+var APP_VERSION = '7.3';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3002,6 +3002,11 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '7.3', date: 'Mar 28 2026', label: 'Better random variety + read definitions aloud', items: [
+    'Random Case avoids repeating last 10 stations and same specialty back-to-back',
+    'New 📖 button on glossary terms reads the definition aloud (free browser TTS)',
+    '84 stations across 15 specialties — only 3 are chest pain',
+  ]},
   { version: '7.2', date: 'Mar 28 2026', label: 'Drug engine now works in direct mode — patients can actually die', items: [
     'BUG FIX: VitalsEngine.detectAndApply was never called in direct mode — drug deaths were impossible',
     'Give lethal fentanyl dose → Code Blue, vitals crash, patient trails off mid-sentence',
@@ -10598,7 +10603,17 @@ function pickNextRandomStation_() {
       allStations.push(NAC_PRACTICE_TESTS[ri][rj]);
     }
   }
-  var next = allStations[Math.floor(Math.random() * allStations.length)];
+  // Avoid recently played stations — track last 10 pregenIds
+  if (!App._nacRecentIds) App._nacRecentIds = [];
+  var candidates = allStations.filter(function(s) { return App._nacRecentIds.indexOf(s.pregenId) === -1; });
+  if (candidates.length === 0) { candidates = allStations; App._nacRecentIds = []; } // reset if all played
+  // Also try to avoid same specialty as last station
+  var lastSpec = App.nacStations && App.nacStations[0] ? App.nacStations[0].specialty : '';
+  var diffSpec = candidates.filter(function(s) { return s.specialty !== lastSpec; });
+  var pool = diffSpec.length > 3 ? diffSpec : candidates;
+  var next = pool[Math.floor(Math.random() * pool.length)];
+  App._nacRecentIds.push(next.pregenId);
+  if (App._nacRecentIds.length > 10) App._nacRecentIds.shift();
   App.nacStations = [next];
   App.nacCurrentStation = 0;
   App.nacTotalStations = 1;
@@ -12716,8 +12731,11 @@ function toggleMedPanel(e) {
   var displayLabel = isAbbrev ? (dispTerm + ' (' + abbrevExpanded + ')') : dispTerm;
 
   var inner = '';
-  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(speakTerm) + ',1.0)" title="Listen (normal)">&#x1F50A;</button>';
-  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(speakTerm) + ',0.45)" title="Listen (slow)">&#x1F40C;</button>';
+  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(speakTerm) + ',1.0)" title="Say term">&#x1F50A;</button>';
+  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(speakTerm) + ',0.45)" title="Say term (slow)">&#x1F40C;</button>';
+  // Read definition aloud button
+  var defForSpeak = translation ? (speakTerm + '. ' + translation) : speakTerm;
+  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + JSON.stringify(defForSpeak) + ',0.9)" title="Read definition aloud" style="font-size:12px">&#x1F4D6;</button>';
   if (isAbbrev) {
     inner += '<span style="font-size:11px;color:var(--text-light);margin:0 3px;font-style:italic">' + escapeHtml(abbrevExpanded) + '</span>';
   }
