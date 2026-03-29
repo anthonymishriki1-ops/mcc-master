@@ -9357,7 +9357,7 @@ function maybeTriggerNacLabResults_(doctorMessage, patientResponse) {
   if (!doctorMessage) return;
   // Require an ACTION VERB + test name pattern — "order CBC" yes, "I had a CT" no
   var actionVerb = /\b(order|ordering|run|send|draw|request|do|perform|get\s+(?:a|an|the|me|some)?)\b/i;
-  var testName = /\b(blood\s*work|labs?\b|cbc|bmp|cmp|troponin|ecg|ekg|x-?ray|ct\s*scan|ct\b|mri|ultrasound|urinalysis|ua\b|culture|abg|coags?|inr|ptt|lipase|amylase|lfts?|creatinine|electrolytes|tsh|hcg|d-?dimer|bnp|lactate|hgb|hemoglobin|wbc|platelets|ferritin|b12|folate|crp|esr|blood\s*gas|urine|imaging|chest\s*x-?ray|abdominal|doa|drug\s*screen|tox\s*screen|uds)\b/i;
+  var testName = /\b(blood\s*work|labs?\b|cbc|bmp|cmp|lfts?|lipid\s*panel|a1c|hba1c|iron\s*studies?|ferritin|tibc|b12|folate|tsh|free\s*t4|t3|cortisol|esr|crp|procalcitonin|blood\s*cultures?|urine\s*cultures?|sputum\s*cultures?|wound\s*cultures?|csf\s*analysis|lumbar\s*puncture|troponin|ck(?:-?mb)?|bnp|nt-?pro\s*bnp|d-?dimer|inr|pt\b|ptt|fibrinogen|type\s*(?:and|&)\s*screen|crossmatch|abg|vbg|lactate|ammonia|osmolality|drug\s*levels?|digoxin|lithium|phenytoin|vancomycin|toxicology\s*screen|doa\s*screen|uds|urine\s*drug\s*screen|alcohol\s*level|acetaminophen\s*level|salicylate\s*level|beta-?hcg|urinalysis|ua\b|24h\s*urine|urine\s*electrolytes?|stool\s*studies?|c\.?\s*diff|h\.?\s*pylori|celiac\s*panel|ana|anca|anti-?dsdna|complement\s*c3\/?c4|rf|anti-?ccp|psa|ca-?125|cea|afp|ecg\/?ekg|ecg|ekg|chest\s*x-?ray|abdominal\s*x-?ray|x-?ray|ct\s*head|ct\s*chest|ct\s*abd(?:omen)?\/?pelvis|ct\s*angio(?:\s*\(pe\s*protocol\))?|ct\s*angio(?:\s*\(stroke\))?|cta\s*coronary|ct\s*scan|ct\b|mri\s*brain|mri\s*spine|mri\s*knee|mri\s*shoulder|mri|ultrasound(?:\s*\((?:abdominal|pelvic|renal|thyroid|dvt\/?venous\s*duplex|carotid|fast|transvaginal|scrotal)\))?|echo(?:cardiogram)?|echocardiogram(?:\s*\((?:tte|tee)\))?|stress\s*test|holter\s*monitor|pfts?|spirometry|peak\s*flow|sleep\s*study|eeg|emg\/?ncs|bone\s*density|dexa|mammogram|colonoscopy|upper\s*endoscopy|bronchoscopy|paracentesis|thoracentesis|arthrocentesis|skin\s*biopsy|bone\s*marrow\s*biopsy|culture|blood\s*gas|coags?|lipase|amylase|creatinine|electrolytes|hcg|hgb|hemoglobin|wbc|platelets|urine|imaging|abdominal|drug\s*screen|tox\s*screen)\b/i;
   // Need BOTH an action verb AND a test name, OR just "order X" / "I'd like X"
   var wantPattern = /\b(i'?d?\s*like|i\s*want|let'?s|can\s*we|i'?m\s*(?:going\s*to|gonna)|please)\b/i;
   if (!(actionVerb.test(doctorMessage) && testName.test(doctorMessage)) && !(wantPattern.test(doctorMessage) && testName.test(doctorMessage))) return;
@@ -9379,11 +9379,11 @@ function generateLabResults_(orderText) {
   var dx = App.pbDiagnosis || p.diagnosis || 'Unknown diagnosis';
   var systemPrompt =
     'You generate realistic clinical investigation results for a NAC-OSCE simulation. ' +
-    'This includes bloodwork, urinalysis, imaging reports, ECG findings, ABGs — ANY investigation a doctor can order. ' +
+    'Handle ANY investigation a doctor can order, including these categories: hematology/CBC, chemistry (BMP/CMP/LFTs/lipids/A1c), endocrine/metabolic, inflammatory & infection markers, microbiology cultures, coagulation studies, blood gas analysis, toxicology/drug levels, urine/stool studies, rheumatology/autoimmune panels, tumor markers, cardiopulmonary tests (ECG, echo, stress/Holter, PFTs), imaging (X-ray/US/CT/CTA/MRI), neurodiagnostics (EEG/EMG), endoscopy, and procedures with fluid/tissue analysis (LP/paracentesis/thoracentesis/arthrocentesis/biopsy). ' +
     'Return ONLY compact JSON with this exact schema: ' +
     '{"testName":"string","values":[{"name":"string","value":"string","unit":"string","flag":"normal|high|low|critical"}]}. ' +
-    'For imaging/ECG, use descriptive findings as "value" (e.g. name:"Chest X-ray", value:"Bilateral infiltrates, cardiomegaly", unit:"", flag:"critical"). ' +
-    'Match findings to the diagnosis and vitals. Include 3-10 values. No markdown, no code blocks.';
+    'For imaging/ECG/procedure reports, use descriptive findings as "value" (e.g. name:"Chest X-ray", value:"Bilateral infiltrates, cardiomegaly", unit:"", flag:"critical"). ' +
+    'Match findings to the diagnosis and vitals. Include 3-10 values with clinically coherent ranges/interpretation. No markdown, no code blocks.';
   var userPrompt =
     'Diagnosis: ' + dx + '\n' +
     'Patient: ' + (p.name || 'Unknown') + ', age ' + (p.age || '?') + ', sex ' + (p.sex || '?') + '\n' +
