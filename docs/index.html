@@ -8457,10 +8457,15 @@ function showHouseSetup() {
   if (!el) return;
   var diff = App.pbDifficulty || 'medium';
   var html = '<div style="max-width:600px;margin:0 auto;padding:24px 16px">';
-  html += '<div style="background:linear-gradient(135deg,#1a1a2e,#2d1b69);color:white;border-radius:18px;padding:32px 28px;margin-bottom:24px;box-shadow:0 8px 32px rgba(0,0,0,0.25)">';
-  html += '<div style="font-size:48px;margin-bottom:12px">&#x1F9E0;</div>';
-  html += '<h2 style="margin:0 0 8px;font-size:26px;font-weight:900">Dr. House Mode</h2>';
-  html += '<p style="margin:0;opacity:0.85;font-size:14px;line-height:1.7">Meet Dr. House — a medical genius with the bedside manner of a brick wall. He\'s already decided you\'re fine before you\'ve opened your mouth.<br><br>Your job? Describe your symptoms, fight for your diagnosis, and try not to get sent home with Tylenol. He will insult you. He will order the wrong tests. But if you know your condition well enough to argue back, even House has to admit when he\'s wrong.<br><span style="opacity:0.6;font-size:13px">(He won\'t enjoy it.)</span></p>';
+  html += '<div style="background:radial-gradient(circle at top right,#34305a 0%,#1a1a2e 45%,#0f1117 100%);color:#f8fafc;border-radius:18px;padding:32px 28px;margin-bottom:16px;box-shadow:0 18px 44px rgba(0,0,0,0.45);border:1px solid rgba(255,255,255,0.08)">';
+  html += '<div style="font-size:11px;letter-spacing:2.8px;text-transform:uppercase;opacity:0.65;margin-bottom:8px">Princeton-Plainsboro Teaching Hospital</div>';
+  html += '<div style="font-size:44px;font-weight:900;letter-spacing:2px;line-height:1.05;margin-bottom:8px;color:#fff">EVERYBODY LIES</div>';
+  html += '<div style="height:2px;width:72px;background:linear-gradient(90deg,#e11d48,rgba(225,29,72,0));margin:12px 0 14px"></div>';
+  html += '<h2 style="margin:0 0 10px;font-size:26px;font-weight:900;display:flex;align-items:center;gap:8px"><span style="font-size:30px">&#x1F9E0;</span> Dr. House Mode</h2>';
+  html += '<p style="margin:0;opacity:0.9;font-size:14px;line-height:1.7">Meet Dr. House — a medical genius with the bedside manner of a brick wall. He\'s already decided you\'re fine before you\'ve opened your mouth.<br><br>Your job? Describe your symptoms, fight for your diagnosis, and try not to get sent home with Tylenol. He will insult you. He will order the wrong tests. But if you know your condition well enough to argue back, even House has to admit when he\'s wrong.<br><span style="opacity:0.6;font-size:13px">(He won\'t enjoy it.)</span></p>';
+  html += '</div>';
+  html += '<div style="background:#111827;color:#d1d5db;border:1px solid rgba(148,163,184,0.28);border-radius:12px;padding:10px 14px;margin-bottom:24px;font-size:12px;line-height:1.6">';
+  html += '<strong style="color:#f8fafc">Clinic Rule #1:</strong> If the first answer is "dehydration," push harder. If the second answer is "anxiety," push harder. If the third answer is "it\'s not lupus"... maybe this time it really isn\'t.';
   html += '</div>';
   html += '<div class="card" style="padding:20px;margin-bottom:16px">';
   html += '<div style="font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;color:var(--text-light)">Difficulty</div>';
@@ -8514,7 +8519,7 @@ function startHouseMode() {
   var cond = pool[Math.floor(Math.random() * pool.length)];
   App.pbHouseCase = cond;
   App.pbHouseConvHistory = [];
-  App.pbHouseScore = { symptoms_mentioned: 0, tests_pushed: 0, turns: 0, clues_hit: [] };
+  App.pbHouseScore = { symptoms_mentioned: 0, tests_pushed: 0, turns: 0, clues_hit: [], lupusShown: false, showLupusEgg: false };
   renderHouseBriefing();
 }
 
@@ -8535,7 +8540,7 @@ function startHouseFreePlay() {
     freeplay: true
   };
   App.pbHouseConvHistory = [];
-  App.pbHouseScore = { symptoms_mentioned: 0, tests_pushed: 0, turns: 0, clues_hit: [], freeplay: true, chosenDisease: disease };
+  App.pbHouseScore = { symptoms_mentioned: 0, tests_pushed: 0, turns: 0, clues_hit: [], freeplay: true, chosenDisease: disease, lupusShown: false, showLupusEgg: false };
   // Skip briefing — go straight to conversation
   startHouseConversation_();
 }
@@ -8662,17 +8667,39 @@ function buildHousePrompt_(cond, difficulty) {
     (diffInstructions[difficulty || 'medium'] || diffInstructions.medium);
 }
 
+function buildHouseDifferential_(cond, score) {
+  var turns = score && score.turns ? score.turns : 0;
+  var cards = [];
+  if (!cond) return cards;
+  cards.push({ name: 'Dehydration', knockedOut: turns >= 2 });
+  var herrings = (cond.red_herrings || []).slice(0, 3);
+  for (var i = 0; i < herrings.length; i++) {
+    cards.push({ name: herrings[i], knockedOut: turns >= (i + 3) });
+  }
+  var finalDx = cond.freeplay ? 'Actual diagnosis (unknown to House)' : cond.name;
+  var solved = !!(score && score.houseDiagnosed);
+  cards.push({ name: finalDx, knockedOut: false, solved: solved });
+  return cards;
+}
+
 function renderHouseChat() {
   var el = document.getElementById('house-content');
   var cond = App.pbHouseCase;
   if (!cond) return;
   var history = App.pbHouseConvHistory;
-  var html = '<div style="max-width:700px;margin:0 auto">';
+  var html = '<div style="max-width:780px;margin:0 auto;background:linear-gradient(180deg,#0f172a,#111827 28%,#0b1220);border:1px solid rgba(148,163,184,0.22);border-radius:16px;padding:10px 0 16px;box-shadow:0 18px 36px rgba(2,6,23,0.45)">';
   // Header
   var isFreeplay = !!(cond.freeplay);
-  html += '<div class="pb-top-bar"><div class="pb-top-left"><h3>&#x1F9E0; ' + (isFreeplay ? 'Free Play &mdash; ???' : 'Dr. House Mode &mdash; ' + escapeHtml(cond.name)) + '</h3></div>';
-  html += '<div class="pb-top-right"><span style="font-size:13px;color:var(--text-light)">Turn ' + App.pbHouseScore.turns + '</span>';
+  html += '<div class="pb-top-bar" style="background:transparent;border-bottom:1px solid rgba(148,163,184,0.2)"><div class="pb-top-left"><h3 style="color:#e2e8f0">&#x1F9E0; ' + (isFreeplay ? 'Free Play &mdash; ???' : 'Dr. House Mode &mdash; ' + escapeHtml(cond.name)) + '</h3></div>';
+  html += '<div class="pb-top-right"><span style="font-size:13px;color:#94a3b8">Turn ' + App.pbHouseScore.turns + '</span>';
   html += '<button class="btn btn-sm btn-outline" onclick="endHouseMode_()" style="margin-left:8px">End Session</button></div></div>';
+
+  if (App.pbHouseScore && App.pbHouseScore.houseDiagnosed) {
+    html += '<div style="margin:12px 16px 8px;border-radius:12px;padding:12px 14px;background:linear-gradient(90deg,rgba(190,24,93,0.95),rgba(124,58,237,0.95));color:#fff;font-weight:800;letter-spacing:.4px;box-shadow:0 8px 20px rgba(124,58,237,0.35);animation:houseRevealPulse 1s ease-out 1">';
+    html += '&#x1F4A5; Diagnostic reveal: ' + escapeHtml(cond.freeplay ? 'House locked in a final diagnosis.' : cond.name + '. House finally says it out loud.');
+    html += '</div>';
+    html += '<style>@keyframes houseRevealPulse{0%{transform:scale(.98);opacity:.35}60%{transform:scale(1.01);opacity:1}100%{transform:scale(1);opacity:1}}</style>';
+  }
 
   if (isFreeplay) {
     // Free play: show what YOU chose, but remind user House doesn't know
@@ -8698,6 +8725,21 @@ function renderHouseChat() {
     }
     html += '</div>';
   } // end standard mode briefing
+  var differentials = buildHouseDifferential_(cond, App.pbHouseScore || {});
+  html += '<div style="margin:8px 16px 12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.55)">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px"><div style="font-size:12px;font-weight:900;letter-spacing:1.3px;text-transform:uppercase;color:#0f172a">&#x1F5D2; Differential Whiteboard</div><div style="font-size:11px;color:#64748b">Crossed off as evidence builds</div></div>';
+  for (var di = 0; di < differentials.length; di++) {
+    var d = differentials[di];
+    var crossed = !!d.knockedOut;
+    var lineColor = d.solved ? '#be123c' : crossed ? '#94a3b8' : '#1e293b';
+    html += '<div style="padding:4px 0;color:' + lineColor + ';font-weight:' + (d.solved ? '800' : '600') + ';text-decoration:' + (crossed ? 'line-through' : 'none') + ';opacity:' + (crossed ? '.65' : '1') + '">';
+    html += (d.solved ? '&#x1F525; ' : crossed ? '&#x2717; ' : '&#x2022; ') + escapeHtml(d.name) + '</div>';
+  }
+  if (App.pbHouseScore && App.pbHouseScore.showLupusEgg) {
+    html += '<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(251,191,36,0.2);color:#78350f;font-size:12px;font-weight:700">&#x1F9EA; House (grudgingly): "It\'s not lupus." <span style="font-weight:500;opacity:.8">— Easter egg unlocked</span></div>';
+  }
+  html += '</div>';
+
   // Chat messages
   html += '<div class="chat-container"><div class="chat-messages" id="pb-messages" role="log" aria-live="polite" aria-relevant="additions" style="min-height:300px">';
   for (var i = 0; i < history.length; i++) {
@@ -8793,6 +8835,13 @@ function sendHouseMessage() {
     var busted = response.indexOf('[BUSTED]') !== -1;
     // Strip tags from displayed message
     response = response.replace(/\[DIAGNOSED\]/g, '').replace(/\[BUSTED\]/g, '').trim();
+    if (App.pbHouseScore && !App.pbHouseScore.lupusShown) {
+      var hasLupusRef = response.toLowerCase().indexOf('lupus') !== -1;
+      if (hasLupusRef || App.pbHouseScore.turns >= 3) {
+        App.pbHouseScore.showLupusEgg = true;
+        App.pbHouseScore.lupusShown = true;
+      }
+    }
     App.pbHouseConvHistory.push({ role: 'assistant', content: response });
     if (diagnosed) {
       App.pbHouseScore.houseDiagnosed = true;
