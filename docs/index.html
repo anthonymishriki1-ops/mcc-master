@@ -2990,7 +2990,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '8.4';
+var APP_VERSION = '8.5';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -10245,10 +10245,9 @@ function startNACExamInner_() {
 
   App.nacVoiceMode = getNACVoiceMode_();
   App.pbHandsFree = App.nacVoiceMode === 'hands-free';
+  // Enable TTS for NAC session only — do NOT persist to localStorage (would affect PatientBot)
   App.pbTTS = true;
   App.pbOpenAITTS = true;
-  localStorage.setItem('mcc_pbTTS', '1');
-  localStorage.setItem('mcc_openaiTTS', '1');
 
   startNextNACStation();
 }
@@ -10973,6 +10972,10 @@ function showNACSummary() {
   stopHandsFree_();
   VitalsEngine.stop();
   if (App.nacIdleTimer) { clearInterval(App.nacIdleTimer); App.nacIdleTimer = null; }
+  // Restore PatientBot TTS setting from localStorage (NAC overrode it temporarily)
+  App.pbTTS = localStorage.getItem('mcc_pbTTS') === '1';
+  App.pbOpenAITTS = localStorage.getItem('mcc_openaiTTS') === '1';
+  App.pbHandsFree = false;
 
   // Show all content sections, hide patientbot, show nac-sim
   var pages = document.querySelectorAll('.page-content');
