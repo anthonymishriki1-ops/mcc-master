@@ -3097,6 +3097,7 @@ var App = {
 
   // NAC-OSCE Simulator
   nacActive: false,
+  nacSelectedTest: 1,
   nacStations: [],
   nacCurrentStation: 0,
   nacTotalStations: 0,
@@ -3111,6 +3112,7 @@ var App = {
   nacIdleNudgeCount: 0,
   nacStationEvalLoading: false,
   nacStationEval: null,
+  nacStationToken: 0,
 
   // Games
   speedDxCards: [],
@@ -6831,8 +6833,9 @@ function processPBTranscriptText_(text) {
   }
 
   stopMicForProcessing_();
-
+  var stationTokenAtSend = App.nacActive ? (App.nacStationToken || 0) : 0;
   serverCall('sendPatientBotMessage', App.pbCaseId, best, App.pbHistory.slice(-30)).then(function(result) {
+    if (App.nacActive && stationTokenAtSend !== (App.nacStationToken || 0)) return;
     removeEl('pb-typing');
     if (result.expired) { App.pbCaseId = null; stopHandsFree_(); showPatientBotSetup(); return; }
     if (result.blocked) {
@@ -6861,6 +6864,7 @@ function processPBTranscriptText_(text) {
     App.pbHistory.push({ role: 'assistant', content: result.response });
     target();
   }).catch(function(e) {
+    if (App.nacActive && stationTokenAtSend !== (App.nacStationToken || 0)) return;
     removeEl('pb-typing');
     App.pbHistory.push({ role: 'assistant', content: 'Error: ' + (e.message || String(e)) });
     target();
@@ -9772,17 +9776,18 @@ function showNACSetup() {
 
   html += '<div class="form-group" style="text-align:left"><label>Practice Test</label>';
   html += '<div class="quiz-count-btns" style="flex-wrap:wrap">';
-  html += '<button class="quiz-count-btn" onclick="setNACTest(0,this)">&#x1F3B2; Random Case</button>';
+  var selectedTest = (typeof App.nacSelectedTest === 'number') ? App.nacSelectedTest : 1;
+  html += '<button class="quiz-count-btn' + (selectedTest === 0 ? ' active' : '') + '" onclick="setNACTest(0,this)">&#x1F3B2; Random Case</button>';
   for (var ti = 0; ti < NAC_PRACTICE_TESTS.length; ti++) {
     var hasData = NAC_PRACTICE_TESTS[ti][0] && NAC_PRACTICE_TESTS[ti][0].nm;
     if (hasData) {
-      html += '<button class="quiz-count-btn' + (ti === 0 ? ' active' : '') + '" onclick="setNACTest(' + (ti+1) + ',this)">Test ' + (ti+1) + '</button>';
+      html += '<button class="quiz-count-btn' + (selectedTest === (ti + 1) ? ' active' : '') + '" onclick="setNACTest(' + (ti+1) + ',this)">Test ' + (ti+1) + '</button>';
     } else {
       html += '<button class="quiz-count-btn" disabled style="opacity:0.4;cursor:not-allowed">Test ' + (ti+1) + ' (Soon)</button>';
     }
   }
   html += '</div>';
-  html += '<input type="hidden" id="nac-test-num" value="1">';
+  html += '<input type="hidden" id="nac-test-num" value="' + selectedTest + '">';
   html += '</div>';
 
   html += '<div class="form-group" style="text-align:left"><label>Station Timer</label>';
@@ -9968,7 +9973,9 @@ function showNACScoresPage() {
 }
 
 function setNACTest(n, btn) {
-  document.getElementById('nac-test-num').value = n;
+  App.nacSelectedTest = n;
+  var testInput = document.getElementById('nac-test-num');
+  if (testInput) testInput.value = n;
   var btns = btn.parentElement.querySelectorAll('.quiz-count-btn');
   for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
   btn.classList.add('active');
@@ -10181,6 +10188,7 @@ function sendNACTextMessage_() {
 // ── NAC Direct Mode: send message without GAS ──
 function sendNACMessageDirect_(userMessage) {
   if (!App.nacActive || !App._nacSystemPrompt) return;
+  var stationTokenAtSend = App.nacStationToken || 0;
   // Dead patients don't talk
   if (App.pbHistory.some(function(m) { return m.role === 'death'; })) {
     App.pbHistory.push({ role: 'user', content: userMessage });
@@ -10231,6 +10239,7 @@ function sendNACMessageDirect_(userMessage) {
   }
 
   callAnthropicDirect_(App._nacSystemPrompt, apiMessages).then(function(response) {
+    if (!App.nacActive || stationTokenAtSend !== (App.nacStationToken || 0)) return;
     response = response.replace(/```[\s\S]*?```/g, '').replace(/\[SYSTEM[^\]]*\]/gi, '').replace(/\*[^*]+\*/g, '').replace(/\s{2,}/g, ' ').trim();
     // Detect if the model broke character (safety override) and replace with in-character reaction
     var breakPhrases = ['not going to continue', 'won\'t simulate', 'can\'t roleplay', 'I\'m an AI', 'as an AI', 'language model', 'crossed into threats', 'I cannot', 'I can\'t engage', 'against my guidelines', 'uncomfortable with', 'professional and respectful', 'happy to restart'];
@@ -10254,6 +10263,7 @@ function sendNACMessageDirect_(userMessage) {
     nacDirectRespond_(response, isExam ? 'partial' : 'assistant');
     maybeTriggerNacLabResults_(userMessage, response);
   }).catch(function(e) {
+    if (!App.nacActive || stationTokenAtSend !== (App.nacStationToken || 0)) return;
     App.pbHistory.push({ role: 'system', content: 'Error: ' + (e.message || String(e)) });
     renderPBChat();
     restartMicAfterResponse_();
@@ -10506,8 +10516,10 @@ function startNACExam() {
 }
 
 function startNACExamInner_() {
-  var testNum = parseInt(document.getElementById('nac-test-num').value, 10);
+  var testInput = document.getElementById('nac-test-num');
+  var testNum = parseInt(testInput ? testInput.value : App.nacSelectedTest, 10);
   if (isNaN(testNum)) testNum = 1;
+  App.nacSelectedTest = testNum;
 
   // Random case mode: pick one random station from all available pregen stations
   if (testNum === 0) {
@@ -10561,6 +10573,7 @@ var _nacStationGen = 0; // generation counter to prevent stale async callbacks
 
 function startNextNACStation() {
   _nacStationGen++; // invalidate any in-flight async callbacks from previous station
+  App.nacStationToken = (App.nacStationToken || 0) + 1; // invalidate pending async message callbacks
   App.nacCurrentStation++;
   App.pbCurrentCase = App.nacCurrentStation;
   App.nacNotes = ''; // fresh notepad each station
@@ -10901,6 +10914,7 @@ function enterNACStation_() {
     App._nacNudgeInFlight = true;
     // Use AI to generate a natural nudge (not scripted)
     if (App._nacDirectMode && App._nacSystemPrompt) {
+      var nudgeStationToken = App.nacStationToken || 0;
       var nudgeMessages = App.pbHistory.filter(function(m) { return m.role === 'user' || m.role === 'assistant'; })
         .map(function(m) { return { role: m.role, content: m.content }; });
       var silenceCount = (App._nacSilenceCount = (App._nacSilenceCount || 0) + 1);
@@ -10921,6 +10935,7 @@ function enterNACStation_() {
       }
       nudgeMessages.push({ role: 'user', content: '[SYSTEM: ' + nudgePrompt + ']' });
       callAnthropicDirect_(App._nacSystemPrompt, nudgeMessages).then(function(response) {
+        if (!App.nacActive || nudgeStationToken !== (App.nacStationToken || 0)) return;
         App._nacNudgeInFlight = false;
         App._nacLastActivity = Date.now(); // reset after nudge so next one waits full 28s
         response = response.replace(/```[\s\S]*?```/g, '').replace(/\[SYSTEM[^\]]*\]/gi, '').replace(/\*[^*]+\*/g, '').replace(/\s{2,}/g, ' ').trim();
@@ -10931,7 +10946,10 @@ function enterNACStation_() {
           var voice = localStorage.getItem('mcc_tts_voice_override') || getOpenAIVoice_();
           callTTSDirect_(response, voice, getOpenAISpeed_()).catch(function() {});
         }
-      }).catch(function() { App._nacNudgeInFlight = false; });
+      }).catch(function() {
+        if (!App.nacActive || nudgeStationToken !== (App.nacStationToken || 0)) return;
+        App._nacNudgeInFlight = false;
+      });
     } else {
       // Fallback for non-direct mode — still use AI via server if possible
       App.nacDoctorSpoke = true;
@@ -11116,6 +11134,23 @@ function _renderNACResultsScreen(score, evalResult) {
   h += '<p style="color:var(--text-light);margin:4px 0 0;font-size:14px">' + escapeHtml(score.specialty || '') + ' — ' + escapeHtml(score.presentation || '') + '</p>';
   h += '</div>';
 
+  var stationData = (App.nacStations && App.nacStations[App.nacCurrentStation - 1]) || {};
+  var pi = App.pbPatientInfo || {};
+  var patientName = pi.name || stationData.nm || 'Unknown Patient';
+  var patientAge = (pi.age != null ? pi.age : stationData.age);
+  var patientSexRaw = pi.sex || stationData.sx || '';
+  var patientSex = (patientSexRaw === 'female' || patientSexRaw === 'F' || patientSexRaw === 'trans_f') ? 'F'
+    : (patientSexRaw === 'male' || patientSexRaw === 'M' || patientSexRaw === 'trans_m') ? 'M'
+    : 'NB';
+  var patientEth = pi.ethnicity || stationData.eth || '';
+  var correctDx = stationData.dx || App.pbDiagnosis || score.diagnosis || '';
+  h += '<div style="background:var(--card);border-radius:12px;padding:14px 16px;border:1px solid var(--border);margin-bottom:16px">';
+  h += '<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px">' + escapeHtml(patientName) + '</div>';
+  h += '<div style="font-size:13px;color:var(--text-light);margin-bottom:6px">' + (patientAge != null ? patientAge : '?') + ' &middot; ' + patientSex + (patientEth ? ' &middot; ' + escapeHtml(patientEth) : '') + '</div>';
+  h += '<div style="font-size:13px;color:var(--text-light);margin-bottom:4px"><strong>Presentation:</strong> ' + escapeHtml(score.presentation || stationData.presentation || 'N/A') + '</div>';
+  if (correctDx) h += '<div style="font-size:13px;color:var(--text)"><strong>Correct diagnosis:</strong> ' + escapeHtml(correctDx) + '</div>';
+  h += '</div>';
+
   // OSCE Scorecard
   h += '<div style="background:var(--card);border-radius:12px;padding:20px;border:1px solid var(--border);margin-bottom:16px">';
   h += '<div style="font-size:16px;font-weight:700;margin-bottom:14px;color:var(--text)">OSCE Scorecard</div>';
@@ -11157,7 +11192,7 @@ function _renderNACResultsScreen(score, evalResult) {
 
   // Action buttons
   h += '<div style="display:flex;gap:12px;justify-content:center">';
-  h += '<button class="btn btn-success" style="min-width:160px;font-size:16px;padding:12px 24px" onclick="App.nacStationFinished=false;advanceNACStation_()">' + nextLabel + '</button>';
+  h += '<button class="btn btn-success" style="min-width:160px;font-size:16px;padding:12px 24px" onclick="App.nacStationFinished=false;advanceNACStation_(true)">' + nextLabel + '</button>';
   if (!isLast) h += '<button class="btn btn-outline" onclick="App.nacStationFinished=false;if(confirm(\'End entire NAC exam?\')){showNACSummary();}">End Exam</button>';
   h += '</div></div>';
   el.innerHTML = h;
@@ -11180,9 +11215,11 @@ function _loadNACScoreHistory() {
   } catch(e) { return []; }
 }
 
-function advanceNACStation_() {
+function advanceNACStation_(userInitiated) {
+  if (userInitiated !== true) return; // never auto-advance station transitions
   App.pbCaseId = null;
   App.pbHistory = [];
+  App.pbCodeBlue = null;
   VitalsEngine.stop();
   App.nacStationEval = null;
   if (App.nacRandomMode) {
@@ -11306,7 +11343,7 @@ function showNACStationScoreModal_(evalResult) {
   } else {
     h += '<div style="font-size:13px;color:var(--text-light);margin-bottom:14px">Evaluation was unavailable for this station.</div>';
   }
-  h += '<button id="nac-score-next-btn" class="btn btn-success" style="width:100%" onclick="document.getElementById(\'nac-station-score-modal\').remove();advanceNACStation_()">' + nextLabel + '</button>';
+  h += '<button id="nac-score-next-btn" class="btn btn-success" style="width:100%" onclick="document.getElementById(\'nac-station-score-modal\').remove();advanceNACStation_(true)">' + nextLabel + '</button>';
   h += '</div></div>';
   document.body.insertAdjacentHTML('beforeend', h);
   setTimeout(function() {
