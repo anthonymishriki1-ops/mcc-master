@@ -2612,6 +2612,7 @@ a:focus-visible {
       <li class="nav-group-label">PRACTICE</li>
       <li data-page="patientbot" onclick="navigateTo('patientbot')">&#x1F3E5; PatientBot</li>
       <li data-page="house" onclick="navigateTo('house')">&#x1F9E0; Dr. House</li>
+      <li data-page="melfi" onclick="navigateTo('melfi')">&#x1F453; Dr. Melfi</li>
 
       <li class="nav-group-label">GAMES</li>
       <li data-page="speeddx" onclick="navigateTo('speeddx')">&#x26A1; Speed Dx</li>
@@ -2795,6 +2796,14 @@ a:focus-visible {
         <h2>&#x1F9E0; Dr. House</h2>
       </div>
       <div id="house-content"></div>
+    </div>
+
+    <!-- DR. MELFI -->
+    <div id="page-melfi" class="page">
+      <div class="page-header">
+        <h2>&#x1F453; Dr. Melfi</h2>
+      </div>
+      <div id="melfi-content"></div>
     </div>
 
     <!-- PATIENTBOT -->
@@ -3148,7 +3157,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '9.8';
+var APP_VERSION = '9.9';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3160,6 +3169,13 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '9.9', date: 'Mar 30 2026', label: 'Dr. Melfi — Therapy Simulator', items: [
+    'New mode: sit on Dr. Melfi\'s couch as a patient',
+    '5 personas: Tony Soprano, Stressed Med Student, Grieving Parent, Anxious Overachiever, Custom',
+    '15-minute timed session with real therapeutic techniques',
+    'Session summary: defense mechanisms detected, clinical notes, therapy progress',
+    'Great for psych rotation prep — experience therapy from the patient\'s side',
+  ]},
   { version: '9.8', date: 'Mar 30 2026', label: 'Carfentanyl kills instantly + state fixes', items: [
     'Carfentanyl/carfentanil added to drug engine — instant death, 5 second onset',
     'Massive dose effects: HR -80, BP crashes, SpO2 drops to zero',
@@ -3554,6 +3570,7 @@ function navigateTo(page) {
     case 'search': document.getElementById('search-input').focus(); break;
     case 'patientbot': if (!App.pbCaseId && !App.nacActive) showPatientBotSetup(); break;
     case 'house': showHouseSetup(); break;
+    case 'melfi': showMelfiSetup(); break;
     case 'mccqe-sim': showMCCQESetup(); break;
     case 'nac-sim': showNACSetup(); break;
     case 'speeddx': showSpeedDx(); break;
@@ -7398,6 +7415,198 @@ function ddSpeakLast_() {
   if (!App.ddTTS) return;
   var last = App.drDataHistory[App.drDataHistory.length - 1];
   if (last && last.role === 'assistant') speakText_(last.content, null, true);
+}
+
+// ── Dr. Melfi Mode — Therapy Simulator ──────────────────────────────────────
+var MELFI_PERSONAS = [
+  { id: 'tony', name: 'Tony Soprano', desc: 'Mob boss with anger issues, panic attacks, mother complex. Resistant to therapy but keeps coming back.', prompt: 'You are playing Tony Soprano — a powerful mob boss who suffers from panic attacks and depression. You are tough, defensive, use humor to deflect, and hate vulnerability. You came to therapy because of blackouts. Deep down you know you need help but would never admit it.' },
+  { id: 'student', name: 'Stressed Med Student', desc: 'Overwhelmed, imposter syndrome, sleep-deprived. Thinks asking for help means weakness.', prompt: 'You are a 2nd-year medical student experiencing severe burnout, imposter syndrome, and anxiety. You sleep 4 hours a night, drink too much coffee, and your relationship is falling apart. You minimize everything: "I\'m fine, everyone goes through this." You intellectualize your emotions as a defense mechanism.' },
+  { id: 'grief', name: 'Grieving Parent', desc: 'Lost a child 6 months ago. Functioning on autopilot. Hasn\'t cried yet.', prompt: 'You are a parent who lost your 8-year-old child to leukemia 6 months ago. You haven\'t cried. You went back to work after 2 weeks. Everyone says you\'re "so strong." You\'re actually numb and terrified of falling apart. You use busyness and rationalization to avoid the grief.' },
+  { id: 'overachiever', name: 'Anxious Overachiever', desc: 'Perfect GPA, perfect life on paper. Crippling anxiety underneath. Can\'t stop performing.', prompt: 'You are a high-achieving professional who appears to have it all together. Underneath, you have crippling anxiety, perfectionism that borders on OCD, and a deep fear of failure rooted in childhood. You perform competence as a mask. You came to therapy because you had your first panic attack during a presentation.' },
+  { id: 'custom', name: 'Custom', desc: 'Create your own persona or just be yourself.', prompt: '' }
+];
+
+function showMelfiSetup() {
+  var el = document.getElementById('melfi-content');
+  if (!el) return;
+  var persona = App.melfiPersona || 'tony';
+  var html = '<div style="max-width:600px;margin:0 auto;padding:24px 16px">';
+  // Header
+  html += '<div style="background:radial-gradient(ellipse at bottom left,#3d1c1c 0%,#1a1210 50%,#0f0d0b 100%);color:#f5efe6;border-radius:18px;padding:32px 28px;margin-bottom:16px;box-shadow:0 18px 44px rgba(0,0,0,0.45);border:1px solid rgba(139,90,43,0.2)">';
+  html += '<div style="font-size:11px;letter-spacing:2.8px;text-transform:uppercase;opacity:0.5;margin-bottom:8px">Therapy Session</div>';
+  html += '<div style="font-size:38px;font-weight:900;letter-spacing:1px;line-height:1.1;margin-bottom:8px;color:#f5efe6">Dr. Melfi</div>';
+  html += '<div style="height:2px;width:72px;background:linear-gradient(90deg,#8b5a2b,rgba(139,90,43,0));margin:12px 0 14px"></div>';
+  html += '<p style="font-size:15px;opacity:0.8;line-height:1.6;margin:0">Take a seat. This is your session — not as a doctor, but as a <strong>patient</strong>. Dr. Melfi will listen, probe, and occasionally say something that hits a little too close to home.</p>';
+  html += '</div>';
+  // Why this matters
+  html += '<div style="background:#1a1210;color:#c4b49a;border:1px solid rgba(139,90,43,0.2);border-radius:12px;padding:10px 14px;margin-bottom:20px;font-size:12px;line-height:1.6">';
+  html += '<strong style="color:#f5efe6">For your psych rotation:</strong> Experience therapy from the patient\'s side. Understand resistance, deflection, and what good therapeutic technique feels like when you\'re receiving it.';
+  html += '</div>';
+  // Persona picker
+  html += '<div class="card" style="padding:20px;margin-bottom:16px">';
+  html += '<div style="font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;color:var(--text-light)">Who Are You Today?</div>';
+  for (var i = 0; i < MELFI_PERSONAS.length; i++) {
+    var p = MELFI_PERSONAS[i];
+    var sel = persona === p.id;
+    html += '<div onclick="App.melfiPersona=\'' + p.id + '\';showMelfiSetup()" style="padding:12px 14px;border:2px solid ' + (sel ? 'var(--primary)' : 'var(--border)') + ';border-radius:10px;margin-bottom:8px;cursor:pointer;background:' + (sel ? 'rgba(99,102,241,0.06)' : 'var(--card)') + '">';
+    html += '<div style="font-weight:700;font-size:14px;color:var(--text)">' + escapeHtml(p.name) + '</div>';
+    html += '<div style="font-size:12px;color:var(--text-light);margin-top:2px">' + escapeHtml(p.desc) + '</div>';
+    html += '</div>';
+  }
+  if (persona === 'custom') {
+    html += '<textarea id="melfi-custom-prompt" placeholder="Describe who you are... (or leave blank to just be yourself)" style="width:100%;height:80px;margin-top:8px;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;resize:vertical">' + escapeHtml(App.melfiCustomPrompt || '') + '</textarea>';
+  }
+  html += '</div>';
+  // Start
+  html += '<button class="btn btn-primary" style="width:100%;padding:14px;font-size:16px;font-weight:700;background:linear-gradient(135deg,#3d1c1c,#8b5a2b)" onclick="startMelfiSession()">Begin Session</button>';
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function startMelfiSession() {
+  var persona = MELFI_PERSONAS.find(function(p) { return p.id === (App.melfiPersona || 'tony'); }) || MELFI_PERSONAS[0];
+  if (persona.id === 'custom') {
+    var ta = document.getElementById('melfi-custom-prompt');
+    App.melfiCustomPrompt = ta ? ta.value.trim() : '';
+  }
+  var patientPrompt = persona.id === 'custom' ? (App.melfiCustomPrompt || 'The patient has not shared any background. Gently explore who they are.') : persona.prompt;
+  App.melfiActive = true;
+  App.melfiHistory = [];
+  App.melfiStartTime = Date.now();
+  App.melfiDefenses = [];
+  App.melfiSystemPrompt = 'You are Dr. Jennifer Melfi, a licensed psychotherapist. You are warm but incisive, calm but never passive.\n\n' +
+    'YOUR THERAPEUTIC APPROACH:\n' +
+    '- Use open-ended questions: "How does that make you feel?" "What comes to mind when you think about that?"\n' +
+    '- Reflective listening: mirror their words back with slight reframing\n' +
+    '- Socratic questioning: guide them to their own insights\n' +
+    '- Call out defense mechanisms GENTLY: "I notice you deflect with humor when we get close to something painful."\n' +
+    '- Use strategic silence: if they trail off, wait. Let the discomfort do the work.\n' +
+    '- Occasional confrontation: "You say you\'re fine, but you\'ve brought up your father three times."\n' +
+    '- NEVER judge. NEVER lecture. NEVER diagnose out loud unless clinically appropriate.\n' +
+    '- Keep responses SHORT — 1-3 sentences. Therapy is about the patient talking, not you.\n\n' +
+    'YOUR PATIENT TODAY:\n' + patientPrompt + '\n\n' +
+    'RULES:\n' +
+    '- You are IN SESSION. No small talk, no "how was your week" pleasantries beyond the opener.\n' +
+    '- Track emotional patterns across the conversation. Reference things they said earlier.\n' +
+    '- If they get hostile or deflective, stay calm. That IS the therapy.\n' +
+    '- Identify defense mechanisms as you see them (denial, projection, rationalization, intellectualization, displacement, humor as defense, avoidance) but only name them when therapeutically appropriate.\n' +
+    '- End the session with a brief, thoughtful summary if the timer runs out.\n';
+  renderMelfiChat();
+  // Melfi opens with a gentle starter
+  App.melfiHistory.push({ role: 'assistant', content: '' });
+  callAnthropicDirect_(App.melfiSystemPrompt, [{ role: 'user', content: '[SESSION START — the patient just sat down. Open the session naturally. One sentence max.]' }]).then(function(r) {
+    var clean = String(r || '').replace(/\[SESSION[^\]]*\]/gi, '').replace(/```[\s\S]*?```/g, '').trim();
+    App.melfiHistory[0] = { role: 'assistant', content: clean || 'So... what brings you in today?' };
+    renderMelfiChat();
+  }).catch(function() {
+    App.melfiHistory[0] = { role: 'assistant', content: 'So... what brings you in today?' };
+    renderMelfiChat();
+  });
+}
+
+function renderMelfiChat() {
+  var el = document.getElementById('melfi-content');
+  if (!el) return;
+  var elapsed = App.melfiStartTime ? Math.floor((Date.now() - App.melfiStartTime) / 1000) : 0;
+  var remaining = Math.max(0, 900 - elapsed); // 15 min session
+  var mm = Math.floor(remaining / 60), ss = remaining % 60;
+  var html = '<div style="max-width:700px;margin:0 auto">';
+  // Top bar
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:linear-gradient(135deg,#1a1210,#3d1c1c);border-radius:12px 12px 0 0;color:#f5efe6">';
+  html += '<div><span style="font-size:15px;font-weight:700">Dr. Melfi</span> <span style="font-size:12px;opacity:0.6">— Session in progress</span></div>';
+  html += '<div style="font-size:14px;font-family:monospace;color:#c4b49a">' + mm + ':' + (ss < 10 ? '0' : '') + ss + '</div>';
+  html += '<button class="btn btn-sm" onclick="endMelfiSession()" style="background:rgba(255,255,255,0.1);color:#f5efe6;border:1px solid rgba(255,255,255,0.2);font-size:12px">End Session</button>';
+  html += '</div>';
+  // Chat area
+  html += '<div id="melfi-messages" style="background:var(--card);min-height:350px;max-height:55vh;overflow-y:auto;padding:16px;border:1px solid var(--border);border-top:none">';
+  for (var i = 0; i < App.melfiHistory.length; i++) {
+    var m = App.melfiHistory[i];
+    if (!m.content) continue;
+    var isUser = m.role === 'user';
+    html += '<div style="display:flex;justify-content:' + (isUser ? 'flex-end' : 'flex-start') + ';margin-bottom:10px">';
+    html += '<div style="max-width:80%;padding:10px 14px;border-radius:14px;font-size:14px;line-height:1.5;' +
+      (isUser ? 'background:var(--primary);color:white' : 'background:var(--bg);color:var(--text);border:1px solid var(--border)') + '">';
+    if (!isUser) html += '<div style="font-size:11px;color:var(--text-light);margin-bottom:4px;font-weight:600">Dr. Melfi</div>';
+    html += escapeHtml(m.content);
+    html += '</div></div>';
+  }
+  html += '</div>';
+  // Input
+  html += '<div style="display:flex;gap:8px;padding:12px;background:var(--card);border:1px solid var(--border);border-top:none;border-radius:0 0 12px 12px">';
+  html += '<input type="text" id="melfi-input" placeholder="What\'s on your mind..." style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:14px" onkeydown="if(event.key===\'Enter\')sendMelfiMessage()">';
+  html += '<button class="btn btn-primary" onclick="sendMelfiMessage()" style="background:linear-gradient(135deg,#3d1c1c,#8b5a2b)">Send</button>';
+  html += '</div></div>';
+  el.innerHTML = html;
+  var msgs = document.getElementById('melfi-messages');
+  if (msgs) msgs.scrollTop = msgs.scrollHeight;
+  var input = document.getElementById('melfi-input');
+  if (input) input.focus();
+}
+
+function sendMelfiMessage() {
+  var input = document.getElementById('melfi-input');
+  if (!input) return;
+  var msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  App.melfiHistory.push({ role: 'user', content: msg });
+  renderMelfiChat();
+  // Send to Melfi
+  var messages = App.melfiHistory.map(function(m) { return { role: m.role, content: m.content }; });
+  callAnthropicDirect_(App.melfiSystemPrompt, messages).then(function(r) {
+    var clean = String(r || '').replace(/```[\s\S]*?```/g, '').trim();
+    App.melfiHistory.push({ role: 'assistant', content: clean });
+    renderMelfiChat();
+  }).catch(function(e) {
+    App.melfiHistory.push({ role: 'assistant', content: 'I\'m sorry, I lost my train of thought. Could you say that again?' });
+    renderMelfiChat();
+  });
+}
+
+function endMelfiSession() {
+  if (!App.melfiActive) return;
+  App.melfiActive = false;
+  var el = document.getElementById('melfi-content');
+  if (!el) return;
+  var elapsed = App.melfiStartTime ? Math.round((Date.now() - App.melfiStartTime) / 60000) : 0;
+  var turns = App.melfiHistory.filter(function(m) { return m.role === 'user'; }).length;
+  // Generate session summary via AI
+  var transcript = App.melfiHistory.map(function(m) { return (m.role === 'user' ? 'Patient' : 'Dr. Melfi') + ': ' + (m.content || '').substring(0, 300); }).join('\n');
+  var summaryPrompt = 'You just finished a therapy session. Based on this transcript, write brief clinical notes:\n' +
+    '1. Defense mechanisms observed (list each with a one-line example from the session)\n' +
+    '2. Key themes/patterns\n' +
+    '3. Therapeutic progress (what shifted, if anything)\n' +
+    '4. Recommendation for next session\n\n' +
+    'Keep it concise — bullet points, clinical tone. Max 200 words.\n\nTranscript:\n' + transcript.substring(0, 3000);
+  el.innerHTML = '<div style="max-width:600px;margin:0 auto;padding:24px;text-align:center"><div style="font-size:48px;margin-bottom:12px">&#x1F4CB;</div><h2>Generating Session Notes...</h2><p style="color:var(--text-light)">Dr. Melfi is reviewing her notes.</p></div>';
+  callAnthropicDirect_('You are a clinical psychologist writing session notes. Be concise and professional.', [{ role: 'user', content: summaryPrompt }]).then(function(r) {
+    var notes = String(r || '').trim();
+    renderMelfiSummary(elapsed, turns, notes);
+  }).catch(function() {
+    renderMelfiSummary(elapsed, turns, 'Session notes unavailable.');
+  });
+}
+
+function renderMelfiSummary(minutes, turns, notes) {
+  var el = document.getElementById('melfi-content');
+  if (!el) return;
+  var html = '<div style="max-width:600px;margin:0 auto;padding:24px">';
+  html += '<div style="text-align:center;margin-bottom:20px">';
+  html += '<div style="font-size:48px;margin-bottom:8px">&#x1F453;</div>';
+  html += '<h2 style="margin:0;font-size:22px;color:var(--text)">Session Complete</h2>';
+  html += '<p style="color:var(--text-light);font-size:14px;margin:4px 0 0">' + minutes + ' minutes &middot; ' + turns + ' exchanges</p>';
+  html += '</div>';
+  // Clinical notes
+  html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px">';
+  html += '<div style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--text)">Dr. Melfi\'s Clinical Notes</div>';
+  html += '<div style="font-size:13px;color:var(--text-light);line-height:1.7;white-space:pre-wrap">' + escapeHtml(notes) + '</div>';
+  html += '</div>';
+  // Actions
+  html += '<div style="display:flex;gap:12px;justify-content:center">';
+  html += '<button class="btn btn-primary" onclick="startMelfiSession()" style="background:linear-gradient(135deg,#3d1c1c,#8b5a2b)">Another Session</button>';
+  html += '<button class="btn btn-outline" onclick="showMelfiSetup()">Change Persona</button>';
+  html += '</div></div>';
+  el.innerHTML = html;
 }
 
 // Voice command detection — intercepts mic transcripts in PB mode
