@@ -3146,7 +3146,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '9.5';
+var APP_VERSION = '9.6';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3158,6 +3158,11 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '9.6', date: 'Mar 30 2026', label: 'Parent voice fix + detailed scorecard', items: [
+    'Pediatric cases: parent speaks as their own gender (mother = female voice, father = male)',
+    'Parent refers to child by name ("my baby", "my son") instead of speaking as the child',
+    'Scorecard shows patient name, demographics, presentation, correct diagnosis',
+  ]},
   { version: '9.5', date: 'Mar 30 2026', label: 'Detailed scorecard with patient info', items: [
     'Scorecard shows patient name, age, sex, ethnicity, presentation, specialty',
     'Correct diagnosis revealed after station ends',
@@ -10289,13 +10294,43 @@ function restartMicAfterResponse_() {
 
 // Build NAC system prompt from pregen station data (client-side, no server needed)
 function buildNACSystemPrompt_(station) {
-  var sx = station.sx === 'F' ? 'female' : station.sx === 'M' ? 'male' : 'non-binary';
-  var pronouns = station.sx === 'F' ? 'she/her' : station.sx === 'M' ? 'he/him' : 'they/them';
+  // Detect pediatric cases where a parent is the speaker
+  // Format: "Baby Samir (mother: Amina Yusuf)" or "Olivia (mother: Hannah Green)"
+  var parentMatch = (station.nm || '').match(/\((mother|father|parent|guardian|caregiver):\s*([^)]+)\)/i);
+  var isPediatric = parentMatch || (station.age && parseFloat(station.age) < 5);
+  var parentRole = parentMatch ? parentMatch[1].toLowerCase() : null;
+  var parentName = parentMatch ? parentMatch[2].trim() : null;
+  var patientName = parentMatch ? station.nm.replace(/\s*\([^)]+\)/, '').trim() : station.nm;
+
+  // For the SPEAKER's sex: use parent role, not patient sex
+  var speakerSx, speakerPronouns;
+  if (parentRole === 'mother') {
+    speakerSx = 'female'; speakerPronouns = 'she/her';
+  } else if (parentRole === 'father') {
+    speakerSx = 'male'; speakerPronouns = 'he/him';
+  } else {
+    speakerSx = station.sx === 'F' ? 'female' : station.sx === 'M' ? 'male' : 'non-binary';
+    speakerPronouns = station.sx === 'F' ? 'she/her' : station.sx === 'M' ? 'he/him' : 'they/them';
+  }
+
+  var patientSx = station.sx === 'F' ? 'female' : station.sx === 'M' ? 'male' : 'non-binary';
+  var roleSection;
+  if (isPediatric && parentName) {
+    roleSection = 'YOU ARE ROLEPLAYING AS ' + parentName.toUpperCase() + ', THE ' + (parentRole || 'parent').toUpperCase() + ' OF THE PATIENT.\n' +
+      '- Your name: ' + parentName + '\n' +
+      '- You are: ' + speakerSx + ' (' + speakerPronouns + ')\n' +
+      '- Your child/patient: ' + patientName + ', age ' + station.age + ', ' + patientSx + '\n' +
+      '- You speak AS THE PARENT. Refer to your child by name or as "my baby", "my son", "my daughter", "my child".\n' +
+      '- You are worried, scared, protective. You describe what YOU observed — not medical facts.\n';
+  } else {
+    roleSection = 'YOU ARE ROLEPLAYING AS A SPECIFIC PATIENT. ALL DETAILS ARE LOCKED:\n' +
+      '- Name: ' + station.nm + '\n' +
+      '- Age: ' + station.age + '\n' +
+      '- Sex: ' + speakerSx + ' (' + speakerPronouns + ')\n';
+  }
+
   return 'You are PatientBot, a clinical scenario simulator for the NAC-OSCE.\n\n' +
-    'YOU ARE ROLEPLAYING AS A SPECIFIC PATIENT. ALL DETAILS ARE LOCKED:\n' +
-    '- Name: ' + station.nm + '\n' +
-    '- Age: ' + station.age + '\n' +
-    '- Sex: ' + sx + ' (' + pronouns + ')\n' +
+    roleSection +
     '- Ethnicity: ' + station.eth + '\n' +
     '- Appearance: ' + station.ap + '\n' +
     '- Chief complaint: ' + station.presentation + '\n' +
