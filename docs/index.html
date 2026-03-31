@@ -3157,7 +3157,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '10.0';
+var APP_VERSION = '10.2';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3169,6 +3169,11 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '10.2', date: 'Mar 31 2026', label: 'NAC/PatientBot state bleed FIXED', items: [
+    'NAC deactivates when station ends — PatientBot no longer shows NAC leftovers',
+    'Idle timer, vitals engine, mic all stopped on station end',
+    'Clicking PatientBot after NAC shows PatientBot setup, not dead NAC station',
+  ]},
   { version: '10.0', date: 'Mar 31 2026', label: 'NAC routing fix + v10', items: [
     'NAC exam summary now returns to NAC-OSCE page, not PatientBot',
     'v10.0 milestone!',
@@ -11266,14 +11271,18 @@ function finishNACStation() {
   if (!App.pbDiagResolved) logPBConversation('nac_timeout', {});
   if (!App.nacScoreHistory) App.nacScoreHistory = [];
 
+  // CRITICAL: Deactivate NAC so PatientBot doesn't show NAC UI
+  App.nacActive = false;
+  VitalsEngine.stop();
+  if (App.nacIdleTimer) { clearInterval(App.nacIdleTimer); App.nacIdleTimer = null; }
+  // Clear PatientBot state so it doesn't show NAC leftovers
+  App.pbCaseId = null;
+  App.pbCodeBlue = null;
+  App._pbSpeaking = false;
+
   // Show INLINE results screen (replaces station UI entirely)
   App.nacStationEval = null;
   App.nacStationEvalLoading = true;
-  console.log('[NAC] finishNACStation: initial render attempt', {
-    currentStation: App.nacCurrentStation,
-    hasNacSimContent: !!document.getElementById('nac-sim-content'),
-    hasPatientBotContent: !!document.getElementById('patientbot-content')
-  });
   _renderNACResultsScreen(score, null); // render immediately with "loading" state
 
   // Fire off evaluation in background — updates the results screen when done
@@ -11443,8 +11452,11 @@ function advanceNACStation_(userInitiated) {
   App.pbCaseId = null;
   App.pbHistory = [];
   App.pbCodeBlue = null;
+  App.nacStationFinished = false;
   VitalsEngine.stop();
   App.nacStationEval = null;
+  // Re-enable NAC mode for next station
+  App.nacActive = true;
   if (App.nacRandomMode) {
     pickNextRandomStation_();
   } else if (App.nacCurrentStation >= App.nacTotalStations) {
