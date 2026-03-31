@@ -11327,24 +11327,9 @@ function finishNACStation() {
 }
 
 function _renderNACResultsScreen(score, evalResult) {
-  // Ensure we're on the right page — NAC results should render to whichever page is active
-  var nacEl = document.getElementById('nac-sim-content');
-  var pbEl = document.getElementById('patientbot-content');
-  // Make sure the NAC page is visible
-  var nacPage = document.getElementById('page-nac-sim');
-  var pbPage = document.getElementById('page-patientbot');
-  if (nacPage && !nacPage.classList.contains('active')) {
-    // Switch to NAC page so results are visible
-    var allPages = document.querySelectorAll('.page');
-    for (var pi = 0; pi < allPages.length; pi++) allPages[pi].classList.remove('active');
-    nacPage.classList.add('active');
-  }
-  var el = nacEl || pbEl;
-  console.log('[NAC] _renderNACResultsScreen target lookup', {
-    using: nacEl ? 'nac-sim-content' : (pbEl ? 'patientbot-content' : 'none'),
-    hasNacSimContent: !!nacEl,
-    hasPatientBotContent: !!pbEl
-  });
+  // Render results into patientbot-content (where the station was running)
+  // Do NOT switch pages — stay on current page so user sees results immediately
+  var el = document.getElementById('patientbot-content') || document.getElementById('nac-sim-content');
   if (!el) return;
   var isLast = (!App.nacRandomMode && App.nacCurrentStation >= App.nacTotalStations);
   var nextLabel = isLast ? 'View Final Results' : 'Next Station';
