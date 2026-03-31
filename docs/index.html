@@ -3146,7 +3146,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '9.7';
+var APP_VERSION = '9.8';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3158,6 +3158,10 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '9.8', date: 'Mar 30 2026', label: 'Carfentanyl kills instantly + state fixes', items: [
+    'Carfentanyl/carfentanil added to drug engine — instant death, 5 second onset',
+    'Massive dose effects: HR -80, BP crashes, SpO2 drops to zero',
+  ]},
   { version: '9.7', date: 'Mar 30 2026', label: 'Scorecard: patient name, diagnosis, state reset', items: [
     'Scorecard shows patient name, demographics, correct diagnosis revealed',
     'Dead patient state resets between stations — no more carrying over death',
@@ -4027,6 +4031,8 @@ var VitalsEngine = {
     'atropine':        { hr:+30, sbp:+5,  dbp:0,   spo2:0,  rr:0,   temp:0,    onset:60  },
     'morphine':        { hr:-8,  sbp:-10, dbp:-5,  spo2:-2, rr:-4,  temp:0,    onset:120 },
     'fentanyl':        { hr:-5,  sbp:-8,  dbp:-4,  spo2:-2, rr:-5,  temp:0,    onset:30  },
+    'carfentanyl':     { hr:-80, sbp:-100,dbp:-60, spo2:-40,rr:-30, temp:-2,   onset:5   },
+    'carfentanil':     { hr:-80, sbp:-100,dbp:-60, spo2:-40,rr:-30, temp:-2,   onset:5   },
     'hydromorphone':   { hr:-6,  sbp:-8,  dbp:-4,  spo2:-2, rr:-4,  temp:0,    onset:60  },
     'metoprolol':      { hr:-20, sbp:-15, dbp:-8,  spo2:0,  rr:-2,  temp:0,    onset:300 },
     'labetalol':       { hr:-15, sbp:-20, dbp:-10, spo2:0,  rr:-2,  temp:0,    onset:180 },
