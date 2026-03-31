@@ -3157,7 +3157,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '10.2';
+var APP_VERSION = '10.3';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3169,6 +3169,11 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '10.3', date: 'Mar 31 2026', label: 'Clean separation: PatientBot is PatientBot', items: [
+    'Removed NAC Exam Mode and Dr. House Mode from PatientBot dropdown',
+    'PatientBot is now purely clinical practice — Random or by Specialty',
+    'NAC-OSCE and Dr. House each have their own dedicated pages',
+  ]},
   { version: '10.2', date: 'Mar 31 2026', label: 'NAC/PatientBot state bleed FIXED', items: [
     'NAC deactivates when station ends — PatientBot no longer shows NAC leftovers',
     'Idle timer, vitals engine, mic all stopped on station end',
@@ -8391,8 +8396,7 @@ function showPatientBotSetup() {
 
   html += '<div class="form-group" style="text-align:left"><label>Mode</label>';
   html += '<select id="pb-specialty" style="width:100%">';
-  html += '<option value="Random">&#x1F3AF; NAC Exam Mode (Random Presentation)</option>';
-  html += '<option value="house">&#x1F9E0; Dr. House Mode — You Are the Patient</option>';
+  html += '<option value="Random">&#x1F3AF; Random Presentation</option>';
   html += '<optgroup label="By Specialty">';
   var groupedSpecs = ['Cardiology','Respirology','GI / Hepatology','Neurology','Psychiatry','MSK / Rheumatology','Nephrology / Urology','Endocrinology','Hematology / Oncology','Dermatology','OB/GYN','Pediatrics','Emergency Medicine','Infectious Disease','Surgery','Ophthalmology / ENT','Family Medicine'];
   for (var g = 0; g < groupedSpecs.length; g++) html += '<option value="' + escapeHtml(groupedSpecs[g]) + '">' + escapeHtml(groupedSpecs[g]) + '</option>';
