@@ -3157,7 +3157,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '9.9';
+var APP_VERSION = '10.0';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3169,6 +3169,10 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '10.0', date: 'Mar 31 2026', label: 'NAC routing fix + v10', items: [
+    'NAC exam summary now returns to NAC-OSCE page, not PatientBot',
+    'v10.0 milestone!',
+  ]},
   { version: '9.9', date: 'Mar 30 2026', label: 'Dr. Melfi — Therapy Simulator', items: [
     'New mode: sit on Dr. Melfi\'s couch as a patient',
     '5 personas: Tony Soprano, Stressed Med Student, Grieving Parent, Anxious Overachiever, Custom',
@@ -11622,14 +11626,9 @@ function showNACSummary() {
   App.pbOpenAITTS = localStorage.getItem('mcc_openaiTTS') === '1';
   App.pbHandsFree = false;
 
-  // Show all content sections, hide patientbot, show nac-sim
-  var pages = document.querySelectorAll('.page-content');
-  for (var pi = 0; pi < pages.length; pi++) pages[pi].style.display = 'none';
-  var nacPage = document.getElementById('nac-sim-content');
-  if (nacPage) nacPage.style.display = 'block';
-  // Update sidebar highlight
-  syncNACSidebarActive_();
-  var el = nacPage;
+  // Navigate back to NAC-OSCE page (not patientbot)
+  navigateTo('nac-sim');
+  var el = document.getElementById('nac-sim-content');
   var scores = App.nacScores;
   var correct = scores.filter(function(s) { return s.correct; }).length;
   var total = scores.length;
