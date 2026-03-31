@@ -3146,7 +3146,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '9.6';
+var APP_VERSION = '9.7';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3158,6 +3158,12 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '9.7', date: 'Mar 30 2026', label: 'Scorecard: patient name, diagnosis, state reset', items: [
+    'Scorecard shows patient name, demographics, correct diagnosis revealed',
+    'Dead patient state resets between stations — no more carrying over death',
+    'Conversation history properly cleared between stations',
+    'TTS, idle timers, mic all cleaned up on station transition',
+  ]},
   { version: '9.6', date: 'Mar 30 2026', label: 'Parent voice fix + detailed scorecard', items: [
     'Pediatric cases: parent speaks as their own gender (mother = female voice, father = male)',
     'Parent refers to child by name ("my baby", "my son") instead of speaking as the child',
@@ -10566,11 +10572,20 @@ function startNextNACStation() {
   App.nacNotes = ''; // fresh notepad each station
   App.nacActions = []; // fresh actions log each station
   nacActiveTab = 'overview'; // reset to overview tab
-  // Clear stale patient info to prevent flash of wrong patient during loading
+  // Clear ALL stale state from previous station
   App.pbPatientInfo = null;
   App.pbVitals = null;
+  App.pbHistory = [];
+  App.pbCodeBlue = null;
+  App.nacStationFinished = false;
   App.nacLabResults = [];
+  App.nacImagingResults = [];
+  App.nacExamResults = [];
   App.nacIdleNudgeCount = 0;
+  App._pbSpeaking = false;
+  App._nacSilenceCount = 0;
+  if (App._ttsAudio) { try { App._ttsAudio.pause(); App._ttsAudio = null; } catch(e) {} }
+  if (App.nacIdleTimer) { clearInterval(App.nacIdleTimer); App.nacIdleTimer = null; }
   var station = App.nacStations[App.nacCurrentStation - 1];
 
   // Set PB specialty to the station's specialty
@@ -11115,6 +11130,26 @@ function _renderNACResultsScreen(score, evalResult) {
   }
   h += '<p style="color:var(--text-light);margin:4px 0 0;font-size:14px">' + escapeHtml(score.specialty || '') + ' — ' + escapeHtml(score.presentation || '') + '</p>';
   h += '</div>';
+
+  // Patient details card
+  var pi = App.pbPatientInfo || {};
+  var sd = (App.nacStations && App.nacStations[App.nacCurrentStation - 1]) || {};
+  var ptName = pi.name || sd.nm || '';
+  if (ptName) {
+    h += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:16px">';
+    h += '<div style="font-size:17px;font-weight:700;margin-bottom:4px;color:var(--text)">' + escapeHtml(ptName) + '</div>';
+    h += '<div style="font-size:13px;color:var(--text-light)">';
+    h += (pi.age || sd.age || '?') + ' &middot; ' + (pi.sex === 'female' || sd.sx === 'F' ? 'F' : pi.sex === 'male' || sd.sx === 'M' ? 'M' : 'NB');
+    if (pi.ethnicity || sd.eth) h += ' &middot; ' + escapeHtml(pi.ethnicity || sd.eth || '');
+    h += '</div></div>';
+  }
+  // Correct diagnosis reveal
+  var correctDx = sd.dx || App.pbDiagnosis || '';
+  if (correctDx) {
+    h += '<div style="background:rgba(76,175,80,0.08);border:1px solid rgba(76,175,80,0.3);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:14px">';
+    h += '<strong style="color:#4caf50">Correct Diagnosis:</strong> ' + escapeHtml(correctDx);
+    h += '</div>';
+  }
 
   // OSCE Scorecard
   h += '<div style="background:var(--card);border-radius:12px;padding:20px;border:1px solid var(--border);margin-bottom:16px">';
