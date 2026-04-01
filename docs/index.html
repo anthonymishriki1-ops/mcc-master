@@ -3157,7 +3157,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '11.0';
+var APP_VERSION = '11.2';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3173,6 +3173,12 @@ var APP_CHANGELOG = [
     'CRITICAL FIX: async lab generation callback was overwriting scorecard with renderPBChat',
     'Added nacShowingResults guard — nothing can overwrite the scorecard while it\'s displayed',
     'Guard cleared on Next Station, Back to Setup, or navigating to PatientBot',
+  ]},
+  { version: '11.2', date: 'Apr 1 2026', label: 'VitalsEngine + 25 new drugs + text input fix', items: [
+    'CRITICAL: VitalsEngine.start() now called in NAC — drugs actually affect vitals',
+    '25 new drugs: amphetamine, cocaine, meth, oxycodone, rocuronium, dobutamine, aspirin, cannabis, etc.',
+    'Text input preserved during idle nudge re-renders',
+    'navigateTo no longer kills active NAC exam',
   ]},
   { version: '11.0', date: 'Mar 31 2026', label: 'MAJOR: NAC/PatientBot fully separated', items: [
     'NAC renders to its own #nac-sim-content — never touches PatientBot',
@@ -4130,6 +4136,41 @@ var VitalsEngine = {
     'trendelenburg':   { hr:-5,  sbp:+10, dbp:+5,  spo2:0,  rr:0,   temp:0,    onset:30  },
     'cpr':             { hr:0,   sbp:+30, dbp:0,   spo2:+5, rr:0,   temp:0,    onset:30  },
     'defibrillation':  { hr:-30, sbp:+10, dbp:+5,  spo2:+2, rr:0,   temp:0,    onset:10  },
+    // Stimulants
+    'amphetamine':     { hr:+30, sbp:+25, dbp:+15, spo2:0,  rr:+4,  temp:+0.5, onset:60  },
+    'cocaine':         { hr:+35, sbp:+30, dbp:+20, spo2:-2, rr:+6,  temp:+0.5, onset:15  },
+    'methamphetamine': { hr:+40, sbp:+35, dbp:+20, spo2:-2, rr:+6,  temp:+1,   onset:30  },
+    // Additional opioids
+    'oxycodone':       { hr:-5,  sbp:-8,  dbp:-4,  spo2:-2, rr:-4,  temp:0,    onset:120 },
+    'hydrocodone':     { hr:-4,  sbp:-6,  dbp:-3,  spo2:-1, rr:-3,  temp:0,    onset:120 },
+    'codeine':         { hr:-3,  sbp:-5,  dbp:-2,  spo2:-1, rr:-2,  temp:0,    onset:180 },
+    'meperidine':      { hr:-5,  sbp:-8,  dbp:-4,  spo2:-2, rr:-4,  temp:0,    onset:60  },
+    // Paralytics
+    'rocuronium':      { hr:0,   sbp:-5,  dbp:-3,  spo2:-8, rr:-12, temp:0,    onset:60  },
+    'succinylcholine_drug': { hr:-10, sbp:-5, dbp:-3, spo2:-6, rr:-10, temp:0, onset:30  },
+    // Inotropes
+    'dobutamine':      { hr:+15, sbp:+15, dbp:+5,  spo2:+1, rr:-1,  temp:0,    onset:120 },
+    'milrinone':       { hr:+10, sbp:-5,  dbp:-5,  spo2:+1, rr:0,   temp:0,    onset:300 },
+    // Antiarrhythmics
+    'magnesium':       { hr:-5,  sbp:-8,  dbp:-4,  spo2:0,  rr:-1,  temp:0,    onset:120 },
+    'procainamide':    { hr:-10, sbp:-15, dbp:-8,  spo2:0,  rr:0,   temp:0,    onset:300 },
+    'calcium':         { hr:+5,  sbp:+10, dbp:+5,  spo2:0,  rr:0,   temp:0,    onset:60  },
+    // Vasodilators
+    'nitroprusside':   { hr:+10, sbp:-35, dbp:-15, spo2:0,  rr:0,   temp:0,    onset:30  },
+    'hydralazine':     { hr:+15, sbp:-25, dbp:-15, spo2:0,  rr:0,   temp:0,    onset:300 },
+    // Beta-blockers
+    'esmolol':         { hr:-25, sbp:-15, dbp:-8,  spo2:0,  rr:-1,  temp:0,    onset:30, duration:120 },
+    // PDE inhibitors
+    'sildenafil':      { hr:+5,  sbp:-20, dbp:-10, spo2:0,  rr:0,   temp:0,    onset:300 },
+    // Aspirin
+    'aspirin':         { hr:0,   sbp:-2,  dbp:-1,  spo2:0,  rr:0,   temp:-0.2, onset:600 },
+    // Steroids
+    'dexamethasone':   { hr:+3,  sbp:+5,  dbp:+3,  spo2:0,  rr:0,   temp:-0.3, onset:900 },
+    // Osmotic
+    'mannitol':        { hr:+5,  sbp:-10, dbp:-5,  spo2:0,  rr:0,   temp:0,    onset:300 },
+    // Cannabis
+    'cannabis':        { hr:+15, sbp:-5,  dbp:-3,  spo2:-1, rr:-2,  temp:0,    onset:120 },
+    'thc':             { hr:+15, sbp:-5,  dbp:-3,  spo2:-1, rr:-2,  temp:0,    onset:120 },
   },
 
   DRUG_KEYWORDS: [
@@ -4180,6 +4221,39 @@ var VitalsEngine = {
     [/trendelenburg/i, 'trendelenburg'],
     [/\bCPR\b|chest compress/i, 'cpr'],
     [/defibri|cardiovert/i, 'defibrillation'],
+    // Stimulants
+    [/\bamphetamine\b|\badderall\b|\bdextroamphetamine\b/i, 'amphetamine'],
+    [/\bcocaine\b|\bcoca\b/i, 'cocaine'],
+    [/\bmethamphetamine\b|\bmeth\b|\bcrystal\b/i, 'methamphetamine'],
+    // Additional opioids
+    [/\boxycodone\b|\boxycontin\b|\bpercocet\b/i, 'oxycodone'],
+    [/\bhydrocodone\b|\bvicodin\b/i, 'hydrocodone'],
+    [/\bcodeine\b/i, 'codeine'],
+    [/\bmeperidine\b|\bdemerol\b/i, 'meperidine'],
+    // Paralytics
+    [/\brocuronium\b|\bzemuron\b/i, 'rocuronium'],
+    [/\bsuccinylcholine\b|\bsux\b|\banectine\b/i, 'succinylcholine_drug'],
+    // Inotropes
+    [/\bdobutamine\b/i, 'dobutamine'],
+    [/\bmilrinone\b/i, 'milrinone'],
+    // Antiarrhythmics
+    [/\bmagnesium\b|\bMgSO4\b/i, 'magnesium'],
+    [/\bprocainamide\b/i, 'procainamide'],
+    [/\bcalcium\s*(chloride|gluconate)\b|\bCaCl\b/i, 'calcium'],
+    // Vasodilators
+    [/\bnitroprusside\b|\bnipride\b/i, 'nitroprusside'],
+    [/\bhydralazine\b/i, 'hydralazine'],
+    // Beta-blockers
+    [/\besmolol\b|\bbrevibloc\b/i, 'esmolol'],
+    // PDE inhibitors
+    [/\bsildenafil\b|\bviagra\b|\btadalafil\b|\bcialis\b/i, 'sildenafil'],
+    // Common meds
+    [/\baspirin\b|\bASA\b/i, 'aspirin'],
+    [/\bdexamethasone\b|\bdecadron\b/i, 'dexamethasone'],
+    [/\bmannitol\b/i, 'mannitol'],
+    // Recreational
+    [/\bcannabis\b|\bmarijuana\b|\bweed\b|\bpot\b/i, 'cannabis'],
+    [/\bTHC\b/i, 'thc'],
   ],
 
   init: function(serverVitals) {
@@ -11150,6 +11224,8 @@ function enterNACStation_() {
   _setInterimCaption_('');
   // Doctor speaks first — don't auto-play patient's opening line
   App.nacDoctorSpoke = false;
+  // START VITALS ENGINE — critical for drug effects to actually work
+  VitalsEngine.start();
   // Build system prompt for direct mode if keys available
   var station = App.nacStations[App.nacCurrentStation - 1];
   if (station && station.nm && localStorage.getItem('mcc_anthropic_key')) {
