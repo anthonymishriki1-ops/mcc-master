@@ -3157,7 +3157,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '11.8';
+var APP_VERSION = '11.9';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -12499,7 +12499,7 @@ function renderNACStationUI_(targetEl) {
 
     // Conversation transcript (right column on desktop)
     html += '<div class="nac-overview-right">';
-    var convMsgs = App.pbHistory.filter(function(m) { return m.role === 'user' || m.role === 'assistant'; });
+    var convMsgs = App.pbHistory.filter(function(m) { return m.role === 'user' || m.role === 'assistant' || m.role === 'system' || m.role === 'death'; });
     html += '<div style="background:var(--card);border-radius:10px;padding:16px;border:1px solid var(--border);height:100%">';
     html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-light);margin-bottom:10px">Conversation</div>';
     html += '<div id="nac-convo-box" style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:8px">';
@@ -12508,6 +12508,16 @@ function renderNACStationUI_(targetEl) {
     }
     for (var ci = 0; ci < convMsgs.length; ci++) {
       var cm = convMsgs[ci];
+      // System alerts and death messages get special styling
+      if (cm.role === 'system' || cm.role === 'death') {
+        var sysColor = cm.role === 'death' ? '#b71c1c' : (cm.severity === 'danger' || cm.severity === 'critical' ? '#c62828' : cm.severity === 'caution' ? '#e65100' : '#1565c0');
+        var sysBg = cm.role === 'death' ? 'rgba(183,28,28,0.1)' : (cm.severity === 'danger' || cm.severity === 'critical' ? 'rgba(198,40,40,0.08)' : cm.severity === 'caution' ? 'rgba(230,81,0,0.08)' : 'rgba(21,101,192,0.08)');
+        html += '<div style="align-self:center;max-width:90%;text-align:center">';
+        html += '<div style="background:' + sysBg + ';border:1px solid ' + sysColor + ';color:' + sysColor + ';padding:8px 14px;border-radius:8px;font-size:12px;font-weight:600;line-height:1.4">';
+        html += (cm.role === 'death' ? '&#x1F480; ' : '&#x26A0;&#xFE0F; ') + escapeHtml(typeof cm.content === 'string' ? cm.content : '');
+        html += '</div></div>';
+        continue;
+      }
       var isDoc = cm.role === 'user';
       var align = isDoc ? 'flex-end' : 'flex-start';
       var bg = isDoc ? 'var(--primary)' : 'var(--bg)';
