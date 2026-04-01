@@ -11890,8 +11890,19 @@ function renderNACChat() {
   if (App.nacShowingResults) return;
   var el = document.getElementById('nac-sim-content');
   if (!el) return;
+  // Preserve text input value across re-renders (idle nudges would erase it)
+  var oldInput = document.getElementById('nac-text-input');
+  var savedText = oldInput ? oldInput.value : '';
+  var savedFocus = oldInput && document.activeElement === oldInput;
+  var savedSel = savedFocus ? oldInput.selectionStart : 0;
   renderNACStationUI_(el);
   startPBMonitorAnimation();
+  // Restore text input
+  var newInput = document.getElementById('nac-text-input');
+  if (newInput && savedText) {
+    newInput.value = savedText;
+    if (savedFocus) { newInput.focus(); newInput.selectionStart = newInput.selectionEnd = savedSel; }
+  }
   var convoBox = document.getElementById('nac-convo-box');
   if (convoBox) convoBox.scrollTop = convoBox.scrollHeight;
   // TTS: In direct mode, handled by sendNACMessageDirect_. Otherwise speak last message.
