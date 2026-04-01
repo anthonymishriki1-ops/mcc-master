@@ -3157,7 +3157,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '11.5';
+var APP_VERSION = '11.6';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -12704,7 +12704,25 @@ function renderNACStationUI_(targetEl) {
     }
   }
 
+  // Diagnosis modal overlay (NAC mode)
+  if (App.pbDiagnosing) {
+    html += '<div style="position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:16px" onclick="closeDiagnoseModal()">';
+    html += '<div style="background:var(--card);border-radius:16px;padding:24px;max-width:450px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3)" onclick="event.stopPropagation()">';
+    html += '<h3 style="margin:0 0 8px;font-size:20px;color:var(--text)">What\'s Your Diagnosis?</h3>';
+    html += '<p style="margin:0 0 16px;font-size:13px;color:var(--text-light)">Type your diagnosis and submit. Be specific.</p>';
+    html += '<input type="text" id="pb-diag-input" placeholder="e.g. Acute appendicitis" style="width:100%;padding:12px;border:2px solid var(--primary);border-radius:8px;font-size:15px;background:var(--bg);color:var(--text)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();submitPBDiagnosis()}">';
+    html += '<div style="display:flex;gap:8px;margin-top:16px">';
+    html += '<button class="btn btn-primary" id="pb-diag-submit-btn" onclick="submitPBDiagnosis()" style="flex:1;padding:12px">Submit</button>';
+    html += '<button class="btn btn-outline" onclick="closeDiagnoseModal()" style="padding:12px">Cancel</button>';
+    html += '</div></div></div>';
+  }
+
   el.innerHTML = '<div style="display:flex;flex-direction:column;height:100%">' + html + '</div>';
+  // Auto-focus diagnosis input
+  if (App.pbDiagnosing) {
+    var diagInput = document.getElementById('pb-diag-input');
+    if (diagInput) diagInput.focus();
+  }
 }
 
 function renderPBChatInner() {
