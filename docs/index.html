@@ -3157,7 +3157,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '11.2';
+var APP_VERSION = '11.3';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3173,6 +3173,11 @@ var APP_CHANGELOG = [
     'CRITICAL FIX: async lab generation callback was overwriting scorecard with renderPBChat',
     'Added nacShowingResults guard — nothing can overwrite the scorecard while it\'s displayed',
     'Guard cleared on Next Station, Back to Setup, or navigating to PatientBot',
+  ]},
+  { version: '11.3', date: 'Apr 1 2026', label: 'Old scorecard blocked + buttons fixed + better random', items: [
+    'Old PatientBot scorecard modal no longer hijacks NAC stations',
+    'Station complete buttons actually work (View Scorecard / Next Station)',
+    'Random mode remembers last 40 stations — no more repeats',
   ]},
   { version: '11.2', date: 'Apr 1 2026', label: 'VitalsEngine + 25 new drugs + text input fix', items: [
     'CRITICAL: VitalsEngine.start() now called in NAC — drugs actually affect vitals',
@@ -11707,7 +11712,7 @@ function pickNextRandomStation_() {
   var pool = diffSpec.length > 3 ? diffSpec : candidates;
   var next = pool[Math.floor(Math.random() * pool.length)];
   App._nacRecentIds.push(next.pregenId);
-  if (App._nacRecentIds.length > 10) App._nacRecentIds.shift();
+  if (App._nacRecentIds.length > 40) App._nacRecentIds.shift(); // remember last 40 of 84 stations
   App.nacStations = [next];
   App.nacCurrentStation = 0;
   App.nacTotalStations = 1;
@@ -12641,8 +12646,11 @@ function renderNACStationUI_(targetEl) {
   } else {
     html += '<div style="padding:16px 20px;border-top:1px solid var(--border);background:var(--card);display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap">';
     html += '<span style="color:var(--text-light);font-size:14px">Station complete.</span>';
-    html += '<button class="btn btn-success" onclick="finishNACStation()">' + (App.nacCurrentStation >= App.nacTotalStations ? 'View Results' : 'Next Station') + '</button>';
-    html += '<button class="btn btn-primary" onclick="showScorecardModal_()">View Scorecard</button>';
+    if (!App.nacStationFinished) {
+      html += '<button class="btn btn-success" onclick="finishNACStation()">View Scorecard</button>';
+    } else {
+      html += '<button class="btn btn-success" onclick="advanceNACStation_(true)">' + (App.nacCurrentStation >= App.nacTotalStations ? 'View Final Results' : 'Next Station') + '</button>';
+    }
     html += '<button class="btn btn-outline" onclick="if(confirm(\'End entire NAC exam?\')){showNACSummary();}">End Exam</button>';
     html += '</div>';
     if (!App.pbScorecard && !App.pbScorecardLoading && !App.pbScorecardError) {
@@ -12655,9 +12663,9 @@ function renderNACStationUI_(targetEl) {
     if (App.pbScorecardError && !App.pbScorecard) {
       html += '<div style="text-align:center;padding:16px;color:var(--text-light)">&#x26A0;&#xFE0F; Scorecard failed. <button class="btn btn-outline btn-sm" onclick="App.pbScorecardError=false;loadOSCEScorecard()">Retry</button></div>';
     }
-    if (App.pbScorecard && !App.pbScorecardShown) {
+    if (App.pbScorecard && !App.pbScorecardShown && !App.nacActive && !App.nacShowingResults) {
       App.pbScorecardShown = true;
-      setTimeout(function() { showScorecardModal_(); }, 300);
+      setTimeout(function() { if (!App.nacActive && !App.nacShowingResults) showScorecardModal_(); }, 300);
     }
   }
 
@@ -13096,9 +13104,9 @@ function renderPBChatInner() {
     }
 
     // Show scorecard popup when ready
-    if (App.pbScorecard && !App.pbScorecardShown) {
+    if (App.pbScorecard && !App.pbScorecardShown && !App.nacActive && !App.nacShowingResults) {
       App.pbScorecardShown = true;
-      setTimeout(function() { showScorecardModal_(); }, 300);
+      setTimeout(function() { if (!App.nacActive && !App.nacShowingResults) showScorecardModal_(); }, 300);
     }
     if (App.pbScorecard) {
       html += '<div style="text-align:center;padding:12px"><button class="btn btn-primary" onclick="showScorecardModal_()">View OSCE Scorecard</button></div>';
