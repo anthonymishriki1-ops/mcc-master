@@ -3157,7 +3157,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '10.4';
+var APP_VERSION = '11.0';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3173,6 +3173,13 @@ var APP_CHANGELOG = [
     'CRITICAL FIX: async lab generation callback was overwriting scorecard with renderPBChat',
     'Added nacShowingResults guard — nothing can overwrite the scorecard while it\'s displayed',
     'Guard cleared on Next Station, Back to Setup, or navigating to PatientBot',
+  ]},
+  { version: '11.0', date: 'Mar 31 2026', label: 'MAJOR: NAC/PatientBot fully separated', items: [
+    'NAC renders to its own #nac-sim-content — never touches PatientBot',
+    'New renderNACChat() function — PatientBot renderPBChat() is PatientBot-only',
+    'All NAC state cleaned up when navigating away from NAC page',
+    'Scorecard renders to NAC page, not PatientBot page',
+    'No more UI bleed between the two modes',
   ]},
   { version: '10.3', date: 'Mar 31 2026', label: 'Clean separation: PatientBot is PatientBot', items: [
     'Removed NAC Exam Mode and Dr. House Mode from PatientBot dropdown',
@@ -3511,11 +3518,21 @@ var SKILL_MAP = [
 function navigateTo(page) {
   stopGameTimers_(page);
 
-  // Stop NAC idle timer + mic when navigating away from NAC/PatientBot
-  if (page !== 'patientbot' && page !== 'nac-sim' && App.nacActive) {
-    if (App.nacIdleTimer) { clearInterval(App.nacIdleTimer); App.nacIdleTimer = null; }
-    stopHandsFree_();
-    stopNACPttRecording_(false);
+  // Clean up NAC state when navigating away from NAC page
+  if (page !== 'nac-sim') {
+    if (App.nacActive || App.nacShowingResults) {
+      App.nacActive = false;
+      App.nacShowingResults = false;
+      App.nacStationFinished = false;
+      App.pbCaseId = null;
+      App.pbCodeBlue = null;
+      App._pbSpeaking = false;
+      VitalsEngine.stop();
+      if (App.nacIdleTimer) { clearInterval(App.nacIdleTimer); App.nacIdleTimer = null; }
+      stopHandsFree_();
+      stopNACPttRecording_(false);
+      stopNACTimer();
+    }
   }
 
   // Stop quiz timer if navigating away from quiz
@@ -10981,7 +10998,8 @@ function startNextNACStation() {
 
 // ── NAC Reading Period (2 min door prompt + notepad) ──
 function showNACReadingPeriod_(station) {
-  var el = document.getElementById('patientbot-content');
+  navigateTo('nac-sim'); // ensure NAC page is active
+  var el = document.getElementById('nac-sim-content');
   if (!el) return;
   App.nacNotes = App.nacNotes || '';
   var readingSec = 120; // 2 minutes
@@ -11096,7 +11114,7 @@ function endNACReadingPeriod_() {
 
   // If case hasn't loaded yet, show brief loading then enter when ready
   if (!App.nacCaseReady) {
-    var el = document.getElementById('patientbot-content');
+    var el = document.getElementById('nac-sim-content');
     if (el) el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div><p style="margin-top:16px;color:var(--text-light)">Preparing station...</p></div>';
     var waitCaseStart = Date.now();
     var waitCase = setInterval(function() {
@@ -11143,7 +11161,7 @@ function enterNACStation_() {
     App._nacDirectMode = false;
   }
   // Render the station UI (no TTS until doctor speaks)
-  renderPBChat();
+  renderNACChat();
   showNACOnboardingPopup_();
   // Start hands-free listening (slight delay to ensure DOM is ready for mic permission)
   if (App.pbHandsFree) setTimeout(function() { startHandsFreeListening_(); }, 500);
@@ -11347,9 +11365,8 @@ function finishNACStation() {
 }
 
 function _renderNACResultsScreen(score, evalResult) {
-  // Render results into patientbot-content (where the station was running)
-  // Do NOT switch pages — stay on current page so user sees results immediately
-  var el = document.getElementById('patientbot-content') || document.getElementById('nac-sim-content');
+  // Render results into nac-sim-content (NAC has its own page now)
+  var el = document.getElementById('nac-sim-content');
   if (!el) return;
   var isLast = (!App.nacRandomMode && App.nacCurrentStation >= App.nacTotalStations);
   var nextLabel = isLast ? 'View Final Results' : 'Next Station';
@@ -11869,22 +11886,26 @@ function sendPBDrDataMessage() {
   });
 }
 
+// ── NAC Chat Renderer — renders to #nac-sim-content (completely separate from PatientBot) ──
+function renderNACChat() {
+  if (!App.nacActive) return;
+  if (App.nacShowingResults) return;
+  var el = document.getElementById('nac-sim-content');
+  if (!el) return;
+  renderNACStationUI_(el);
+  startPBMonitorAnimation();
+  var convoBox = document.getElementById('nac-convo-box');
+  if (convoBox) convoBox.scrollTop = convoBox.scrollHeight;
+  // TTS: In direct mode, handled by sendNACMessageDirect_. Otherwise speak last message.
+  if (!App._nacDirectMode && App.nacDoctorSpoke && !App._pbSpeaking) pbSpeakLastMessage_();
+}
+
 function renderPBChat() {
   // GUARD: if NAC results screen is showing, don't overwrite it
   if (App.nacShowingResults) return;
+  // If NAC is active, delegate to renderNACChat instead
+  if (App.nacActive) { renderNACChat(); return; }
   var el = document.getElementById('patientbot-content');
-  // NAC-OSCE has its own UI — renders directly to DOM
-  if (App.nacActive) {
-    renderNACStationUI_();
-    startPBMonitorAnimation();
-    // Auto-scroll conversation box to latest message
-    var convoBox = document.getElementById('nac-convo-box');
-    if (convoBox) convoBox.scrollTop = convoBox.scrollHeight;
-    // Doctor speaks first — suppress patient TTS until doctor has spoken
-    // In direct mode, TTS is handled by sendNACMessageDirect_ — don't double-speak
-    if (!App._nacDirectMode && App.nacDoctorSpoke && !App._pbSpeaking) pbSpeakLastMessage_();
-    return;
-  }
   el.innerHTML = renderPBChatInner();
   // Restore action palette collapsed state
   if (App.pbActionsHidden) {
@@ -12153,11 +12174,11 @@ var nacActiveTab = 'overview';
 
 function setNACTab(tab) {
   nacActiveTab = tab;
-  renderNACStationUI_();
+  renderNACChat();
 }
 
-function renderNACStationUI_() {
-  var el = document.getElementById('patientbot-content');
+function renderNACStationUI_(targetEl) {
+  var el = targetEl || document.getElementById('nac-sim-content') || document.getElementById('patientbot-content');
   if (!el) return;
   // Ensure login screen is hidden
   var profilePage = document.getElementById('profile-select-page');
