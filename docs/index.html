@@ -3157,7 +3157,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '11.4';
+var APP_VERSION = '11.5';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -9871,39 +9871,68 @@ function submitPBDiagnosis() {
   if (btn) { btn.disabled = true; btn.textContent = 'Checking...'; }
   App.pbDiagAttempts++;
 
+  // NAC DIRECT MODE: evaluate diagnosis locally via Anthropic API (no server needed)
+  if (App._nacDirectMode && App.nacActive) {
+    var correctDx = App.pbDiagnosis || '';
+    var evalPrompt = 'The correct diagnosis is: "' + correctDx + '"\nThe student guessed: "' + answer + '"\n\nScore 0-100 how close the student\'s diagnosis is. Be generous with synonyms and abbreviations (e.g. "MI" = "myocardial infarction", "PE" = "pulmonary embolism"). Return JSON only: {"score":NUMBER,"correct":BOOLEAN,"feedback":"1 sentence"}';
+    callAnthropicDirect_('You are a medical exam grader. Return only valid JSON.', [{ role: 'user', content: evalPrompt }]).then(function(raw) {
+      var txt = String(raw || '').trim();
+      var match = txt.match(/\{[\s\S]*\}/);
+      var result = match ? JSON.parse(match[0]) : { score: 0, correct: false, feedback: 'Could not evaluate.' };
+      result.score = Math.max(0, Math.min(100, parseInt(result.score) || 0));
+      result.correct = result.score >= 60;
+      result.feedback = result.feedback || '';
+      _handleDiagnosisResult(result, answer);
+    }).catch(function(e) {
+      // Fallback: simple string match
+      var norm = function(s) { return s.toLowerCase().replace(/[^a-z0-9]/g, ''); };
+      var isClose = norm(answer).indexOf(norm(correctDx).substring(0, 8)) !== -1 || norm(correctDx).indexOf(norm(answer).substring(0, 8)) !== -1;
+      _handleDiagnosisResult({ score: isClose ? 70 : 20, correct: isClose, feedback: isClose ? 'Correct!' : 'The correct diagnosis was: ' + correctDx }, answer);
+    });
+    return;
+  }
+
   serverCall('submitDiagnosis', App.pbCaseId, answer, App.pbDiagnosis, App.pbHistory.slice(-20)).then(function(result) {
-    App.pbDiagnosing = false;
-    var renderFn = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
-
-    if (result.expired) { App.pbCaseId = null; showPatientBotSetup(); return; }
-
-    if (result.score >= 40 && result.score < 80 && !App.pbPartialUsed) {
-      // Partial credit — let them keep investigating and try once more
-      App.pbPartialUsed = true;
-      App.pbHistory.push({ role: 'partial', content: { score: result.score, feedback: result.feedback } });
-      renderFn();
-      return;
-    }
-
-    App.pbDiagResolved = true;
-    if (result.correct) {
-      var pts = POINTS.PB_CORRECT + (App.pbDiagAttempts === 1 ? POINTS.PB_FIRST_TRY : 0);
-      App.pbHistory.push({ role: 'diagnosis_result', content: { correct: true, score: result.score, feedback: result.feedback, points: pts, answer: App.pbDiagnosis } });
-      App.pbCaseScores.push({ specialty: App.pbSpecialty, caseNum: App.pbCurrentCase, correct: true, diagnosis: App.pbDiagnosis, attempts: App.pbDiagAttempts, feedback: result.feedback, points: pts, score: result.score });
-      serverCall('saveProgress', 'pb_result', { correct: true, specialty: App.pbSpecialty, diagnosis: App.pbDiagnosis, attempts: App.pbDiagAttempts, points: pts, feedback: result.feedback, score: result.score, transcript: getPBTranscript() });
-      logPBConversation('diagnosed', { correct: true, score: result.score });
-    } else {
-      App.pbHistory.push({ role: 'diagnosis_result', content: { correct: false, score: result.score, feedback: result.feedback, points: 0, answer: App.pbDiagnosis } });
-      App.pbCaseScores.push({ specialty: App.pbSpecialty, caseNum: App.pbCurrentCase, correct: false, diagnosis: App.pbDiagnosis, attempts: App.pbDiagAttempts, feedback: result.feedback, points: 0, score: result.score });
-      serverCall('saveProgress', 'pb_result', { correct: false, specialty: App.pbSpecialty, diagnosis: App.pbDiagnosis, attempts: App.pbDiagAttempts, points: 0, feedback: result.feedback, score: result.score, transcript: getPBTranscript() });
-      logPBConversation('wrong', { correct: false, score: result.score });
-    }
-
-    renderFn();
+    if (result.expired) { App.pbCaseId = null; if (App.nacActive) { finishNACStation(); return; } showPatientBotSetup(); return; }
+    _handleDiagnosisResult(result, App.pbDiagnosis);
   }).catch(function(e) {
     App.pbDiagnosing = false; App.pbHistory.push({ role: 'assistant', content: 'Error: ' + (e.message || String(e)) });
     var fn = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat; fn();
   });
+}
+
+function _handleDiagnosisResult(result, answer) {
+  App.pbDiagnosing = false;
+  var renderFn = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
+
+  if (result.score >= 40 && result.score < 80 && !App.pbPartialUsed) {
+    App.pbPartialUsed = true;
+    App.pbHistory.push({ role: 'partial', content: { score: result.score, feedback: result.feedback } });
+    renderFn();
+    return;
+  }
+
+  App.pbDiagResolved = true;
+  if (result.correct) {
+    var pts = POINTS.PB_CORRECT + (App.pbDiagAttempts === 1 ? POINTS.PB_FIRST_TRY : 0);
+    App.pbHistory.push({ role: 'diagnosis_result', content: { correct: true, score: result.score, feedback: result.feedback, points: pts, answer: App.pbDiagnosis } });
+    App.pbCaseScores.push({ specialty: App.pbSpecialty, caseNum: App.pbCurrentCase, correct: true, diagnosis: App.pbDiagnosis, attempts: App.pbDiagAttempts, feedback: result.feedback, points: pts, score: result.score });
+    serverCall('saveProgress', 'pb_result', { correct: true, specialty: App.pbSpecialty, diagnosis: App.pbDiagnosis, attempts: App.pbDiagAttempts, points: pts, feedback: result.feedback, score: result.score, transcript: getPBTranscript() }).catch(function(){});
+    logPBConversation('diagnosed', { correct: true, score: result.score });
+  } else {
+    App.pbHistory.push({ role: 'diagnosis_result', content: { correct: false, score: result.score, feedback: result.feedback, points: 0, answer: App.pbDiagnosis } });
+    App.pbCaseScores.push({ specialty: App.pbSpecialty, caseNum: App.pbCurrentCase, correct: false, diagnosis: App.pbDiagnosis, attempts: App.pbDiagAttempts, feedback: result.feedback, points: 0, score: result.score });
+    serverCall('saveProgress', 'pb_result', { correct: false, specialty: App.pbSpecialty, diagnosis: App.pbDiagnosis, attempts: App.pbDiagAttempts, points: 0, feedback: result.feedback, score: result.score, transcript: getPBTranscript() }).catch(function(){});
+    logPBConversation('wrong', { correct: false, score: result.score });
+  }
+
+  // In NAC mode, auto-trigger finishNACStation after diagnosis
+  if (App.nacActive) {
+    showToast_(result.correct ? 'Correct diagnosis!' : 'Incorrect — the answer was: ' + (App.pbDiagnosis || ''));
+    setTimeout(function() { finishNACStation(); }, 1500);
+  }
+
+  renderFn();
 }
 
 function finishCurrentPBCase() {
