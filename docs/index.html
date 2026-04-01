@@ -3157,7 +3157,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '10.3';
+var APP_VERSION = '10.4';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3169,6 +3169,11 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '10.4', date: 'Mar 31 2026', label: 'Scorecard ALWAYS shows — async race fixed', items: [
+    'CRITICAL FIX: async lab generation callback was overwriting scorecard with renderPBChat',
+    'Added nacShowingResults guard — nothing can overwrite the scorecard while it\'s displayed',
+    'Guard cleared on Next Station, Back to Setup, or navigating to PatientBot',
+  ]},
   { version: '10.3', date: 'Mar 31 2026', label: 'Clean separation: PatientBot is PatientBot', items: [
     'Removed NAC Exam Mode and Dr. House Mode from PatientBot dropdown',
     'PatientBot is now purely clinical practice — Random or by Specialty',
@@ -3582,7 +3587,7 @@ function navigateTo(page) {
       break;
     case 'dontmiss': if (App.dontMissItems.length === 0) loadDontMiss('All'); break;
     case 'search': document.getElementById('search-input').focus(); break;
-    case 'patientbot': if (!App.pbCaseId && !App.nacActive) showPatientBotSetup(); break;
+    case 'patientbot': App.nacShowingResults = false; if (!App.pbCaseId && !App.nacActive) showPatientBotSetup(); break;
     case 'house': showHouseSetup(); break;
     case 'melfi': showMelfiSetup(); break;
     case 'mccqe-sim': showMCCQESetup(); break;
@@ -10002,6 +10007,7 @@ var NAC_PRACTICE_TESTS = [
 
 function showNACSetup() {
   App.nacActive = false;
+  App.nacShowingResults = false;
   var el = document.getElementById('nac-sim-content');
   var html = '<div class="pb-setup card">';
   html += '<div style="font-size:48px;margin-bottom:16px">&#x1FA7A;</div>';
@@ -11277,6 +11283,7 @@ function finishNACStation() {
 
   // CRITICAL: Deactivate NAC so PatientBot doesn't show NAC UI
   App.nacActive = false;
+  App.nacShowingResults = true; // prevent renderPBChat from overwriting scorecard
   VitalsEngine.stop();
   if (App.nacIdleTimer) { clearInterval(App.nacIdleTimer); App.nacIdleTimer = null; }
   // Clear PatientBot state so it doesn't show NAC leftovers
@@ -11453,6 +11460,7 @@ function _loadNACScoreHistory() {
 
 function advanceNACStation_(userInitiated) {
   if (userInitiated !== true) return; // never auto-advance station transitions
+  App.nacShowingResults = false; // allow renderPBChat again
   App.pbCaseId = null;
   App.pbHistory = [];
   App.pbCodeBlue = null;
@@ -11617,6 +11625,7 @@ function pickNextRandomStation_() {
 
 function showNACSummary() {
   App.nacActive = false;
+  App.nacShowingResults = false;
   App.nacStationFinished = false;
   stopNACPttRecording_(false);
   stopHandsFree_();
@@ -11861,6 +11870,8 @@ function sendPBDrDataMessage() {
 }
 
 function renderPBChat() {
+  // GUARD: if NAC results screen is showing, don't overwrite it
+  if (App.nacShowingResults) return;
   var el = document.getElementById('patientbot-content');
   // NAC-OSCE has its own UI — renders directly to DOM
   if (App.nacActive) {
