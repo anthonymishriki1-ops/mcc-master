@@ -10866,9 +10866,7 @@ function startNextNACStation() {
     App.pbCustom.sex = 'female';
   }
 
-  navigateTo('patientbot');
-  var titleEl = document.getElementById('pb-page-title');
-  if (titleEl) titleEl.textContent = 'NAC-OSCE';
+  // NAC renders to its own page — no need to navigate to patientbot
 
   // If station has embedded patient data, populate patientInfo for instant door prompt
   if (station.nm) {
