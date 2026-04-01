@@ -3608,7 +3608,7 @@ function navigateTo(page) {
     case 'house': showHouseSetup(); break;
     case 'melfi': showMelfiSetup(); break;
     case 'mccqe-sim': showMCCQESetup(); break;
-    case 'nac-sim': showNACSetup(); break;
+    case 'nac-sim': if (!App.nacActive) showNACSetup(); break;
     case 'speeddx': showSpeedDx(); break;
     case 'vitals-emergency': showVitalSignsEmergency(); break;
 
