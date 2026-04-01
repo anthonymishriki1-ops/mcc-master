@@ -3157,7 +3157,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '11.7';
+var APP_VERSION = '11.8';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -9868,7 +9868,7 @@ function closeDiagnoseModal() { App.pbDiagnosing = false; var fn = App.dailyPhas
 function submitPBDiagnosis() {
   var input = document.getElementById('pb-diag-input'); var answer = input ? input.value.trim() : ''; if (!answer) return;
   var btn = document.getElementById('pb-diag-submit-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Checking...'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner" style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-top:2px solid white;border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:6px"></span>Checking...'; }
   App.pbDiagAttempts++;
 
   // NAC DIRECT MODE: evaluate diagnosis locally (no server needed)
@@ -11570,6 +11570,45 @@ function _renderNACResultsScreen(score, evalResult) {
     h += '<div style="color:var(--text-light);font-size:13px">Evaluation unavailable.</div>';
   }
   h += '</div>';
+
+  // Conversation recap
+  var userMsgs = (App.pbHistory || []).filter(function(m) { return m.role === 'user'; });
+  var asstMsgs = (App.pbHistory || []).filter(function(m) { return m.role === 'assistant'; });
+  if (userMsgs.length > 0) {
+    h += '<div style="background:var(--card);border-radius:12px;padding:16px;border:1px solid var(--border);margin-bottom:16px">';
+    h += '<div style="font-size:14px;font-weight:700;margin-bottom:10px;color:var(--text)">Encounter Summary</div>';
+    h += '<div style="font-size:13px;color:var(--text-light);margin-bottom:8px">' + userMsgs.length + ' messages sent &middot; ' + asstMsgs.length + ' patient responses</div>';
+    // Show last 3 exchanges
+    var exchanges = [];
+    for (var ei = Math.max(0, App.pbHistory.length - 6); ei < App.pbHistory.length; ei++) {
+      var em = App.pbHistory[ei];
+      if (em && (em.role === 'user' || em.role === 'assistant')) {
+        exchanges.push(em);
+      }
+    }
+    if (exchanges.length > 0) {
+      h += '<div style="max-height:120px;overflow-y:auto;font-size:12px;line-height:1.5;border-top:1px solid var(--border);padding-top:8px">';
+      for (var xi = 0; xi < exchanges.length; xi++) {
+        var xm = exchanges[xi];
+        var who = xm.role === 'user' ? '<strong>You:</strong>' : '<strong style="color:var(--primary)">Patient:</strong>';
+        h += '<div style="margin-bottom:4px">' + who + ' ' + escapeHtml((xm.content || '').substring(0, 100)) + '</div>';
+      }
+      h += '</div>';
+    }
+    // What you did / didn't do
+    var labCount = (App.nacLabResults || []).length;
+    var imgCount = (App.nacImagingResults || []).length;
+    var examCount = (App.nacExamResults || []).length;
+    var actions = [];
+    if (labCount) actions.push(labCount + ' lab' + (labCount > 1 ? 's' : '') + ' ordered');
+    if (imgCount) actions.push(imgCount + ' imaging');
+    if (examCount) actions.push(examCount + ' exam finding' + (examCount > 1 ? 's' : ''));
+    if (App.pbDiagResolved) actions.push('Diagnosis submitted');
+    if (actions.length > 0) {
+      h += '<div style="margin-top:8px;font-size:12px;color:var(--text-light)">Actions: ' + actions.join(' &middot; ') + '</div>';
+    }
+    h += '</div>';
+  }
 
   // Action buttons
   h += '<div style="display:flex;gap:12px;justify-content:center">';
