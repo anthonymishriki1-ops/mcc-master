@@ -3157,7 +3157,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '11.3';
+var APP_VERSION = '11.4';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -10361,7 +10361,13 @@ function callAnthropicDirect_(systemPrompt, messages) {
       messages: messages
     })
   }).then(function(r) {
-    if (!r.ok) return r.text().then(function(t) { throw new Error('Anthropic error: ' + t.substring(0, 200)); });
+    if (!r.ok) return r.text().then(function(t) {
+      if (t.indexOf('credit balance') !== -1 || t.indexOf('billing') !== -1) {
+        showToast_('API credits exhausted — add credits at console.anthropic.com');
+        throw new Error('API credits exhausted. Add credits at console.anthropic.com/settings/billing');
+      }
+      throw new Error('API Error: ' + t.substring(0, 200));
+    });
     return r.json();
   }).then(function(data) {
     return data.content[0].text;
