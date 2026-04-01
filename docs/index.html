@@ -3157,7 +3157,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '11.6';
+var APP_VERSION = '11.7';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -9871,10 +9871,22 @@ function submitPBDiagnosis() {
   if (btn) { btn.disabled = true; btn.textContent = 'Checking...'; }
   App.pbDiagAttempts++;
 
-  // NAC DIRECT MODE: evaluate diagnosis locally via Anthropic API (no server needed)
-  if (App._nacDirectMode && App.nacActive) {
+  // NAC DIRECT MODE: evaluate diagnosis locally (no server needed)
+  if (App._nacDirectMode || App.nacActive) {
     var correctDx = App.pbDiagnosis || '';
-    var evalPrompt = 'The correct diagnosis is: "' + correctDx + '"\nThe student guessed: "' + answer + '"\n\nScore 0-100 how close the student\'s diagnosis is. Be generous with synonyms and abbreviations (e.g. "MI" = "myocardial infarction", "PE" = "pulmonary embolism"). Return JSON only: {"score":NUMBER,"correct":BOOLEAN,"feedback":"1 sentence"}';
+    // Try API first, fall back to string matching instantly if API fails
+    var norm = function(s) { return (s||'').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim(); };
+    var doFallback = function() {
+      var a = norm(answer), c = norm(correctDx);
+      var isClose = false;
+      if (c.length > 3 && a.length > 3) {
+        isClose = a.indexOf(c.substring(0, Math.min(10, c.length))) !== -1 || c.indexOf(a.substring(0, Math.min(10, a.length))) !== -1;
+      }
+      _handleDiagnosisResult({ score: isClose ? 80 : 15, correct: isClose, feedback: isClose ? 'Correct! The diagnosis is ' + correctDx + '.' : 'Incorrect. The correct diagnosis was: ' + correctDx }, answer);
+    };
+    var hasKey = !!localStorage.getItem('mcc_anthropic_key');
+    if (!hasKey) { doFallback(); return; }
+    var evalPrompt = 'The correct diagnosis is: "' + correctDx + '"\nThe student guessed: "' + answer + '"\n\nScore 0-100 how close. Be generous with synonyms (MI=myocardial infarction, PE=pulmonary embolism). Return JSON only: {"score":NUMBER,"correct":BOOLEAN,"feedback":"1 sentence"}';
     callAnthropicDirect_('You are a medical exam grader. Return only valid JSON.', [{ role: 'user', content: evalPrompt }]).then(function(raw) {
       var txt = String(raw || '').trim();
       var match = txt.match(/\{[\s\S]*\}/);
@@ -9883,12 +9895,7 @@ function submitPBDiagnosis() {
       result.correct = result.score >= 60;
       result.feedback = result.feedback || '';
       _handleDiagnosisResult(result, answer);
-    }).catch(function(e) {
-      // Fallback: simple string match
-      var norm = function(s) { return s.toLowerCase().replace(/[^a-z0-9]/g, ''); };
-      var isClose = norm(answer).indexOf(norm(correctDx).substring(0, 8)) !== -1 || norm(correctDx).indexOf(norm(answer).substring(0, 8)) !== -1;
-      _handleDiagnosisResult({ score: isClose ? 70 : 20, correct: isClose, feedback: isClose ? 'Correct!' : 'The correct diagnosis was: ' + correctDx }, answer);
-    });
+    }).catch(function(e) { doFallback(); });
     return;
   }
 
