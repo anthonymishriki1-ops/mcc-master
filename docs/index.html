@@ -3157,7 +3157,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '12.1';
+var APP_VERSION = '12.2';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3789,6 +3789,14 @@ function patchApiResult_(fn, result) {
       }
     });
   }
+  // Reclassify breast cases — they're tagged OB/GYN in the sheet but should be Surgery
+  if (fn === 'startPatientBotCase' && result && result.specialty) {
+    var pres = (result.presentation || '').toLowerCase();
+    if (/breast|mammogra|mastect|lumpect|fibroadenoma|gynecomast/i.test(pres)) {
+      result.specialty = 'Surgery';
+    }
+  }
+
   return result;
 }
 
