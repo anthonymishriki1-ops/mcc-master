@@ -3157,7 +3157,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '12.0';
+var APP_VERSION = '12.1';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3169,6 +3169,12 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '12.1', date: 'Apr 1 2026', label: 'CDM Short Answer Questions added to MCCQE Part I', items: [
+    'NEW: Clinical Decision Making (CDM) mode with 8 cases and 32 short-answer questions',
+    'Cases cover: Cardio, Resp, OB/GYN, Neuro, Peds, Psych, GI/Surgery, Rheumatology',
+    'AI-graded free-text answers with detailed feedback and model answers',
+    'Progress saved per case — see which cases you\'ve completed',
+  ]},
   { version: '12.0', date: 'Apr 1 2026', label: 'Cleaner sidebar — House & Melfi hidden for dev only', items: [
     'Dr. House and Dr. Melfi moved to dev-only (visible when logged in as dev user)',
     'Sidebar cleaner for regular users — just PatientBot under PRACTICE',
@@ -6357,6 +6363,226 @@ function filterBulletNotes(text) { renderBulletNotes(text); }
 function toggleNotesForm() { var search = document.getElementById('notes-search'); renderBulletNotes(search ? search.value : ''); }
 
 // =============================================
+// MCCQE PART I SETUP — MCQ + CDM modes
+// =============================================
+
+function showMCCQESetup() {
+  var el = document.getElementById('mccqe-sim-content');
+  if (!el) { showQuizSetup(); return; }
+  var mode = App.mccqeMode || 'mcq';
+  var html = '<div style="max-width:700px;margin:0 auto;padding:16px">';
+  html += '<div style="display:flex;gap:8px;margin-bottom:20px">';
+  html += '<button class="quiz-count-btn' + (mode === 'mcq' ? ' active' : '') + '" onclick="App.mccqeMode=\'mcq\';showMCCQESetup()" style="flex:1;padding:12px;font-size:15px">MCQ</button>';
+  html += '<button class="quiz-count-btn' + (mode === 'cdm' ? ' active' : '') + '" onclick="App.mccqeMode=\'cdm\';showMCCQESetup()" style="flex:1;padding:12px;font-size:15px">CDM (Short Answer)</button>';
+  html += '</div>';
+  if (mode === 'mcq') {
+    html += '<div id="quiz-content"></div>';
+    el.innerHTML = html + '</div>';
+    showQuizSetup();
+    return;
+  }
+  // CDM Mode
+  html += '<div class="card" style="padding:20px;text-align:center;margin-bottom:16px">';
+  html += '<div style="font-size:40px;margin-bottom:8px">&#x1F4DD;</div>';
+  html += '<h3 style="margin:0 0 8px">Clinical Decision Making</h3>';
+  html += '<p style="color:var(--text-light);font-size:13px;margin:0 0 16px">38 cases with short-answer questions. Type your diagnosis, investigations, and management plan. AI evaluates your answers.</p>';
+  html += '</div>';
+  // Case list
+  html += '<div class="card" style="padding:16px">';
+  html += '<div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;color:var(--text-light)">Select a Case</div>';
+  for (var i = 0; i < CDM_CASES.length; i++) {
+    var c = CDM_CASES[i];
+    var done = App.cdmCompleted && App.cdmCompleted[i];
+    html += '<div onclick="startCDMCase(' + i + ')" style="padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:' + (done ? 'rgba(76,175,80,0.06)' : 'var(--card)') + '">';
+    html += '<div><strong style="font-size:14px">Case ' + (i + 1) + ':</strong> <span style="color:var(--text-light)">' + escapeHtml(c.title) + '</span></div>';
+    html += done ? '<span style="color:#4caf50;font-size:12px">&#x2705; Done</span>' : '<span style="color:var(--text-light);font-size:12px">' + c.questions.length + ' Qs</span>';
+    html += '</div>';
+  }
+  html += '</div>';
+  html += '<button class="btn btn-primary" style="width:100%;margin-top:12px;padding:14px;font-size:16px" onclick="startCDMCase(Math.floor(Math.random()*CDM_CASES.length))">Random Case</button>';
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+// CDM Case Bank — Clinical Decision Making cases for MCCQE Part I
+var CDM_CASES = [
+  { title: 'Chest Pain in a 58-year-old Man', specialty: 'Cardiology', vignette: 'A 58-year-old man presents to the emergency department with a 2-hour history of substernal chest pain radiating to his left arm. He describes it as a "crushing pressure." He is diaphoretic and nauseated. He has a history of type 2 diabetes, hypertension, and dyslipidemia. He smokes 1 pack per day for 30 years. Vitals: HR 102, BP 158/94, RR 22, SpO2 96%, Temp 37.1°C.', questions: [
+    { q: 'What is the most likely diagnosis?', type: 'write', answer: 'Acute coronary syndrome / ST-elevation myocardial infarction (STEMI)' },
+    { q: 'List 3 investigations you would order immediately.', type: 'write', answer: '12-lead ECG, troponin (serial), chest X-ray; also accept: CBC, BMP, coagulation studies, BNP' },
+    { q: 'What is your initial management?', type: 'write', answer: 'ASA 160-325mg chewed, nitroglycerin SL, morphine for pain, heparin, oxygen if SpO2 <94%, activate cath lab for PCI if STEMI' },
+    { q: 'Name 2 complications you are most concerned about in the first 24 hours.', type: 'write', answer: 'Arrhythmia (ventricular fibrillation/tachycardia), cardiogenic shock, heart failure, cardiac arrest, mechanical complications (papillary muscle rupture, VSD)' }
+  ]},
+  { title: 'Shortness of Breath in a 28-year-old Woman', specialty: 'Respirology', vignette: 'A 28-year-old woman presents with sudden onset shortness of breath and right-sided pleuritic chest pain that started 3 hours ago. She recently returned from a 14-hour flight from Dubai. She takes oral contraceptive pills. She has mild swelling in her right calf. Vitals: HR 112, BP 118/72, RR 24, SpO2 91%, Temp 37.2°C.', questions: [
+    { q: 'What is the most likely diagnosis?', type: 'write', answer: 'Pulmonary embolism (PE)' },
+    { q: 'What clinical scoring system would you use to assess probability?', type: 'write', answer: 'Wells score for PE; also accept: Geneva score, PERC rule' },
+    { q: 'List the investigations you would order.', type: 'write', answer: 'D-dimer (if low probability), CT pulmonary angiography (CTPA), ECG, chest X-ray, ABG, CBC, BMP, coagulation studies' },
+    { q: 'What is the initial treatment?', type: 'write', answer: 'Anticoagulation with heparin (unfractionated or LMWH), supplemental oxygen, hemodynamic support if unstable, consider thrombolysis if massive PE with hemodynamic instability' }
+  ]},
+  { title: 'Abdominal Pain in a 35-year-old Woman', specialty: 'OB/GYN', vignette: 'A 35-year-old woman (G2P1) presents with sudden onset right lower quadrant abdominal pain and vaginal spotting. Her last menstrual period was 7 weeks ago. She has a history of pelvic inflammatory disease. She appears pale and diaphoretic. Vitals: HR 118, BP 90/60, RR 20, SpO2 98%, Temp 37.0°C.', questions: [
+    { q: 'What is the most likely diagnosis?', type: 'write', answer: 'Ruptured ectopic pregnancy' },
+    { q: 'What is the most important initial investigation?', type: 'write', answer: 'Quantitative serum beta-hCG and transvaginal ultrasound; also accept: type and screen, CBC' },
+    { q: 'What is your immediate management priority?', type: 'write', answer: 'IV access (two large-bore), fluid resuscitation, type and crossmatch, urgent surgical consult for laparoscopy/laparotomy, Rh status check' },
+    { q: 'Name 2 risk factors for this condition present in this patient.', type: 'write', answer: 'History of PID, age >35; also accept: prior ectopic (not stated but common answer)' }
+  ]},
+  { title: 'Confusion in a 72-year-old Man', specialty: 'Neurology', vignette: 'A 72-year-old man is brought to the ED by his wife who noticed sudden onset confusion and right-sided weakness 1 hour ago. He was watching TV when he suddenly stopped making sense and his right arm went limp. He has atrial fibrillation and is on warfarin, but admits to poor compliance. PMH: HTN, DM2, Afib. Vitals: HR 88 irregular, BP 178/98, RR 16, SpO2 97%, Temp 36.8°C.', questions: [
+    { q: 'What is the most likely diagnosis?', type: 'write', answer: 'Acute ischemic stroke (CVA); also accept: cerebrovascular accident, TIA (less likely given persistence)' },
+    { q: 'What is the first investigation you must order and why?', type: 'write', answer: 'Non-contrast CT head — to rule out hemorrhagic stroke before considering thrombolysis' },
+    { q: 'If the CT shows no hemorrhage and it has been less than 4.5 hours, what treatment do you consider?', type: 'write', answer: 'IV alteplase (tPA) thrombolysis; also accept: endovascular thrombectomy if large vessel occlusion' },
+    { q: 'What was the likely cause of this stroke given his history?', type: 'write', answer: 'Cardioembolic stroke from atrial fibrillation with inadequate anticoagulation (poor warfarin compliance)' }
+  ]},
+  { title: 'Fever and Cough in a 4-year-old Child', specialty: 'Pediatrics', vignette: 'A 4-year-old boy is brought in by his mother with a 3-day history of high fever (39.5°C), productive cough, and rapid breathing. He has been refusing to eat and is less active than usual. He attends daycare. On exam: decreased breath sounds and crackles at the right base. Vitals: HR 140, RR 36, SpO2 92%, Temp 39.2°C.', questions: [
+    { q: 'What is the most likely diagnosis?', type: 'write', answer: 'Community-acquired pneumonia (right lower lobe)' },
+    { q: 'What investigations would you order?', type: 'write', answer: 'Chest X-ray, CBC, blood culture, oxygen saturation monitoring; consider: CRP, nasopharyngeal swab for viral panel' },
+    { q: 'What is your antibiotic choice and why?', type: 'write', answer: 'High-dose amoxicillin (first-line for uncomplicated CAP in children); if severe/hospitalized: IV ampicillin or ceftriaxone + macrolide' },
+    { q: 'What are 2 indications for hospital admission in pediatric pneumonia?', type: 'write', answer: 'Hypoxia (SpO2 <92%), respiratory distress, failure to tolerate oral intake/antibiotics, age <6 months, toxic appearance, failed outpatient therapy' }
+  ]},
+  { title: 'Anxiety and Insomnia in a 28-year-old Woman', specialty: 'Psychiatry', vignette: 'A 28-year-old woman presents with a 6-month history of difficulty sleeping, muscle tension, irritability, and difficulty concentrating. She was promoted 8 months ago and finds her job very stressful. She worries excessively about work performance, finances, and her relationship. She is requesting lorazepam, which helped her 2 years ago during a stressful period.', questions: [
+    { q: 'What is the most likely diagnosis?', type: 'write', answer: 'Generalized anxiety disorder (GAD)' },
+    { q: 'What screening tool could you use?', type: 'write', answer: 'GAD-7; also accept: Hamilton Anxiety Rating Scale, PHQ-9 (to screen for comorbid depression)' },
+    { q: 'What is the first-line pharmacological treatment?', type: 'write', answer: 'SSRI (e.g., sertraline, escitalopram) or SNRI (e.g., venlafaxine); NOT benzodiazepines for chronic use' },
+    { q: 'The patient insists on lorazepam. How do you address this?', type: 'write', answer: 'Acknowledge her past positive experience, explain risks of long-term benzodiazepine use (dependence, tolerance, cognitive effects), offer short-term bridging while SSRI takes effect (2-4 weeks), recommend CBT as adjunct, set clear expectations about tapering plan' }
+  ]},
+  { title: 'Rectal Bleeding in a 65-year-old Man', specialty: 'GI / Surgery', vignette: 'A 65-year-old man presents with a 3-month history of intermittent bright red blood per rectum mixed with stool, and a 10 lb unintentional weight loss over 2 months. He has a change in bowel habits with alternating constipation and diarrhea. He has a family history of colon cancer (father at age 60). He has never had a colonoscopy.', questions: [
+    { q: 'What is the most concerning diagnosis?', type: 'write', answer: 'Colorectal cancer / colon cancer' },
+    { q: 'What is the gold standard investigation?', type: 'write', answer: 'Colonoscopy with biopsy' },
+    { q: 'What other investigations would you order?', type: 'write', answer: 'CBC (for anemia), iron studies, liver function tests, CEA (tumor marker), CT abdomen/pelvis for staging' },
+    { q: 'Name 3 red flag features in this presentation.', type: 'write', answer: 'Unintentional weight loss, change in bowel habits, rectal bleeding, age >50, family history of colon cancer, no prior screening' }
+  ]},
+  { title: 'Joint Pain and Rash in a 32-year-old Woman', specialty: 'Rheumatology', vignette: 'A 32-year-old woman presents with a 2-month history of fatigue, joint pain and swelling (hands, wrists, knees), and a facial rash that worsens with sun exposure. She also reports mouth sores and hair loss. She recently had a positive pregnancy test but had a miscarriage at 10 weeks. Vitals are normal.', questions: [
+    { q: 'What is the most likely diagnosis?', type: 'write', answer: 'Systemic lupus erythematosus (SLE)' },
+    { q: 'List 4 investigations you would order.', type: 'write', answer: 'ANA, anti-dsDNA, complement levels (C3/C4), CBC, urinalysis, ESR/CRP; also accept: anti-Smith, antiphospholipid antibodies, renal function' },
+    { q: 'What classification criteria are used for this condition?', type: 'write', answer: 'ACR/EULAR 2019 classification criteria for SLE; also accept: SLICC criteria' },
+    { q: 'What is the significance of the miscarriage in this context?', type: 'write', answer: 'Suggests antiphospholipid syndrome (secondary to SLE) — associated with recurrent pregnancy loss, thrombosis. Should check antiphospholipid antibodies (anticardiolipin, anti-beta-2 glycoprotein I, lupus anticoagulant)' }
+  ]}
+];
+
+function startCDMCase(index) {
+  var c = CDM_CASES[index];
+  if (!c) return;
+  App.cdmCurrentCase = index;
+  App.cdmCurrentQ = 0;
+  App.cdmAnswers = [];
+  App.cdmResults = [];
+  renderCDMCase();
+}
+
+function renderCDMCase() {
+  var el = document.getElementById('mccqe-sim-content');
+  if (!el) return;
+  var c = CDM_CASES[App.cdmCurrentCase];
+  var qi = App.cdmCurrentQ;
+  var q = c.questions[qi];
+  var html = '<div style="max-width:700px;margin:0 auto;padding:16px">';
+  // Header
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">';
+  html += '<button class="btn btn-sm btn-outline" onclick="showMCCQESetup()">&#x2190; Back</button>';
+  html += '<span style="font-size:13px;color:var(--text-light)">Question ' + (qi + 1) + ' of ' + c.questions.length + '</span>';
+  html += '</div>';
+  // Vignette
+  html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px">';
+  html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--primary);margin-bottom:8px">Case ' + (App.cdmCurrentCase + 1) + ': ' + escapeHtml(c.title) + '</div>';
+  html += '<div style="font-size:14px;line-height:1.6;color:var(--text)">' + escapeHtml(c.vignette) + '</div>';
+  html += '</div>';
+  // Question
+  html += '<div style="background:var(--card);border:2px solid var(--primary);border-radius:12px;padding:16px;margin-bottom:16px">';
+  html += '<div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:12px">' + escapeHtml(q.q) + '</div>';
+  html += '<textarea id="cdm-answer" rows="4" placeholder="Type your answer..." style="width:100%;padding:12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text);resize:vertical"></textarea>';
+  html += '<button class="btn btn-primary" style="width:100%;margin-top:12px;padding:12px;font-size:15px" id="cdm-submit-btn" onclick="submitCDMAnswer()">Submit Answer</button>';
+  html += '</div>';
+  // Previous answers
+  if (App.cdmResults.length > 0) {
+    html += '<div style="font-size:13px;font-weight:700;color:var(--text-light);margin-bottom:8px">Previous Answers</div>';
+    for (var ri = 0; ri < App.cdmResults.length; ri++) {
+      var prev = App.cdmResults[ri];
+      var pq = c.questions[ri];
+      html += '<div style="background:var(--card);border:1px solid ' + (prev.correct ? 'rgba(76,175,80,0.3)' : 'rgba(244,67,54,0.3)') + ';border-radius:8px;padding:10px 12px;margin-bottom:6px;font-size:13px">';
+      html += '<div style="font-weight:600;margin-bottom:4px">' + escapeHtml(pq.q) + '</div>';
+      html += '<div style="color:var(--text-light)">Your answer: ' + escapeHtml(prev.answer) + '</div>';
+      html += '<div style="color:' + (prev.correct ? '#4caf50' : '#f44336') + ';margin-top:4px">' + escapeHtml(prev.feedback) + '</div>';
+      html += '</div>';
+    }
+  }
+  html += '</div>';
+  el.innerHTML = html;
+  var ta = document.getElementById('cdm-answer');
+  if (ta) ta.focus();
+}
+
+function submitCDMAnswer() {
+  var ta = document.getElementById('cdm-answer');
+  if (!ta || !ta.value.trim()) return;
+  var answer = ta.value.trim();
+  var btn = document.getElementById('cdm-submit-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner" style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-top:2px solid white;border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:6px"></span>Evaluating...'; }
+  var c = CDM_CASES[App.cdmCurrentCase];
+  var q = c.questions[App.cdmCurrentQ];
+  App.cdmAnswers.push(answer);
+  // Evaluate via AI
+  var evalPrompt = 'Question: "' + q.q + '"\nCorrect answer guide: "' + q.answer + '"\nStudent answer: "' + answer + '"\n\nScore the student 0-100. Be generous with synonyms and abbreviations. Return JSON only: {"score":NUMBER,"correct":BOOLEAN,"feedback":"1-2 sentences explaining what was right/wrong/missing"}';
+  callAnthropicDirect_('You are an MCCQE Part I examiner grading CDM short answers. Return only valid JSON.', [{ role: 'user', content: evalPrompt }]).then(function(raw) {
+    var txt = String(raw || '').trim();
+    var match = txt.match(/\{[\s\S]*\}/);
+    var result = match ? JSON.parse(match[0]) : { score: 0, correct: false, feedback: 'Could not evaluate.' };
+    result.score = Math.max(0, Math.min(100, parseInt(result.score) || 0));
+    result.correct = result.score >= 50;
+    result.answer = answer;
+    App.cdmResults.push(result);
+    advanceCDMQuestion();
+  }).catch(function(e) {
+    // Fallback: simple match
+    var norm = function(s) { return s.toLowerCase().replace(/[^a-z0-9]/g, ''); };
+    var isClose = norm(answer).length > 3 && norm(q.answer).indexOf(norm(answer).substring(0, 10)) !== -1;
+    App.cdmResults.push({ score: isClose ? 60 : 20, correct: isClose, feedback: isClose ? 'Acceptable answer.' : 'Expected: ' + q.answer.split(';')[0], answer: answer });
+    advanceCDMQuestion();
+  });
+}
+
+function advanceCDMQuestion() {
+  var c = CDM_CASES[App.cdmCurrentCase];
+  App.cdmCurrentQ++;
+  if (App.cdmCurrentQ >= c.questions.length) {
+    showCDMResults();
+    return;
+  }
+  renderCDMCase();
+}
+
+function showCDMResults() {
+  var el = document.getElementById('mccqe-sim-content');
+  if (!el) return;
+  var c = CDM_CASES[App.cdmCurrentCase];
+  var correct = App.cdmResults.filter(function(r) { return r.correct; }).length;
+  var total = App.cdmResults.length;
+  var pct = total > 0 ? Math.round((correct / total) * 100) : 0;
+  if (!App.cdmCompleted) App.cdmCompleted = {};
+  App.cdmCompleted[App.cdmCurrentCase] = { score: pct, correct: correct, total: total };
+  try { localStorage.setItem('mcc_cdm_completed', JSON.stringify(App.cdmCompleted)); } catch(e) {}
+  var html = '<div style="max-width:700px;margin:0 auto;padding:16px">';
+  html += '<div style="text-align:center;margin-bottom:20px">';
+  html += '<div style="font-size:48px;margin-bottom:8px">' + (pct >= 70 ? '&#x2705;' : pct >= 50 ? '&#x1F7E1;' : '&#x274C;') + '</div>';
+  html += '<h2 style="margin:0">' + correct + '/' + total + ' Correct (' + pct + '%)</h2>';
+  html += '<p style="color:var(--text-light);margin:4px 0 0">' + escapeHtml(c.title) + '</p>';
+  html += '</div>';
+  // Show all Q&A
+  for (var i = 0; i < c.questions.length; i++) {
+    var q = c.questions[i], r = App.cdmResults[i];
+    html += '<div style="background:var(--card);border:1px solid ' + (r && r.correct ? 'rgba(76,175,80,0.3)' : 'rgba(244,67,54,0.3)') + ';border-radius:10px;padding:14px;margin-bottom:10px">';
+    html += '<div style="font-weight:700;font-size:14px;margin-bottom:6px">' + (i + 1) + '. ' + escapeHtml(q.q) + '</div>';
+    html += '<div style="font-size:13px;color:var(--text-light);margin-bottom:4px"><strong>Your answer:</strong> ' + escapeHtml(r ? r.answer : '') + '</div>';
+    html += '<div style="font-size:13px;color:' + (r && r.correct ? '#4caf50' : '#f44336') + ';margin-bottom:4px">' + escapeHtml(r ? r.feedback : '') + '</div>';
+    html += '<div style="font-size:12px;color:var(--text-light);background:var(--bg);border-radius:6px;padding:8px 10px;margin-top:6px"><strong>Model answer:</strong> ' + escapeHtml(q.answer.split(';')[0]) + '</div>';
+    html += '</div>';
+  }
+  html += '<div style="display:flex;gap:12px;justify-content:center;margin-top:16px">';
+  html += '<button class="btn btn-primary" onclick="startCDMCase(Math.floor(Math.random()*CDM_CASES.length))">Next Case</button>';
+  html += '<button class="btn btn-outline" onclick="showMCCQESetup()">Back to Setup</button>';
+  html += '</div></div>';
+  el.innerHTML = html;
+}
+
+// Load saved CDM progress
+try { App.cdmCompleted = JSON.parse(localStorage.getItem('mcc_cdm_completed') || '{}'); } catch(e) { App.cdmCompleted = {}; }
+
 // MCQ QUIZ
 // =============================================
 
