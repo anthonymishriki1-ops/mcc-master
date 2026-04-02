@@ -2611,8 +2611,8 @@ a:focus-visible {
 
       <li class="nav-group-label">PRACTICE</li>
       <li data-page="patientbot" onclick="navigateTo('patientbot')">&#x1F3E5; PatientBot</li>
-      <li data-page="house" onclick="navigateTo('house')">&#x1F9E0; Dr. House</li>
-      <li data-page="melfi" onclick="navigateTo('melfi')">&#x1F453; Dr. Melfi</li>
+      <li data-page="house" onclick="navigateTo('house')" class="dev-only-nav" style="display:none">&#x1F9E0; Dr. House</li>
+      <li data-page="melfi" onclick="navigateTo('melfi')" class="dev-only-nav" style="display:none">&#x1F453; Dr. Melfi</li>
 
       <li class="nav-group-label">GAMES</li>
       <li data-page="speeddx" onclick="navigateTo('speeddx')">&#x26A1; Speed Dx</li>
@@ -3157,7 +3157,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '11.9';
+var APP_VERSION = '12.0';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3169,6 +3169,10 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '12.0', date: 'Apr 1 2026', label: 'Cleaner sidebar — House & Melfi hidden for dev only', items: [
+    'Dr. House and Dr. Melfi moved to dev-only (visible when logged in as dev user)',
+    'Sidebar cleaner for regular users — just PatientBot under PRACTICE',
+  ]},
   { version: '10.4', date: 'Mar 31 2026', label: 'Scorecard ALWAYS shows — async race fixed', items: [
     'CRITICAL FIX: async lab generation callback was overwriting scorecard with renderPBChat',
     'Added nacShowingResults guard — nothing can overwrite the scorecard while it\'s displayed',
@@ -4003,6 +4007,8 @@ function afterLogin_(displayName) {
   if (DEV_USERS.indexOf(profileId.toLowerCase()) !== -1) {
     var devNav = document.getElementById('nav-dev');
     if (devNav) devNav.style.display = '';
+    var devOnlyNavs = document.querySelectorAll('.dev-only-nav');
+    for (var di = 0; di < devOnlyNavs.length; di++) devOnlyNavs[di].style.display = '';
   }
 
   seedApiKeys_(); // fetch shared API keys from server if not cached
@@ -4838,6 +4844,8 @@ function init() {
   if (DEV_USERS.indexOf(savedProfile.toLowerCase()) !== -1) {
     var devNav = document.getElementById('nav-dev');
     if (devNav) devNav.style.display = '';
+    var devOnlyNavs = document.querySelectorAll('.dev-only-nav');
+    for (var di = 0; di < devOnlyNavs.length; di++) devOnlyNavs[di].style.display = '';
   }
 
   finishInit();
