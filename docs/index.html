@@ -3157,7 +3157,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '12.2';
+var APP_VERSION = '12.3';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -3169,6 +3169,12 @@ function seedApiKeys_() {
   }).catch(function() {});
 }
 var APP_CHANGELOG = [
+  { version: '12.3', date: 'Apr 2 2026', label: 'Patients harder to kill accidentally', items: [
+    'Neglect death thresholds raised: HR<35, SpO2<60, SBP<50 (was 40/70/60)',
+    'Warning toast before neglect death: "CRITICAL: intervene now!"',
+    'Neglect timer doubled: 120s to die (was 90s), 60s to deteriorate (was 30s)',
+    'Uses base vitals not display — random noise no longer triggers false crits',
+  ]},
   { version: '12.1', date: 'Apr 1 2026', label: 'CDM Short Answer Questions added to MCCQE Part I', items: [
     'NEW: Clinical Decision Making (CDM) mode with 8 cases and 32 short-answer questions',
     'Cases cover: Cardio, Resp, OB/GYN, Neuro, Peds, Psych, GI/Surgery, Rheumatology',
@@ -4728,23 +4734,28 @@ var VitalsEngine = {
     this._display.dbp  = Math.max(0, Math.round(dbp + rn(2)));
 
     // NEGLECT DEATH: if vitals critically low for extended time, patient deteriorates further
+    // Use BASE vitals (not display) to avoid random noise triggering false crits
     if (!App.pbCodeBlue && App.nacActive) {
-      var critical = (this._display.hr < 40 || this._display.spo2 < 70 || this._display.sbp < 60 || this._display.rr < 6);
+      var critical = (this._base.hr < 35 || this._base.spo2 < 60 || this._base.sbp < 50 || this._base.rr < 4);
       if (critical) {
-        if (!this._neglectStart) this._neglectStart = Date.now();
-        var neglectMs = Date.now() - this._neglectStart;
-        // After 30s of critical vitals with no intervention → slow deterioration
-        if (neglectMs > 30000) {
-          this._base.hr = Math.max(0, this._base.hr - 2);
-          this._base.spo2 = Math.max(0, this._base.spo2 - 1);
-          this._base.sbp = Math.max(0, this._base.sbp - 3);
+        if (!this._neglectStart) {
+          this._neglectStart = Date.now();
+          // WARN the user before death
+          if (typeof showToast_ === 'function') showToast_('CRITICAL: Patient vitals dangerously low — intervene now!');
         }
-        // After 90s → Code Blue from neglect
-        if (neglectMs > 90000) {
+        var neglectMs = Date.now() - this._neglectStart;
+        // After 60s of critical vitals → slow deterioration
+        if (neglectMs > 60000) {
+          this._base.hr = Math.max(0, this._base.hr - 1);
+          this._base.spo2 = Math.max(0, this._base.spo2 - 1);
+          this._base.sbp = Math.max(0, this._base.sbp - 2);
+        }
+        // After 120s → Code Blue from neglect
+        if (neglectMs > 120000) {
           this._triggerCodeBlue({ drug: 'clinical neglect (untreated critical vitals)', doseMcg: 0, cumDoseMcg: 0, threshold: { category: 'cardiac', label: 'Clinical Neglect' }, ratio: 1, pediatric: false });
         }
       } else {
-        this._neglectStart = null; // reset if vitals recover
+        this._neglectStart = null;
       }
     }
 
