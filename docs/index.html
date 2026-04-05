@@ -7253,8 +7253,25 @@ function processPBTranscriptText_(text) {
     App._nacLastActivity = Date.now();
     App._nacSilenceCount = 0;
   }
+  if (App.nacActive && !App._nacDirectMode && localStorage.getItem('mcc_anthropic_key')) {
+    // Race condition recovery: API key arrived after enterNACStation_ ran — switch to direct mode now
+    var st = App.nacStations && App.nacStations[App.nacCurrentStation - 1];
+    if (st && st.nm) {
+      App._nacDirectMode = true;
+      if (!App._nacSystemPrompt) App._nacSystemPrompt = buildNACSystemPrompt_(st);
+    }
+  }
+
   if (App._nacDirectMode && App.nacActive) {
     sendNACMessageDirect_(best);
+    return;
+  }
+
+  // NAC active but no direct mode and no pbCaseId — don't let serverCall expire and kick to setup
+  if (App.nacActive && !App.pbCaseId) {
+    App.pbHistory.push({ role: 'user', content: best });
+    App.pbHistory.push({ role: 'system', content: 'Session not ready yet — please wait a moment and try again.', severity: 'caution' });
+    renderPBChat();
     return;
   }
 
@@ -10864,7 +10881,20 @@ function sendNACTextMessage_() {
 
 // ── NAC Direct Mode: send message without GAS ──
 function sendNACMessageDirect_(userMessage) {
-  if (!App.nacActive || !App._nacSystemPrompt) return;
+  if (!App.nacActive) return;
+  // If system prompt is missing, try to rebuild it from the current station
+  if (!App._nacSystemPrompt) {
+    var st = App.nacStations && App.nacStations[App.nacCurrentStation - 1];
+    if (st && st.nm) {
+      App._nacSystemPrompt = buildNACSystemPrompt_(st);
+    }
+    if (!App._nacSystemPrompt) {
+      App.pbHistory.push({ role: 'user', content: userMessage });
+      App.pbHistory.push({ role: 'system', content: 'Error: Patient simulation could not start — no API key configured. Set your Anthropic API key in Settings.', severity: 'critical' });
+      renderPBChat();
+      return;
+    }
+  }
   var stationTokenAtSend = App.nacStationToken || 0;
   // Dead patients don't talk
   if (App.pbHistory.some(function(m) { return m.role === 'death'; })) {
@@ -11516,7 +11546,7 @@ function showNACReadingPeriod_(station) {
     // Show error if case failed
     if (App.nacCaseError) {
       clearInterval(App.nacReadingInterval);
-      var el2 = document.getElementById('patientbot-content');
+      var el2 = document.getElementById('nac-sim-content') || document.getElementById('patientbot-content');
       if (el2) el2.innerHTML = '<div class="card"><p>Error loading case: ' + escapeHtml(App.nacCaseError) + '</p>' +
         '<button class="btn btn-primary" onclick="App.nacCurrentStation--;startNextNACStation()" style="margin-top:12px">Retry</button></div>';
     }
