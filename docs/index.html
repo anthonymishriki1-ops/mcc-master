@@ -4550,10 +4550,8 @@ var VitalsEngine = {
       if (drugPatterns[drug].test(msg)) {
         var doseMcg = self._parseDoseMcg(msg);
         var threshold = self.LETHAL_DOSES[drug];
-        // If a lethal drug is given with no numeric dose, assume a dangerous undocumented bolus (2x lethal)
-        if (doseMcg === null && threshold && threshold.lethal) {
-          doseMcg = threshold.lethal * 2;
-        }
+        // If no numeric dose specified, skip lethal check — cannot kill with an unspecified dose
+        if (doseMcg === null) continue;
         if (doseMcg > 0 && threshold) {
           // Accumulate cumulative dose for this drug across the case
           if (!self._cumulativeDoses[drug]) self._cumulativeDoses[drug] = 0;
@@ -6485,8 +6483,13 @@ function startCDMCase(index) {
   renderCDMCase();
 }
 
+function startCDMCaseInQuiz(index) {
+  App.cdmContainer = 'quiz-content';
+  startCDMCase(index);
+}
+
 function renderCDMCase() {
-  var el = document.getElementById('mccqe-sim-content');
+  var el = document.getElementById(App.cdmContainer || 'mccqe-sim-content');
   if (!el) return;
   var c = CDM_CASES[App.cdmCurrentCase];
   var qi = App.cdmCurrentQ;
@@ -6494,7 +6497,8 @@ function renderCDMCase() {
   var html = '<div style="max-width:700px;margin:0 auto;padding:16px">';
   // Header
   html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">';
-  html += '<button class="btn btn-sm btn-outline" onclick="showMCCQESetup()">&#x2190; Back</button>';
+  var backFn = App.cdmContainer === 'quiz-content' ? 'showQuizSetup()' : 'showMCCQESetup()';
+  html += '<button class="btn btn-sm btn-outline" onclick="' + backFn + '">&#x2190; Back</button>';
   html += '<span style="font-size:13px;color:var(--text-light)">Question ' + (qi + 1) + ' of ' + c.questions.length + '</span>';
   html += '</div>';
   // Vignette
@@ -6567,7 +6571,7 @@ function advanceCDMQuestion() {
 }
 
 function showCDMResults() {
-  var el = document.getElementById('mccqe-sim-content');
+  var el = document.getElementById(App.cdmContainer || 'mccqe-sim-content');
   if (!el) return;
   var c = CDM_CASES[App.cdmCurrentCase];
   var correct = App.cdmResults.filter(function(r) { return r.correct; }).length;
@@ -6593,8 +6597,10 @@ function showCDMResults() {
     html += '</div>';
   }
   html += '<div style="display:flex;gap:12px;justify-content:center;margin-top:16px">';
-  html += '<button class="btn btn-primary" onclick="startCDMCase(Math.floor(Math.random()*CDM_CASES.length))">Next Case</button>';
-  html += '<button class="btn btn-outline" onclick="showMCCQESetup()">Back to Setup</button>';
+  var nextCaseFn = App.cdmContainer === 'quiz-content' ? 'startCDMCaseInQuiz(Math.floor(Math.random()*CDM_CASES.length))' : 'startCDMCase(Math.floor(Math.random()*CDM_CASES.length))';
+  var backSetupFn = App.cdmContainer === 'quiz-content' ? 'showQuizSetup()' : 'showMCCQESetup()';
+  html += '<button class="btn btn-primary" onclick="' + nextCaseFn + '">Next Case</button>';
+  html += '<button class="btn btn-outline" onclick="' + backSetupFn + '">Back to Setup</button>';
   html += '</div></div>';
   el.innerHTML = html;
 }
@@ -6608,9 +6614,44 @@ try { App.cdmCompleted = JSON.parse(localStorage.getItem('mcc_cdm_completed') ||
 function showQuizSetup() {
   App.quizActive = false;
   var el = document.getElementById('quiz-content');
+  if (!el) return;
+
+  // If CDM mode, render CDM case list
+  if (App.quizMode === 'cdm') {
+    var cdmHtml = '<div style="max-width:700px;margin:0 auto;padding:8px 0">';
+    cdmHtml += '<div style="display:flex;gap:8px;margin-bottom:20px">';
+    cdmHtml += '<button class="quiz-count-btn" onclick="App.quizMode=\'mcq\';showQuizSetup()" style="flex:1;padding:12px;font-size:15px">MCQ</button>';
+    cdmHtml += '<button class="quiz-count-btn active" style="flex:1;padding:12px;font-size:15px">CDM (Short Answer)</button>';
+    cdmHtml += '</div>';
+    cdmHtml += '<div class="card" style="padding:20px;text-align:center;margin-bottom:16px">';
+    cdmHtml += '<div style="font-size:40px;margin-bottom:8px">&#x1F4DD;</div>';
+    cdmHtml += '<h3 style="margin:0 0 8px">Clinical Decision Making</h3>';
+    cdmHtml += '<p style="color:var(--text-light);font-size:13px;margin:0">Short-answer cases covering diagnosis, investigations, and management. AI evaluates your answers.</p>';
+    cdmHtml += '</div>';
+    cdmHtml += '<div class="card" style="padding:16px">';
+    cdmHtml += '<div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;color:var(--text-light)">Select a Case</div>';
+    for (var ci = 0; ci < CDM_CASES.length; ci++) {
+      var cc = CDM_CASES[ci];
+      var done = App.cdmCompleted && App.cdmCompleted[ci];
+      cdmHtml += '<div onclick="startCDMCaseInQuiz(' + ci + ')" style="padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:' + (done ? 'rgba(76,175,80,0.06)' : 'var(--card)') + '">';
+      cdmHtml += '<div><strong style="font-size:14px">Case ' + (ci + 1) + ':</strong> <span style="color:var(--text-light)">' + escapeHtml(cc.title) + '</span></div>';
+      cdmHtml += done ? '<span style="color:#4caf50;font-size:12px">&#x2705; Done</span>' : '<span style="color:var(--text-light);font-size:12px">' + cc.questions.length + ' Qs</span>';
+      cdmHtml += '</div>';
+    }
+    cdmHtml += '</div>';
+    cdmHtml += '<button class="btn btn-primary" style="width:100%;margin-top:12px;padding:14px;font-size:16px" onclick="startCDMCaseInQuiz(Math.floor(Math.random()*CDM_CASES.length))">Random Case</button>';
+    cdmHtml += '</div>';
+    el.innerHTML = cdmHtml;
+    return;
+  }
+
   var specs = App.specialties ? App.specialties.mcq || [] : [];
 
   var html = '<div class="quiz-setup card">';
+  html += '<div style="display:flex;gap:8px;margin-bottom:20px">';
+  html += '<button class="quiz-count-btn active" style="flex:1;padding:12px;font-size:15px">MCQ</button>';
+  html += '<button class="quiz-count-btn" onclick="App.quizMode=\'cdm\';showQuizSetup()" style="flex:1;padding:12px;font-size:15px">CDM (Short Answer)</button>';
+  html += '</div>';
   html += '<h3 style="margin-bottom:20px;text-align:center">Quiz Setup</h3>';
 
   // Weak areas banner — show only if real (non-"All") weak specialties exist
