@@ -10160,7 +10160,12 @@ function showDiagnoseModal() { App.pbDiagnosing = true; var fn = App.dailyPhase 
 function closeDiagnoseModal() { App.pbDiagnosing = false; var fn = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat; fn(); }
 
 function submitPBDiagnosis() {
-  var input = document.getElementById('pb-diag-input'); var answer = input ? input.value.trim() : ''; if (!answer) return;
+  // Multiple pb-diag-input elements can exist simultaneously (banner + overlay modal).
+  // Use querySelectorAll to find the first one that actually has a value.
+  var answer = '';
+  var inputs = document.querySelectorAll('#pb-diag-input');
+  for (var ii = 0; ii < inputs.length; ii++) { if (inputs[ii].value.trim()) { answer = inputs[ii].value.trim(); break; } }
+  if (!answer) return;
   var btn = document.getElementById('pb-diag-submit-btn');
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner" style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-top:2px solid white;border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:6px"></span>Checking...'; }
   App.pbDiagAttempts++;
