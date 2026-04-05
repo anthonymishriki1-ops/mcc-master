@@ -11746,7 +11746,13 @@ function finishNACStation() {
   }
 
   var historyForEval = App.pbHistory.slice(-80);
+  var diagSubmitted = !!App.pbDiagResolved;
   evaluateNACStationOSCE_(historyForEval).then(function(evalResult) {
+    // If the student never submitted a diagnosis, the diagnosis score must be 0
+    if (!diagSubmitted) {
+      evalResult.total = Math.max(0, (evalResult.total || 0) - (evalResult.diagnosis || 0));
+      evalResult.diagnosis = 0;
+    }
     App.nacStationEvalLoading = false;
     App.nacStationEval = evalResult;
     evalResult.station = App.nacCurrentStation;
@@ -11979,7 +11985,7 @@ function evaluateNACStationOSCE_(history) {
       clinicalReasoning: clampEvalScore_(parsed.clinicalReasoning),
       investigations: clampEvalScore_(parsed.investigations),
       diagnosis: clampEvalScore_(parsed.diagnosis),
-      summary: String(parsed.summary || '').substring(0, 240)
+      summary: String(parsed.summary || '').substring(0, 600)
     };
     out.total = out.historyTaking + out.physicalExam + out.communication + out.clinicalReasoning + out.investigations + out.diagnosis;
     return out;
