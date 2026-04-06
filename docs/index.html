@@ -3562,6 +3562,7 @@ function navigateTo(page) {
       stopNACPttRecording_(false);
       stopNACTimer();
       // Cancel any in-progress TTS so patient voice doesn't play over other pages
+      App._ttsSeq = (App._ttsSeq || 0) + 1; // invalidate in-flight TTS fetches
       if (App._ttsAudio) { try { App._ttsAudio.pause(); App._ttsAudio.currentTime = 0; App._ttsAudio = null; } catch(e) {} }
       try { window.speechSynthesis.cancel(); } catch(e) {}
     }
@@ -6951,7 +6952,7 @@ function playBase64Audio_(base64, format, onDone) {
     App._ttsAudio = audio;
     audio.onended = function() { App._ttsAudio = null; URL.revokeObjectURL(url); if (onDone) onDone(); };
     audio.onerror = function() { App._ttsAudio = null; URL.revokeObjectURL(url); if (onDone) onDone(); };
-    audio.play().catch(function() { App._ttsAudio = null; if (onDone) onDone(); });
+    audio.play().catch(function() { App._ttsAudio = null; URL.revokeObjectURL(url); if (onDone) onDone(); });
   } catch(e) {
     console.warn('Audio play error:', e);
     if (onDone) onDone();
@@ -6963,7 +6964,8 @@ function pbSpeak_(text, onDone) {
   if (!App.pbTTS && !App.pbHandsFree) { if (onDone) onDone(); return; }
   // Cancel any browser speech in progress
   try { window.speechSynthesis.cancel(); } catch(e) {}
-  // Cancel any OpenAI TTS audio in progress
+  // Cancel any OpenAI TTS audio in progress (increment seq to discard in-flight fetches)
+  App._ttsSeq = (App._ttsSeq || 0) + 1;
   if (App._ttsAudio) { try { App._ttsAudio.pause(); App._ttsAudio.currentTime = 0; } catch(e) {} }
   App._pbSpeaking = true;
 
@@ -7267,6 +7269,7 @@ function processPBTranscriptText_(text) {
   }
 
   // Interrupt: if patient is speaking, kill the audio immediately
+  App._ttsSeq = (App._ttsSeq || 0) + 1; // invalidate in-flight TTS fetch
   if (App._ttsAudio) { try { App._ttsAudio.pause(); App._ttsAudio.currentTime = 0; } catch(e) {} App._ttsAudio = null; }
   try { window.speechSynthesis.cancel(); } catch(e) {}
   App._pbSpeaking = false;
@@ -10922,6 +10925,10 @@ function callTTSDirect_(text, voice, speed) {
   var clean = text.replace(/\*[^*]+\*/g, '').replace(/\[.*?\]/g, '').replace(/[*_~`#]/g, '').trim();
   if (!clean || clean.length < 2) return Promise.resolve(null);
   if (clean.length > 4000) clean = clean.substring(0, 4000);
+  // Capture sequence token at call time — if TTS is cancelled before fetch resolves,
+  // App._ttsSeq will be incremented and this result will be discarded (prevents
+  // concurrent fetches from playing simultaneously when messages are sent rapidly).
+  var mySeq = App._ttsSeq = (App._ttsSeq || 0);
   return fetch('https://api.openai.com/v1/audio/speech', {
     method: 'POST',
     headers: {
@@ -10945,6 +10952,8 @@ function callTTSDirect_(text, voice, speed) {
     return r.blob();
   }).then(function(blob) {
     var url = URL.createObjectURL(blob);
+    // Discard if a newer TTS request has been started since this one was dispatched
+    if ((App._ttsSeq || 0) !== mySeq) { URL.revokeObjectURL(url); return null; }
     return new Promise(function(resolve) {
       var audio = new Audio(url);
       App._ttsAudio = audio;
@@ -10999,7 +11008,8 @@ function sendNACMessageDirect_(userMessage) {
   // Stop mic while processing (prevent hearing TTS playback)
   stopMicForProcessing_();
 
-  // Cancel any in-progress TTS
+  // Cancel any in-progress TTS (and invalidate in-flight fetch via sequence token)
+  App._ttsSeq = (App._ttsSeq || 0) + 1;
   if (App._ttsAudio) { try { App._ttsAudio.pause(); App._ttsAudio.currentTime = 0; } catch(e) {} App._ttsAudio = null; }
   try { window.speechSynthesis.cancel(); } catch(e) {}
   App._pbSpeaking = false;
@@ -11026,11 +11036,17 @@ function sendNACMessageDirect_(userMessage) {
 
   // Check if patient just died from the action
   if (App.pbCodeBlue) {
+    // For massive OD (ratio ≥ 5×), _triggerCodeBlue already pushed system-alert + death message.
+    // Only push verbal last words + generic death message if the patient isn't already dead.
+    var alreadyDead = App.pbHistory.some(function(m) { return m.role === 'death'; });
     var deathMsg = App.pbCodeBlue.reversible
       ? 'I— I can\'t... breathe... something\'s... wrong...'
       : 'I feel... really... wei...';
     App.pbHistory.push({ role: 'assistant', content: deathMsg });
-    App.pbHistory.push({ role: 'death', content: 'CODE BLUE — Patient is in cardiac arrest.' });
+    if (!alreadyDead) {
+      // Non-massive code blue — add generic death marker; massive OD already added its own
+      App.pbHistory.push({ role: 'death', content: 'CODE BLUE — Patient is in cardiac arrest.' });
+    }
     renderPBChat();
     var voice = getOpenAIVoice_();
     callTTSDirect_(deathMsg, voice, getOpenAISpeed_()).catch(function(){});
@@ -11391,6 +11407,7 @@ function startNextNACStation() {
   App.nacIdleNudgeCount = 0;
   App._pbSpeaking = false;
   App._nacSilenceCount = 0;
+  App._ttsSeq = (App._ttsSeq || 0) + 1; // invalidate any in-flight TTS fetches
   if (App._ttsAudio) { try { App._ttsAudio.pause(); App._ttsAudio = null; } catch(e) {} }
   if (App.nacIdleTimer) { clearInterval(App.nacIdleTimer); App.nacIdleTimer = null; }
   var station = App.nacStations && App.nacStations[App.nacCurrentStation - 1];
@@ -11455,7 +11472,8 @@ function startNextNACStation() {
   App.nacStationEvalLoading = false;
   // Reset trauma accumulation
   if (typeof VitalsEngine !== 'undefined' && VitalsEngine._traumaScore) VitalsEngine._traumaScore = 0;
-  // Cancel any in-flight TTS
+  // Cancel any in-flight TTS (pause playing audio + invalidate pending fetches)
+  App._ttsSeq = (App._ttsSeq || 0) + 1;
   if (App._ttsAudio) { try { App._ttsAudio.pause(); App._ttsAudio = null; } catch(e) {} }
   // Clear idle timer from previous station
   if (App.nacIdleTimer) { clearInterval(App.nacIdleTimer); App.nacIdleTimer = null; }
@@ -11866,6 +11884,7 @@ function finishNACStation() {
   VitalsEngine.stop();
   if (App.nacIdleTimer) { clearInterval(App.nacIdleTimer); App.nacIdleTimer = null; }
   // Cancel any in-progress TTS so it doesn't play over the results screen
+  App._ttsSeq = (App._ttsSeq || 0) + 1; // invalidate in-flight TTS fetches
   if (App._ttsAudio) { try { App._ttsAudio.pause(); App._ttsAudio.currentTime = 0; App._ttsAudio = null; } catch(e) {} }
   try { window.speechSynthesis.cancel(); } catch(e) {}
   // Clear PatientBot state so it doesn't show NAC leftovers
