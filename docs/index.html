@@ -6930,12 +6930,12 @@ function speakOpenAI_(text, onDone) {
     } else {
       var errMsg = (result && result.error) || 'TTS unavailable';
       console.error('OpenAI TTS error:', errMsg);
-      showToast_('Voice error: ' + errMsg);
+      showToast_('Voice error: ' + escapeHtml(String(errMsg)));
       if (onDone) onDone();
     }
   }).catch(function(e) {
     console.error('OpenAI TTS error:', e);
-    showToast_('Voice error: ' + (e.message || 'Connection failed'));
+    showToast_('Voice error: ' + escapeHtml(e.message || 'Connection failed'));
     if (onDone) onDone();
   });
 }
@@ -8100,7 +8100,7 @@ function handleVoiceCommand_(text) {
   if (orderM) {
     var item = orderM[1].replace(/^(a|an|the|some)\s+/i, '').replace(/\s*(please|thanks|thank you|for (?:me|the patient)|stat|urgent|asap)\.?$/i, '').trim();
     if (item && item.length > 1) {
-      showToast('Ordering: ' + item);
+      showToast('Ordering: ' + escapeHtml(item));
       // Generate lab results for NAC mode
       if (App.nacActive) {
         var labCmdToken = App.nacStationToken || 0;
@@ -8122,7 +8122,7 @@ function handleVoiceCommand_(text) {
   var rxM = tl.match(/^(?:i'?m prescribing|i am prescribing|prescri(?:be|bing))\s+(.+)/);
   if (rxM) {
     var item = rxM[1].replace(/^(a|an|the)\s+/i, '').trim();
-    showToast('Prescribing: ' + item);
+    showToast('Prescribing: ' + escapeHtml(item));
     insertPBAction(item);
     return true;
   }
@@ -8131,7 +8131,7 @@ function handleVoiceCommand_(text) {
   var giveM = tl.match(/^(?:give|administer|start iv(?: of)?|start an iv of|push)\s+(.+)/);
   if (giveM) {
     var item = giveM[1].replace(/^(a|an|the)\s+/i, '').trim();
-    showToast('🔊 Administering: ' + item);
+    showToast('🔊 Administering: ' + escapeHtml(item));
     insertPBAction(item);
     return true;
   }
@@ -8140,7 +8140,7 @@ function handleVoiceCommand_(text) {
   var examM = tl.match(/^(?:examine|i want to examine|i'?m examining|i am examining)\s+(.+)/);
   if (examM) {
     var item = examM[1].replace(/^(a|an|the)\s+/i, '').trim();
-    showToast('🔊 Examining: ' + item);
+    showToast('🔊 Examining: ' + escapeHtml(item));
     insertPBAction(item);
     return true;
   }
@@ -10353,7 +10353,7 @@ function _handleDiagnosisResult(result, answer) {
   // In NAC mode, auto-trigger finishNACStation after diagnosis
   if (App.nacActive || App._diagWasNAC) {
     App._diagWasNAC = false;
-    showToast_(result.correct ? 'Correct diagnosis!' : 'Incorrect — the answer was: ' + (App.pbDiagnosis || ''));
+    showToast_(result.correct ? 'Correct diagnosis!' : 'Incorrect — the answer was: ' + escapeHtml(App.pbDiagnosis || ''));
     // Only trigger finishNACStation if it hasn't already run (e.g. timer expired while eval was in-flight)
     // nacShowingResults is true if finishNACStation already ran — don't double-fire
     if (!App.nacShowingResults) {
@@ -10619,7 +10619,7 @@ function showNACSetup() {
     html += '<div style="margin-top:24px;border-top:2px solid var(--border);padding-top:20px">';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">';
     html += '<h3 style="margin:0;font-size:18px;color:var(--text)">&#x1F4CA; Past Results (' + history.length + ')</h3>';
-    html += '<button class="btn btn-sm btn-outline" onclick="if(confirm(\'Clear all scorecard history?\')){localStorage.removeItem(\'mcc_nac_scores_\'+(App.profile||\'guest\'));showNACSetup();}">Clear</button>';
+    html += '<button class="btn btn-sm btn-outline" onclick="if(confirm(\'Clear all scorecard history?\')){localStorage.removeItem(\'mcc_nac_scores_\'+(sessionStorage.getItem(\'mcc_profile\')||\'guest\'));showNACSetup();}">Clear</button>';
     html += '</div>';
     // Show most recent first
     for (var hi = history.length - 1; hi >= Math.max(0, history.length - 20); hi--) {
@@ -10761,7 +10761,7 @@ function showNACScoresPage() {
 
   // Clear button
   html += '<div style="text-align:center;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">';
-  html += '<button class="btn btn-outline btn-sm" onclick="if(confirm(\'Clear all scorecard history? This cannot be undone.\')){localStorage.removeItem(\'mcc_nac_scores_\'+(App.profile||\'guest\'));showNACScoresPage();}">Clear All Scores</button>';
+  html += '<button class="btn btn-outline btn-sm" onclick="if(confirm(\'Clear all scorecard history? This cannot be undone.\')){localStorage.removeItem(\'mcc_nac_scores_\'+(sessionStorage.getItem(\'mcc_profile\')||\'guest\'));showNACScoresPage();}">Clear All Scores</button>';
   html += '</div>';
 
   html += '</div>';
@@ -12111,7 +12111,7 @@ function _renderNACResultsScreen(score, evalResult) {
 
 function _saveNACScoreHistory() {
   try {
-    var profile = App.profile || 'guest';
+    var profile = sessionStorage.getItem('mcc_profile') || 'guest';
     localStorage.setItem('mcc_nac_scores_' + profile, JSON.stringify(App.nacScoreHistory || []));
     // Also save to backend
     serverCall('saveUserData', 'nac_scores', JSON.stringify(App.nacScoreHistory || [])).catch(function() {});
@@ -12120,7 +12120,7 @@ function _saveNACScoreHistory() {
 
 function _loadNACScoreHistory() {
   try {
-    var profile = App.profile || 'guest';
+    var profile = sessionStorage.getItem('mcc_profile') || 'guest';
     var raw = localStorage.getItem('mcc_nac_scores_' + profile);
     return raw ? JSON.parse(raw) : [];
   } catch(e) { return []; }
@@ -15037,13 +15037,13 @@ function filterDevFlags_() {
 
 function updateFlagStatus_(issueId, status) {
   serverCall('updateIssueStatus', issueId, status).then(function() {
-    showToast('Issue marked as ' + status);
+    showToast('Issue marked as ' + escapeHtml(String(status)));
     // Update local cache
     if (_devFlagsCache) {
       _devFlagsCache.forEach(function(i) { if (i.ID === issueId) i.Status = status; });
     }
     filterDevFlags_();
-  }).catch(function(e) { showToast('Error: ' + (e.message || String(e))); });
+  }).catch(function(e) { showToast('Error: ' + escapeHtml(e.message || String(e))); });
 }
 
 
