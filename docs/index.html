@@ -10312,10 +10312,13 @@ function _handleDiagnosisResult(result, answer) {
   if (App.nacActive || App._diagWasNAC) {
     App._diagWasNAC = false;
     showToast_(result.correct ? 'Correct diagnosis!' : 'Incorrect — the answer was: ' + (App.pbDiagnosis || ''));
-    // Reset nacStationFinished so finishNACStation can fire
-    App.nacStationFinished = false;
-    App.nacActive = true; // re-enable temporarily for finishNACStation
-    setTimeout(function() { finishNACStation(); }, 1500);
+    // Only trigger finishNACStation if it hasn't already run (e.g. timer expired while eval was in-flight)
+    // nacShowingResults is true if finishNACStation already ran — don't double-fire
+    if (!App.nacShowingResults) {
+      App.nacStationFinished = false;
+      App.nacActive = true; // re-enable temporarily for finishNACStation
+      setTimeout(function() { finishNACStation(); }, 1500);
+    }
   }
 
   renderFn();
@@ -11419,6 +11422,7 @@ function startNextNACStation() {
   App.pbDrDataConvHistory = [];
   App.pbCaseId = null;
   App._pbSpeaking = false;
+  App._pbLastSpokenIdx = -1; // reset TTS dedup index — new station history starts fresh
   App._nacSilenceCount = 0;
   App._nacNudgeInFlight = false;
   App.nacPTTRecording = false;
@@ -11639,7 +11643,9 @@ function endNACReadingPeriod_() {
     var el = document.getElementById('nac-sim-content');
     if (el) el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div><p style="margin-top:16px;color:var(--text-light)">Preparing station...</p></div>';
     var waitCaseStart = Date.now();
+    var waitCaseGen = _nacStationGen; // capture generation — if user retries and a new station loads, this interval is stale
     var waitCase = setInterval(function() {
+      if (waitCaseGen !== _nacStationGen) { clearInterval(waitCase); return; } // stale — new station started
       if (App.nacCaseReady) {
         clearInterval(waitCase);
         enterNACStation_();
@@ -11832,6 +11838,9 @@ function finishNACStation() {
   App.nacShowingResults = true; // prevent renderPBChat from overwriting scorecard
   VitalsEngine.stop();
   if (App.nacIdleTimer) { clearInterval(App.nacIdleTimer); App.nacIdleTimer = null; }
+  // Cancel any in-progress TTS so it doesn't play over the results screen
+  if (App._ttsAudio) { try { App._ttsAudio.pause(); App._ttsAudio.currentTime = 0; App._ttsAudio = null; } catch(e) {} }
+  try { window.speechSynthesis.cancel(); } catch(e) {}
   // Clear PatientBot state so it doesn't show NAC leftovers
   App.pbCaseId = null;
   App.pbCodeBlue = null;
@@ -11883,8 +11892,6 @@ function finishNACStation() {
     App.nacStationEvalLoading = false;
     console.error('NAC eval failed:', err);
     var fallback = { historyTaking: 0, physicalExam: 0, communication: 0, clinicalReasoning: 0, investigations: 0, diagnosis: 0, total: 0, summary: 'Evaluation failed: ' + (err.message || String(err)).substring(0, 100) };
-    fallback.station = App.nacCurrentStation;
-    fallback.presentation = score.presentation;
     fallback.station = App.nacCurrentStation;
     fallback.presentation = score.presentation;
     fallback.specialty = score.specialty;
@@ -12914,7 +12921,7 @@ function renderNACStationUI_(targetEl) {
 
     // Conversation transcript (right column on desktop)
     html += '<div class="nac-overview-right">';
-    var convMsgs = App.pbHistory.filter(function(m) { return m.role === 'user' || m.role === 'assistant' || m.role === 'system' || m.role === 'death'; });
+    var convMsgs = App.pbHistory.filter(function(m) { return m.role === 'user' || m.role === 'assistant' || m.role === 'partial' || m.role === 'system' || m.role === 'death'; });
     html += '<div style="background:var(--card);border-radius:10px;padding:16px;border:1px solid var(--border);height:100%">';
     html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-light);margin-bottom:10px">Conversation</div>';
     html += '<div id="nac-convo-box" style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:8px">';
@@ -12930,6 +12937,15 @@ function renderNACStationUI_(targetEl) {
         html += '<div style="align-self:center;max-width:90%;text-align:center">';
         html += '<div style="background:' + sysBg + ';border:1px solid ' + sysColor + ';color:' + sysColor + ';padding:8px 14px;border-radius:8px;font-size:12px;font-weight:600;line-height:1.4">';
         html += (cm.role === 'death' ? '&#x1F480; ' : '&#x26A0;&#xFE0F; ') + escapeHtml(typeof cm.content === 'string' ? cm.content : '');
+        html += '</div></div>';
+        continue;
+      }
+      if (cm.role === 'partial') {
+        // Physical exam finding — show inline as a clinical note
+        var examText = typeof cm.content === 'string' ? cm.content : (cm.content && cm.content.results) ? cm.content.results : JSON.stringify(cm.content || {});
+        html += '<div style="align-self:center;max-width:95%;width:100%">';
+        html += '<div style="background:rgba(33,150,243,0.08);border:1px solid rgba(33,150,243,0.3);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--text);line-height:1.5">';
+        html += '<span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#1565c0;letter-spacing:0.5px">&#x1FA7A; Exam Finding &nbsp;</span>' + escapeHtml(examText);
         html += '</div></div>';
         continue;
       }
