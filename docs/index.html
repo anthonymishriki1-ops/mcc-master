@@ -12491,7 +12491,7 @@ function showScorecardModal_() {
   document.body.insertAdjacentHTML('beforeend', h);
 }
 
-function endPBCase() { VitalsEngine.stop(); stopNACTimer(); stopNACPttRecording_(false); stopHandsFree_(); App.pbMonitorAttached = false; App.pbCodeBlue = false; App.pbCaseId = null; App.pbHistory = []; App.pbSpecialty = null; App.pbPartialUsed = false; App.pbScorecard = null; App.pbScorecardLoading = false; App.pbScorecardError = false; App.pbScorecardShown = false; App.pbDrDataEval = null; App.pbDrDataEvalLoading = false; App.pbDrDataEvalError = false; App.pbDrDataConvHistory = []; App.nacActive = false; App.nacCurrentStation = 0; App.nacTotalStations = 0; showPatientBotSetup(); }
+function endPBCase() { VitalsEngine.stop(); stopNACTimer(); stopNACPttRecording_(false); stopHandsFree_(); App.pbMonitorAttached = false; App.pbCodeBlue = null; App.pbCaseId = null; App.pbHistory = []; App.pbSpecialty = null; App.pbPartialUsed = false; App.pbScorecard = null; App.pbScorecardLoading = false; App.pbScorecardError = false; App.pbScorecardShown = false; App.pbDrDataEval = null; App.pbDrDataEvalLoading = false; App.pbDrDataEvalError = false; App.pbDrDataConvHistory = []; App.nacActive = false; App.nacCurrentStation = 0; App.nacTotalStations = 0; showPatientBotSetup(); }
 
 function attachPBMonitor_() {
   App.pbMonitorAttached = true;
