@@ -8219,9 +8219,12 @@ function sortWeakCardsFirst_(cards) {
 
 function setQuizTimer(secs, btn) {
   App.quizSecondsPerQ = secs;
-  var btns = btn.parentElement.querySelectorAll('.quiz-count-btn');
-  for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
-  btn.classList.add('active');
+  // btn is optional — exam mode calls setQuizTimer(90) without a button element
+  if (btn) {
+    var btns = btn.parentElement.querySelectorAll('.quiz-count-btn');
+    for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+    btn.classList.add('active');
+  }
   var customInput = document.getElementById('quiz-timer-custom');
   if (customInput) customInput.value = '';
 }
