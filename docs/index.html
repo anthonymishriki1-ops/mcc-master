@@ -3559,6 +3559,9 @@ function navigateTo(page) {
       stopHandsFree_();
       stopNACPttRecording_(false);
       stopNACTimer();
+      // Cancel any in-progress TTS so patient voice doesn't play over other pages
+      if (App._ttsAudio) { try { App._ttsAudio.pause(); App._ttsAudio.currentTime = 0; App._ttsAudio = null; } catch(e) {} }
+      try { window.speechSynthesis.cancel(); } catch(e) {}
     }
   }
 
