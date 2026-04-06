@@ -5152,10 +5152,11 @@ function renderDashboard(stats) {
   html += '<div class="quick-actions">';
 
   // Flashcards
+  var _fcProg = loadFlashcardProgress_();
   html += '<div class="quick-action-card" onclick="navigateTo(\'flashcards\')" style="background:linear-gradient(135deg,#667eea,#764ba2)">';
   html += '<div class="qa-icon">&#x1F4DA;</div>';
   html += '<div class="qa-label">Study</div>';
-  html += '<div class="qa-sub">Card ' + (loadFlashcardProgress_() ? loadFlashcardProgress_().index + 1 : 1) + ' of 10K</div>';
+  html += '<div class="qa-sub">Card ' + (_fcProg ? _fcProg.index + 1 : 1) + ' of 10K</div>';
   html += '</div>';
 
   // Quiz
@@ -5603,7 +5604,8 @@ function loadPBLibrary() {
   el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div></div>';
 
   // In NAC mode, show all pregen stations instead of calling broken GAS server
-  if (App.nacActive || navigateTo._last === 'nac-sim') {
+  // (navigateTo._last was never set — App.nacActive is the only relevant guard)
+  if (App.nacActive) {
     var html = '<h3 style="margin-bottom:12px">All NAC-OSCE Stations</h3>';
     for (var ti = 0; ti < NAC_PRACTICE_TESTS.length; ti++) {
       var test = NAC_PRACTICE_TESTS[ti];
@@ -5930,8 +5932,12 @@ function loadFlashcardProgress_() {
   try {
     var saved = JSON.parse(localStorage.getItem(key));
     if (saved && saved.index > 0) {
-      // Clamp to valid range in case card count changed
-      saved.index = Math.min(saved.index, Math.max(0, App.flashcards.length - 1));
+      // Only clamp if flashcards are loaded — when called from the dashboard before flashcards
+      // are fetched, App.flashcards is empty and clamping would incorrectly pin index to 0,
+      // making the dashboard show "Card 1 of 10K" even mid-deck.
+      if (App.flashcards && App.flashcards.length > 0) {
+        saved.index = Math.min(saved.index, App.flashcards.length - 1);
+      }
       console.log('[FC] Restoring progress: card', saved.index + 1, 'of', App.flashcards.length, 'key:', key);
       return saved;
     }
@@ -15612,7 +15618,9 @@ function renderVitalsEmergency(msg) {
   html += '<div style="padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);margin-bottom:8px"><strong>Presentation:</strong> ' + escapeHtml(sc.vignette) + '</div>';
   html += '<div style="padding:12px;border-radius:10px;border:1px solid var(--error);background:rgba(185,28,28,0.06);font-weight:800;margin-bottom:12px">🚨 ' + escapeHtml(sc.vitals) + '</div>';
   for (var i = 0; i < sc.options.length; i++) {
-    html += '<button class="btn ' + (App.vitalsEmergencyActive ? 'btn-outline' : 'btn-outline') + '" style="display:block;width:100%;text-align:left;margin-bottom:8px" onclick="chooseVitalsEmergency(' + i + ')" ' + (App.vitalsEmergencyActive ? '' : 'disabled') + '>' + (i + 1) + '. ' + escapeHtml(sc.options[i]) + '</button>';
+    // When game over, highlight correct answer in green; wrong answers stay outlined
+    var btnClass = App.vitalsEmergencyActive ? 'btn-outline' : (i === sc.correct ? 'btn-success' : 'btn-outline');
+    html += '<button class="btn ' + btnClass + '" style="display:block;width:100%;text-align:left;margin-bottom:8px" onclick="chooseVitalsEmergency(' + i + ')" ' + (App.vitalsEmergencyActive ? '' : 'disabled') + '>' + (i + 1) + '. ' + escapeHtml(sc.options[i]) + '</button>';
   }
   if (!App.vitalsEmergencyActive) {
     html += '<button class="btn btn-primary" style="margin-top:8px" onclick="startVitalsEmergency()">Restart</button>';
