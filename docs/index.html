@@ -3157,7 +3157,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '12.4';
+var APP_VERSION = '12.5';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -6652,7 +6652,19 @@ function showQuizSetup() {
   html += '<button class="quiz-count-btn active" style="flex:1;padding:12px;font-size:15px">MCQ</button>';
   html += '<button class="quiz-count-btn" onclick="App.quizMode=\'cdm\';showQuizSetup()" style="flex:1;padding:12px;font-size:15px">CDM (Short Answer)</button>';
   html += '</div>';
-  html += '<h3 style="margin-bottom:20px;text-align:center">Quiz Setup</h3>';
+  // Mode toggle: Practice vs Exam
+  var examMode = App.quizExamMode || false;
+  html += '<div style="display:flex;gap:8px;margin-bottom:16px">';
+  html += '<button class="quiz-count-btn' + (!examMode ? ' active' : '') + '" onclick="App.quizExamMode=false;showQuizSetup()" style="flex:1;padding:10px">Practice Mode</button>';
+  html += '<button class="quiz-count-btn' + (examMode ? ' active' : '') + '" onclick="App.quizExamMode=true;showQuizSetup()" style="flex:1;padding:10px;background:' + (examMode ? 'linear-gradient(135deg,#c62828,#e53935)' : '') + ';color:' + (examMode ? 'white' : '') + '">Exam Mode</button>';
+  html += '</div>';
+  if (examMode) {
+    html += '<div style="background:rgba(198,40,40,0.08);border:1px solid rgba(198,40,40,0.3);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--text);line-height:1.6">';
+    html += '<strong style="color:#c62828">Real MCCQE Part I Conditions:</strong><br>';
+    html += '115 MCQs &bull; 2h 40m timer &bull; No going back &bull; No answer reveal until end &bull; All specialties';
+    html += '</div>';
+  }
+  html += '<h3 style="margin-bottom:20px;text-align:center">' + (examMode ? 'Exam Settings' : 'Quiz Setup') + '</h3>';
 
   // Weak areas banner — show only if real (non-"All") weak specialties exist
   var rawWeak = App.stats && App.stats.weakAreas ? App.stats.weakAreas : [];
@@ -6708,7 +6720,11 @@ function showQuizSetup() {
   html += '<input type="number" id="quiz-timer-custom" placeholder="Or custom total minutes..." min="1" max="300" style="margin-top:6px">';
   html += '</div>';
 
-  html += '<button class="btn btn-success" style="width:100%;padding:14px;font-size:16px;margin-top:8px" onclick="startQuiz()">Start Quiz</button>';
+  if (examMode) {
+    html += '<button class="btn" style="width:100%;padding:14px;font-size:16px;margin-top:8px;background:linear-gradient(135deg,#c62828,#e53935);color:white;font-weight:700" onclick="App.quizExamActive=true;document.getElementById(\'quiz-count\').value=115;document.getElementById(\'quiz-specialty\').value=\'All\';setQuizTimer(90);startQuiz()">Begin Exam (115 Qs &bull; 2h40m)</button>';
+  } else {
+    html += '<button class="btn btn-success" style="width:100%;padding:14px;font-size:16px;margin-top:8px" onclick="App.quizExamActive=false;startQuiz()">Start Quiz</button>';
+  }
   html += '</div>';
   el.innerHTML = html;
 }
@@ -10187,8 +10203,12 @@ function submitPBDiagnosis() {
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner" style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-top:2px solid white;border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:6px"></span>Checking...'; }
   App.pbDiagAttempts++;
 
+  // Save NAC state at submission time (async eval may complete after nacActive changes)
+  var wasNACActive = App.nacActive;
+  if (wasNACActive) App._diagWasNAC = true;
+
   // NAC DIRECT MODE: evaluate diagnosis locally (no server needed)
-  if (App._nacDirectMode || App.nacActive) {
+  if (App._nacDirectMode || wasNACActive) {
     var correctDx = App.pbDiagnosis || '';
     // Try API first, fall back to string matching instantly if API fails
     var norm = function(s) { return (s||'').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim(); };
@@ -10250,8 +10270,12 @@ function _handleDiagnosisResult(result, answer) {
   }
 
   // In NAC mode, auto-trigger finishNACStation after diagnosis
-  if (App.nacActive) {
+  if (App.nacActive || App._diagWasNAC) {
+    App._diagWasNAC = false;
     showToast_(result.correct ? 'Correct diagnosis!' : 'Incorrect — the answer was: ' + (App.pbDiagnosis || ''));
+    // Reset nacStationFinished so finishNACStation can fire
+    App.nacStationFinished = false;
+    App.nacActive = true; // re-enable temporarily for finishNACStation
     setTimeout(function() { finishNACStation(); }, 1500);
   }
 
