@@ -7308,7 +7308,7 @@ function processPBTranscriptText_(text) {
   serverCall('sendPatientBotMessage', App.pbCaseId, best, App.pbHistory.slice(-30)).then(function(result) {
     if (App.nacActive && stationTokenAtSend !== (App.nacStationToken || 0)) return;
     removeEl('pb-typing');
-    if (result.expired) { App.pbCaseId = null; stopHandsFree_(); showPatientBotSetup(); return; }
+    if (result.expired) { App.pbCaseId = null; stopHandsFree_(); if (App.nacActive) { finishNACStation(); return; } showPatientBotSetup(); return; }
     if (result.blocked) {
       App.pbHistory.push({ role: 'system', content: result.consequence, severity: 'prereq' });
       if (result.vitals) App.pbVitals = result.vitals;
@@ -9156,7 +9156,7 @@ function sendPBMessage() {
     if (blocked_) {
       input.value = '';
       App.pbHistory.push({ role: 'user', content: message });
-      App.pbHistory.push({ role: 'assistant', content: 'Finding: Not applicable — patient anatomy does not include this structure.' });
+      App.pbHistory.push({ role: 'system', content: 'Finding: Not applicable — patient anatomy does not include this structure.', severity: 'prereq' });
       var renderTarget_ = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
       renderTarget_();
       return;
@@ -9224,7 +9224,7 @@ function sendPBMessage() {
 
   serverCall('sendPatientBotMessage', App.pbCaseId, message, App.pbHistory.slice(-30)).then(function(result) {
     removeEl('pb-typing');
-    if (result.expired) { App.pbCaseId = null; showPatientBotSetup(); return; }
+    if (result.expired) { App.pbCaseId = null; if (App.nacActive) { finishNACStation(); return; } showPatientBotSetup(); return; }
 
     // PREREQ BLOCKED — action couldn't be performed
     if (result.blocked) {
@@ -11028,7 +11028,7 @@ function sendNACMessageDirect_(userMessage) {
     // Check if doctor's message was a physical exam action — tag response accordingly
     var examPattern = /\b(palpat|auscult|percuss|inspect|examine|feel|listen to|check|assess|look at|test reflex|cranial nerve|fundoscop|otoscop|ophthalmo|rectal|vaginal|speculum|digital|neuro exam|cardio exam|resp exam|abdo exam|msk exam)/i;
     var isExam = examPattern.test(userMessage);
-    nacDirectRespond_(response, isExam ? 'partial' : 'assistant');
+    nacDirectRespond_(response, isExam ? 'partial' : 'assistant', stationTokenAtSend);
     maybeTriggerNacLabResults_(userMessage, response);
   }).catch(function(e) {
     if (!App.nacActive || stationTokenAtSend !== (App.nacStationToken || 0)) return;
@@ -11039,7 +11039,7 @@ function sendNACMessageDirect_(userMessage) {
 }
 
 // Shared response handler: add to history, render, speak, restart mic
-function nacDirectRespond_(text, role) {
+function nacDirectRespond_(text, role, stationTok) {
   App.pbHistory.push({ role: role || 'assistant', content: text });
   renderPBChat();
   var voice = getOpenAIVoice_();
@@ -11047,9 +11047,9 @@ function nacDirectRespond_(text, role) {
   // Strip asterisk actions from TTS (they cause silence) — keep in chat text
   var ttsText = text.replace(/\*[^*]+\*/g, '').replace(/\s{2,}/g, ' ').trim();
   callTTSDirect_(ttsText || text, voice, speed).then(function() {
-    restartMicAfterResponse_();
+    restartMicAfterResponse_(stationTok);
   }).catch(function() {
-    restartMicAfterResponse_();
+    restartMicAfterResponse_(stationTok);
   });
 }
 
@@ -11063,8 +11063,9 @@ function stopMicForProcessing_() {
 }
 
 // Restart mic after TTS finishes
-function restartMicAfterResponse_() {
+function restartMicAfterResponse_(stationTok) {
   if (!App.pbHandsFree || !App.nacActive || App.pbDiagResolved) return;
+  if (stationTok !== undefined && stationTok !== (App.nacStationToken || 0)) return; // stale — station changed during TTS
   setTimeout(function() {
     startHandsFreeListening_(); // always fresh instance
   }, 300);
@@ -11361,7 +11362,12 @@ function startNextNACStation() {
   App._nacSilenceCount = 0;
   if (App._ttsAudio) { try { App._ttsAudio.pause(); App._ttsAudio = null; } catch(e) {} }
   if (App.nacIdleTimer) { clearInterval(App.nacIdleTimer); App.nacIdleTimer = null; }
-  var station = App.nacStations[App.nacCurrentStation - 1];
+  var station = App.nacStations && App.nacStations[App.nacCurrentStation - 1];
+  if (!station) {
+    App.nacCaseError = 'Station data missing — please restart the exam.';
+    renderNACChat();
+    return;
+  }
 
   // Set PB specialty to the station's specialty
   App.pbSetupSpecialty = station.specialty;
@@ -11445,7 +11451,9 @@ function startNextNACStation() {
 
   // No API key yet — try fetching from server, then retry with direct mode
   if (station.nm && !localStorage.getItem('mcc_anthropic_key')) {
+    var thisGenKeys = _nacStationGen; // capture generation to guard against stale callbacks
     serverCall('getApiKeys').then(function(keys) {
+      if (thisGenKeys !== _nacStationGen) return; // stale — user already moved to another station
       if (keys && keys.anthropic) {
         localStorage.setItem('mcc_anthropic_key', keys.anthropic);
         if (keys.openai) localStorage.setItem('mcc_openai_key', keys.openai);
@@ -11459,6 +11467,7 @@ function startNextNACStation() {
         App.nacCaseError = 'API keys not configured. Contact admin.';
       }
     }).catch(function() {
+      if (thisGenKeys !== _nacStationGen) return;
       App.nacCaseError = 'Server unavailable. Try again later.';
     });
     return;
@@ -11664,7 +11673,7 @@ function enterNACStation_() {
   // START VITALS ENGINE — critical for drug effects to actually work
   VitalsEngine.start();
   // Build system prompt for direct mode if keys available
-  var station = App.nacStations[App.nacCurrentStation - 1];
+  var station = App.nacStations && App.nacStations[App.nacCurrentStation - 1];
   if (station && station.nm && localStorage.getItem('mcc_anthropic_key')) {
     App._nacDirectMode = true;
     App._nacSystemPrompt = buildNACSystemPrompt_(station);
@@ -12267,6 +12276,8 @@ function showNACSummary() {
 }
 
 function loadOSCEScorecard() {
+  // NAC direct mode uses evaluateNACStationOSCE_ — skip debriefPatientBot (pbCaseId is null)
+  if (App.nacActive && !App.pbCaseId) { App.pbScorecardLoading = false; return; }
   App.pbScorecardLoading = true;
   App.pbScorecardError = false;
   serverCall('debriefPatientBot', App.pbCaseId, App.pbHistory.slice(-40)).then(function(result) {
