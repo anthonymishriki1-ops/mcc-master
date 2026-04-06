@@ -7049,7 +7049,9 @@ function startNACPttRecording_() {
   if (!dgKey) {
     // Keys might still be loading from server — retry once after fetch
     showToast_('Loading voice keys...');
+    var pttKeyGenCapture = _nacStationGen;
     serverCall('getApiKeys').then(function(keys) {
+      if (pttKeyGenCapture !== _nacStationGen) { App.nacPTTRecording = false; App.pbMicActive = false; return; } // stale — station changed
       if (keys && keys.deepgram) {
         localStorage.setItem('mcc_deepgram_key', keys.deepgram);
         if (keys.anthropic && !localStorage.getItem('mcc_anthropic_key')) localStorage.setItem('mcc_anthropic_key', keys.anthropic);
@@ -7062,6 +7064,7 @@ function startNACPttRecording_() {
         showToast_('Voice unavailable — Deepgram key not configured');
       }
     }).catch(function() {
+      if (pttKeyGenCapture !== _nacStationGen) { App.nacPTTRecording = false; App.pbMicActive = false; return; }
       App.nacPTTRecording = false;
       App.pbMicActive = false;
       renderPBChat();
@@ -11818,7 +11821,7 @@ function finishNACStation() {
   stopNACPttRecording_(false);
   stopHandsFree_();
   stopNACTimer();
-  // Record score
+  // Record score — capture codeBlue BEFORE clearing pbCodeBlue below
   var score = {
     station: App.nacCurrentStation,
     specialty: App.pbSpecialty || '',
@@ -11826,7 +11829,8 @@ function finishNACStation() {
     diagnosis: App.pbDiagnosis || '',
     correct: App.pbDiagResolved && App.pbCaseScores.length > 0 && App.pbCaseScores[App.pbCaseScores.length - 1].correct,
     attempts: App.pbDiagAttempts || 0,
-    skipped: !App.pbDiagResolved
+    skipped: !App.pbDiagResolved,
+    codeBlue: App.pbCodeBlue || null // preserve death info — pbCodeBlue is cleared below
   };
   App.nacScores.push(score);
 
@@ -11911,17 +11915,18 @@ function _renderNACResultsScreen(score, evalResult) {
   if (!el) return;
   var isLast = (!App.nacRandomMode && App.nacCurrentStation >= App.nacTotalStations);
   var nextLabel = isLast ? 'View Final Results' : 'Next Station';
-  var patientDied = !!App.pbCodeBlue;
+  var patientDied = !!(score.codeBlue || App.pbCodeBlue);
+  var codeBlueInfo = score.codeBlue || App.pbCodeBlue || {};
   var h = '<div style="max-width:640px;margin:0 auto;padding:24px">';
   h += '<div style="text-align:center;margin-bottom:20px">';
   if (patientDied) {
     h += '<div style="font-size:48px;margin-bottom:8px">&#x1F480;</div>';
     h += '<h2 style="margin:0;font-size:24px;color:#f44336">Patient Deceased</h2>';
     h += '<p style="color:var(--text-light);margin:4px 0 0;font-size:14px">The patient died during this encounter.</p>';
-    var cause = App.pbCodeBlue.cause || 'clinical error';
+    var cause = codeBlueInfo.cause || 'clinical error';
     h += '<div style="background:rgba(244,67,54,0.08);border:1px solid rgba(244,67,54,0.3);border-radius:10px;padding:12px 16px;margin-top:12px;text-align:left">';
     h += '<div style="font-size:13px;color:#f44336;font-weight:600;margin-bottom:4px">Cause of Death</div>';
-    h += '<div style="font-size:14px;color:var(--text)">' + escapeHtml(cause) + (App.pbCodeBlue.reversible ? ' (potentially reversible)' : ' (irreversible)') + '</div>';
+    h += '<div style="font-size:14px;color:var(--text)">' + escapeHtml(cause) + (codeBlueInfo.reversible ? ' (potentially reversible)' : ' (irreversible)') + '</div>';
     h += '</div>';
     h += '<p style="color:var(--text-light);margin:16px 0 0;font-size:13px;font-style:italic">Well... here\'s your scorecard anyway.</p>';
   } else {
@@ -12018,7 +12023,8 @@ function _renderNACResultsScreen(score, evalResult) {
     // What you did / didn't do
     var labCount = (App.nacLabResults || []).length;
     var imgCount = (App.nacImagingResults || []).length;
-    var examCount = (App.nacExamResults || []).length;
+    // nacExamResults is unused; physical exam findings are partial-string messages in pbHistory
+    var examCount = (App.pbHistory || []).filter(function(m) { return m.role === 'partial' && typeof m.content === 'string'; }).length;
     var actions = [];
     if (labCount) actions.push(labCount + ' lab' + (labCount > 1 ? 's' : '') + ' ordered');
     if (imgCount) actions.push(imgCount + ' imaging');
@@ -12163,7 +12169,7 @@ function showNACStationScoreModal_(evalResult) {
   // Findings summary
   var labCount = (App.nacLabResults || []).length;
   var imgCount = (App.nacImagingResults || []).length;
-  var examCount = (App.nacExamResults || []).length;
+  var examCount = (App.pbHistory || []).filter(function(m) { return m.role === 'partial' && typeof m.content === 'string'; }).length;
   if (labCount + imgCount + examCount > 0) {
     h += '<div style="font-size:12px;color:var(--text-light);margin-bottom:12px">';
     var findParts = [];
@@ -12828,7 +12834,7 @@ function renderNACStationUI_(targetEl) {
   var nacGeneratedLabs = (App.nacLabResults || []).map(function(r) { return { role: 'results', content: r, _nac: true }; });
   var labResults = nacGeneratedLabs.concat(historyLabResults);
   var diResults = App.pbHistory.filter(function(m) { return m.role === 'results' && m.content && /(x.ray|ct\b|mri|ultrasound|echo|radio|scan|imaging)/i.test(m.content.testName || ''); });
-  var examMsgs = App.pbHistory.filter(function(m) { return m.role === 'partial'; });
+  var examMsgs = App.pbHistory.filter(function(m) { return m.role === 'partial' && typeof m.content === 'string'; });
 
   // ── Tab bar ──
   var tabs = [
@@ -12941,12 +12947,15 @@ function renderNACStationUI_(targetEl) {
         continue;
       }
       if (cm.role === 'partial') {
-        // Physical exam finding — show inline as a clinical note
-        var examText = typeof cm.content === 'string' ? cm.content : (cm.content && cm.content.results) ? cm.content.results : JSON.stringify(cm.content || {});
-        html += '<div style="align-self:center;max-width:95%;width:100%">';
-        html += '<div style="background:rgba(33,150,243,0.08);border:1px solid rgba(33,150,243,0.3);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--text);line-height:1.5">';
-        html += '<span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#1565c0;letter-spacing:0.5px">&#x1FA7A; Exam Finding &nbsp;</span>' + escapeHtml(examText);
-        html += '</div></div>';
+        if (typeof cm.content === 'string') {
+          // Physical exam finding — show inline as a clinical note
+          html += '<div style="align-self:center;max-width:95%;width:100%">';
+          html += '<div style="background:rgba(33,150,243,0.08);border:1px solid rgba(33,150,243,0.3);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--text);line-height:1.5">';
+          html += '<span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#1565c0;letter-spacing:0.5px">&#x1FA7A; Exam Finding &nbsp;</span>' + escapeHtml(cm.content);
+          html += '</div></div>';
+        } else {
+          // Partial-credit diagnosis feedback — skip here; shown via diagnosis_result rendering below the tab
+        }
         continue;
       }
       var isDoc = cm.role === 'user';
