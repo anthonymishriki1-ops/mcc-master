@@ -5238,7 +5238,7 @@ function renderDashboard(stats) {
     var show = stats.achievements.slice(-5);
     for (var i = 0; i < show.length; i++) {
       html += '<div class="achievement-badge" title="' + escapeHtml(show[i].desc) + '">';
-      html += '<span class="achievement-icon">' + show[i].icon + '</span>';
+      html += '<span class="achievement-icon">' + escapeHtml(show[i].icon || '') + '</span>';
       html += '<span class="achievement-name">' + escapeHtml(show[i].name) + '</span>';
       html += '</div>';
     }
@@ -5835,7 +5835,7 @@ function renderDevPanel(stats) {
       html += '<div style="font-size:13px;font-weight:700;margin-bottom:8px;color:var(--text-light)">Recent Activity</div>';
       for (var j = u.recentActivity.length - 1; j >= 0; j--) {
         var act = u.recentActivity[j];
-        var typeLabel = act.type === 'quiz_result' ? '&#x1F4DD; Quiz' : act.type === 'pb_result' ? '&#x1FA7A; PatientBot' : act.type === 'daily_result' ? '&#x2B50; Daily' : act.type;
+        var typeLabel = act.type === 'quiz_result' ? '&#x1F4DD; Quiz' : act.type === 'pb_result' ? '&#x1FA7A; PatientBot' : act.type === 'daily_result' ? '&#x2B50; Daily' : escapeHtml(act.type || '');
         var timeStr = act.time ? new Date(act.time).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
         var detailStr = '';
         if (act.data && typeof act.data === 'object') {
