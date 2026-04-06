@@ -3563,7 +3563,7 @@ function navigateTo(page) {
       stopNACTimer();
       // Cancel any in-progress TTS so patient voice doesn't play over other pages
       App._ttsSeq = (App._ttsSeq || 0) + 1; // invalidate in-flight TTS fetches
-      if (App._ttsAudio) { try { App._ttsAudio.pause(); App._ttsAudio.currentTime = 0; App._ttsAudio = null; } catch(e) {} }
+      _stopTTSAudio_();
       try { window.speechSynthesis.cancel(); } catch(e) {}
     }
   }
@@ -6949,6 +6949,7 @@ function playBase64Audio_(base64, format, onDone) {
     var blob = new Blob([byteArray], { type: mime });
     var url = URL.createObjectURL(blob);
     var audio = new Audio(url);
+    audio._blobUrl = url; // stored so _stopTTSAudio_ can revoke on forced cancel
     App._ttsAudio = audio;
     audio.onended = function() { App._ttsAudio = null; URL.revokeObjectURL(url); if (onDone) onDone(); };
     audio.onerror = function() { App._ttsAudio = null; URL.revokeObjectURL(url); if (onDone) onDone(); };
@@ -6959,6 +6960,18 @@ function playBase64Audio_(base64, format, onDone) {
   }
 }
 
+// Stop any currently-playing TTS audio and revoke its blob URL to prevent memory leaks.
+// Call this instead of inline pause+null whenever cancelling _ttsAudio.
+function _stopTTSAudio_() {
+  if (!App._ttsAudio) return;
+  try {
+    App._ttsAudio.pause();
+    App._ttsAudio.currentTime = 0;
+    if (App._ttsAudio._blobUrl) { URL.revokeObjectURL(App._ttsAudio._blobUrl); App._ttsAudio._blobUrl = null; }
+  } catch(e) {}
+  App._ttsAudio = null;
+}
+
 // Unified speak function — uses OpenAI TTS if enabled, else browser TTS
 function pbSpeak_(text, onDone) {
   if (!App.pbTTS && !App.pbHandsFree) { if (onDone) onDone(); return; }
@@ -6966,7 +6979,7 @@ function pbSpeak_(text, onDone) {
   try { window.speechSynthesis.cancel(); } catch(e) {}
   // Cancel any OpenAI TTS audio in progress (increment seq to discard in-flight fetches)
   App._ttsSeq = (App._ttsSeq || 0) + 1;
-  if (App._ttsAudio) { try { App._ttsAudio.pause(); App._ttsAudio.currentTime = 0; } catch(e) {} }
+  _stopTTSAudio_();
   App._pbSpeaking = true;
 
   var done = function() { App._pbSpeaking = false; if (onDone) onDone(); };
@@ -7270,7 +7283,7 @@ function processPBTranscriptText_(text) {
 
   // Interrupt: if patient is speaking, kill the audio immediately
   App._ttsSeq = (App._ttsSeq || 0) + 1; // invalidate in-flight TTS fetch
-  if (App._ttsAudio) { try { App._ttsAudio.pause(); App._ttsAudio.currentTime = 0; } catch(e) {} App._ttsAudio = null; }
+  _stopTTSAudio_();
   try { window.speechSynthesis.cancel(); } catch(e) {}
   App._pbSpeaking = false;
 
@@ -10959,6 +10972,7 @@ function callTTSDirect_(text, voice, speed) {
     if ((App._ttsSeq || 0) !== mySeq) { URL.revokeObjectURL(url); return null; }
     return new Promise(function(resolve) {
       var audio = new Audio(url);
+      audio._blobUrl = url; // stored so _stopTTSAudio_ can revoke on forced cancel
       App._ttsAudio = audio;
       App._pbSpeaking = true;
       audio.onended = function() { App._ttsAudio = null; App._pbSpeaking = false; URL.revokeObjectURL(url); resolve(); };
@@ -11013,7 +11027,7 @@ function sendNACMessageDirect_(userMessage) {
 
   // Cancel any in-progress TTS (and invalidate in-flight fetch via sequence token)
   App._ttsSeq = (App._ttsSeq || 0) + 1;
-  if (App._ttsAudio) { try { App._ttsAudio.pause(); App._ttsAudio.currentTime = 0; } catch(e) {} App._ttsAudio = null; }
+  _stopTTSAudio_();
   try { window.speechSynthesis.cancel(); } catch(e) {}
   App._pbSpeaking = false;
 
@@ -11411,7 +11425,7 @@ function startNextNACStation() {
   App._pbSpeaking = false;
   App._nacSilenceCount = 0;
   App._ttsSeq = (App._ttsSeq || 0) + 1; // invalidate any in-flight TTS fetches
-  if (App._ttsAudio) { try { App._ttsAudio.pause(); App._ttsAudio = null; } catch(e) {} }
+  _stopTTSAudio_();
   if (App.nacIdleTimer) { clearInterval(App.nacIdleTimer); App.nacIdleTimer = null; }
   var station = App.nacStations && App.nacStations[App.nacCurrentStation - 1];
   if (!station) {
@@ -11477,7 +11491,7 @@ function startNextNACStation() {
   if (typeof VitalsEngine !== 'undefined' && VitalsEngine._traumaScore) VitalsEngine._traumaScore = 0;
   // Cancel any in-flight TTS (pause playing audio + invalidate pending fetches)
   App._ttsSeq = (App._ttsSeq || 0) + 1;
-  if (App._ttsAudio) { try { App._ttsAudio.pause(); App._ttsAudio = null; } catch(e) {} }
+  _stopTTSAudio_();
   // Clear idle timer from previous station
   if (App.nacIdleTimer) { clearInterval(App.nacIdleTimer); App.nacIdleTimer = null; }
   // Clear reading interval from previous station
@@ -11888,7 +11902,7 @@ function finishNACStation() {
   if (App.nacIdleTimer) { clearInterval(App.nacIdleTimer); App.nacIdleTimer = null; }
   // Cancel any in-progress TTS so it doesn't play over the results screen
   App._ttsSeq = (App._ttsSeq || 0) + 1; // invalidate in-flight TTS fetches
-  if (App._ttsAudio) { try { App._ttsAudio.pause(); App._ttsAudio.currentTime = 0; App._ttsAudio = null; } catch(e) {} }
+  _stopTTSAudio_();
   try { window.speechSynthesis.cancel(); } catch(e) {}
   // Clear PatientBot state so it doesn't show NAC leftovers
   App.pbCaseId = null;
@@ -11918,6 +11932,8 @@ function finishNACStation() {
 
   var historyForEval = App.pbHistory.slice(-80);
   var diagSubmitted = !!App.pbDiagResolved;
+  var evalStation = App.nacCurrentStation; // capture now — user may click Next Station before eval resolves
+  var evalPregenId = (App.nacStations && App.nacStations[evalStation - 1]) ? App.nacStations[evalStation - 1].pregenId : null;
   evaluateNACStationOSCE_(historyForEval).then(function(evalResult) {
     // If the student never submitted a diagnosis, the diagnosis score must be 0
     if (!diagSubmitted) {
@@ -11926,12 +11942,13 @@ function finishNACStation() {
     }
     App.nacStationEvalLoading = false;
     App.nacStationEval = evalResult;
-    evalResult.station = App.nacCurrentStation;
+    evalResult.station = evalStation; // use captured value — App.nacCurrentStation may have advanced
     evalResult.presentation = score.presentation;
     evalResult.specialty = score.specialty;
-    evalResult.pregenId = (App.nacStations && App.nacStations[App.nacCurrentStation - 1]) ? App.nacStations[App.nacCurrentStation - 1].pregenId : null;
+    evalResult.pregenId = evalPregenId;
     evalResult.timestamp = Date.now();
     App.nacScoreHistory.push(evalResult); _saveNACScoreHistory();
+    if (!App.nacShowingResults) return; // user already advanced — don't overwrite new station UI
     console.log('[NAC] finishNACStation: rendered evaluated scorecard', {
       hasNacSimContent: !!document.getElementById('nac-sim-content'),
       hasPatientBotContent: !!document.getElementById('patientbot-content')
@@ -11941,11 +11958,12 @@ function finishNACStation() {
     App.nacStationEvalLoading = false;
     console.error('NAC eval failed:', err);
     var fallback = { historyTaking: 0, physicalExam: 0, communication: 0, clinicalReasoning: 0, investigations: 0, diagnosis: 0, total: 0, summary: 'Evaluation failed: ' + (err.message || String(err)).substring(0, 100) };
-    fallback.station = App.nacCurrentStation;
+    fallback.station = evalStation; // use captured value
     fallback.presentation = score.presentation;
     fallback.specialty = score.specialty;
     App.nacScoreHistory.push(fallback); _saveNACScoreHistory();
     App.nacStationEval = fallback;
+    if (!App.nacShowingResults) return; // user already advanced — don't overwrite new station UI
     console.log('[NAC] finishNACStation: rendered eval failure fallback', {
       hasNacSimContent: !!document.getElementById('nac-sim-content'),
       hasPatientBotContent: !!document.getElementById('patientbot-content')
