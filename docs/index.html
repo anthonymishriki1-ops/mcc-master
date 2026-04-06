@@ -3554,8 +3554,10 @@ function navigateTo(page) {
       App.pbCaseId = null;
       App.pbCodeBlue = null;
       App._pbSpeaking = false;
+      App._nacReadingDone = true; // stop any reading-period renders
       VitalsEngine.stop();
       if (App.nacIdleTimer) { clearInterval(App.nacIdleTimer); App.nacIdleTimer = null; }
+      if (App.nacReadingInterval) { clearInterval(App.nacReadingInterval); App.nacReadingInterval = null; }
       stopHandsFree_();
       stopNACPttRecording_(false);
       stopNACTimer();
@@ -4603,7 +4605,7 @@ var VitalsEngine = {
 
     // Trauma death threshold: 5 = hemorrhagic shock / fatal injury
     if (this._traumaScore >= 5 && !App.pbCodeBlue) {
-      this._triggerCodeBlue({ drug: 'physical trauma (hemorrhagic shock)', doseMcg: 0, cumDoseMcg: 0, threshold: { category: 'cardiac', label: 'Physical Trauma' }, ratio: 1, pediatric: false });
+      this._triggerCodeBlue({ drug: 'physical trauma (hemorrhagic shock)', doseMcg: 0, cumDoseMcg: 0, threshold: { category: 'cardiac', label: 'Physical Trauma', note: 'Cumulative traumatic injury leading to hemorrhagic shock and circulatory collapse.' }, ratio: 1, pediatric: false });
       return;
     }
 
@@ -4637,15 +4639,17 @@ var VitalsEngine = {
 
     App.pbCodeBlue = { cause: lethalInfo.drug, category: category, reversible: reversible };
 
-    // Build dose description (cumulative if multi-dose)
+    // Build dose description (cumulative if multi-dose); skip entirely for non-drug causes (doseMcg === 0)
     var cumDesc = '';
-    if (lethalInfo.cumDoseMcg && lethalInfo.cumDoseMcg !== lethalInfo.doseMcg) {
-      var cumMg = (lethalInfo.cumDoseMcg / 1000).toFixed(2).replace(/\.?0+$/, '');
-      var thisMg = (lethalInfo.doseMcg / 1000).toFixed(2).replace(/\.?0+$/, '');
-      cumDesc = ' (this dose: ' + thisMg + ' mg; **cumulative total: ' + cumMg + ' mg** — ' + ratio.toFixed(1) + '× lethal threshold)';
-    } else {
-      var singMg = (lethalInfo.doseMcg / 1000).toFixed(2).replace(/\.?0+$/, '');
-      cumDesc = ' (' + singMg + ' mg — ' + ratio.toFixed(1) + '× lethal threshold)';
+    if (lethalInfo.doseMcg > 0) {
+      if (lethalInfo.cumDoseMcg && lethalInfo.cumDoseMcg !== lethalInfo.doseMcg) {
+        var cumMg = (lethalInfo.cumDoseMcg / 1000).toFixed(2).replace(/\.?0+$/, '');
+        var thisMg = (lethalInfo.doseMcg / 1000).toFixed(2).replace(/\.?0+$/, '');
+        cumDesc = ' (this dose: ' + thisMg + ' mg; **cumulative total: ' + cumMg + ' mg** — ' + ratio.toFixed(1) + '× lethal threshold)';
+      } else {
+        var singMg = (lethalInfo.doseMcg / 1000).toFixed(2).replace(/\.?0+$/, '');
+        cumDesc = ' (' + singMg + ' mg — ' + ratio.toFixed(1) + '× lethal threshold)';
+      }
     }
 
     // Determine message tone based on severity
@@ -10794,6 +10798,7 @@ function callAnthropicDirect_(systemPrompt, messages) {
     });
     return r.json();
   }).then(function(data) {
+    if (!data || !data.content || !data.content.length) throw new Error('Empty response from API');
     return data.content[0].text;
   });
 }
@@ -10933,7 +10938,7 @@ function callTTSDirect_(text, voice, speed) {
       App._pbSpeaking = true;
       audio.onended = function() { App._ttsAudio = null; App._pbSpeaking = false; URL.revokeObjectURL(url); resolve(); };
       audio.onerror = function() { App._ttsAudio = null; App._pbSpeaking = false; URL.revokeObjectURL(url); resolve(); };
-      audio.play().catch(function() { App._pbSpeaking = false; resolve(); });
+      audio.play().catch(function() { App._ttsAudio = null; App._pbSpeaking = false; URL.revokeObjectURL(url); resolve(); });
     });
   });
 }
@@ -12025,7 +12030,8 @@ function _renderNACResultsScreen(score, evalResult) {
     }
     // What you did / didn't do
     var labCount = (App.nacLabResults || []).length;
-    var imgCount = (App.nacImagingResults || []).length;
+    // nacImagingResults is always empty; derive from pbHistory results same as the Imaging tab
+    var imgCount = (App.pbHistory || []).filter(function(m) { return m.role === 'results' && m.content && /(x.ray|ct\b|mri|ultrasound|echo|radio|scan|imaging)/i.test(m.content.testName || ''); }).length;
     // nacExamResults is unused; physical exam findings are partial-string messages in pbHistory
     var examCount = (App.pbHistory || []).filter(function(m) { return m.role === 'partial' && typeof m.content === 'string'; }).length;
     var actions = [];
@@ -12088,9 +12094,19 @@ function evaluateNACStationOSCE_(history) {
   var transcript = '';
   for (var i = 0; i < history.length; i++) {
     var m = history[i];
-    if (!m || (m.role !== 'user' && m.role !== 'assistant' && m.role !== 'results' && m.role !== 'partial')) continue;
-    var raw = typeof m.content === 'string' ? m.content : JSON.stringify(m.content || {});
-    transcript += (m.role === 'user' ? 'Student: ' : (m.role === 'assistant' ? 'Patient: ' : '[Clinical Data] ')) + raw.substring(0, 400) + '\n';
+    if (!m) continue;
+    if (m.role === 'user') {
+      transcript += 'Student: ' + String(m.content || '').substring(0, 400) + '\n';
+    } else if (m.role === 'assistant') {
+      transcript += 'Patient: ' + String(m.content || '').substring(0, 400) + '\n';
+    } else if (m.role === 'partial' && typeof m.content === 'string') {
+      // Physical exam findings — valuable for scoring Physical Exam domain
+      transcript += '[Exam Finding] ' + m.content.substring(0, 400) + '\n';
+    } else if (m.role === 'results') {
+      var raw = typeof m.content === 'string' ? m.content : JSON.stringify(m.content || {});
+      transcript += '[Clinical Data] ' + raw.substring(0, 400) + '\n';
+    }
+    // Skip partial with object content (diagnosis feedback) — confuses evaluator
   }
   var prompt = [
     'You are a strict NAC-OSCE examiner.',
@@ -12171,7 +12187,8 @@ function showNACStationScoreModal_(evalResult) {
   }
   // Findings summary
   var labCount = (App.nacLabResults || []).length;
-  var imgCount = (App.nacImagingResults || []).length;
+  // nacImagingResults is always empty; derive from pbHistory results same as the Imaging tab
+  var imgCount = (App.pbHistory || []).filter(function(m) { return m.role === 'results' && m.content && /(x.ray|ct\b|mri|ultrasound|echo|radio|scan|imaging)/i.test(m.content.testName || ''); }).length;
   var examCount = (App.pbHistory || []).filter(function(m) { return m.role === 'partial' && typeof m.content === 'string'; }).length;
   if (labCount + imgCount + examCount > 0) {
     h += '<div style="font-size:12px;color:var(--text-light);margin-bottom:12px">';
