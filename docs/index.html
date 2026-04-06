@@ -4385,10 +4385,10 @@ var VitalsEngine = {
     // ── Sedatives/Hypnotics ─────────────────────────────────────────────────
     propofol:      { lethal: 350000,   unit: 'mcg', category: 'neuro',   label: 'Propofol',
                      note: 'Induction: 1–2.5 mg/kg IV (~70–175 mg in 70 kg). >350 mg bolus without airway = apnea and death. Propofol infusion syndrome at prolonged high doses.' },
-    midazolam:     { lethal: 100000,   unit: 'mcg', category: 'opioid',  label: 'Midazolam',
-                     note: 'Sedation: 1–5 mg IV. Fatal respiratory arrest typically requires >100 mg IV bolus alone; much lower if combined with opioids or CNS depressants.' },
-    lorazepam:     { lethal: 25000,    unit: 'mcg', category: 'opioid',  label: 'Lorazepam',
-                     note: 'Sedation: 1–4 mg IV. Fatal respiratory arrest reported at >25 mg IV bolus. Synergistic lethality with opioids at much lower doses.' },
+    midazolam:     { lethal: 100000,   unit: 'mcg', category: 'benzo',   label: 'Midazolam',
+                     note: 'Sedation: 1–5 mg IV. Fatal respiratory arrest typically requires >100 mg IV bolus alone; much lower if combined with opioids or CNS depressants. Reversal: flumazenil (not naloxone).' },
+    lorazepam:     { lethal: 25000,    unit: 'mcg', category: 'benzo',   label: 'Lorazepam',
+                     note: 'Sedation: 1–4 mg IV. Fatal respiratory arrest reported at >25 mg IV bolus. Synergistic lethality with opioids at much lower doses. Reversal: flumazenil (not naloxone).' },
     // ── Cardiac drugs ────────────────────────────────────────────────────────
     potassium:     { lethal: 40000,    unit: 'mcg', category: 'cardiac', label: 'Potassium (KCl)',
                      note: 'IV push of >40 mEq (undiluted) causes immediate cardiac arrest from hyperkalemia-induced asystole. Must always be diluted in 250–500 mL and rate-limited.' },
@@ -4427,7 +4427,7 @@ var VitalsEngine = {
     { cls: 'potassium',      re: /\bpotassium\b|\bKCl\b|\bpotassium chloride\b/i },
     { cls: 'metformin',      re: /\bmetformin\b|\bglucophage\b/i },
     { cls: 'contrast',       re: /\bcontrast\b/i },
-    { cls: 'succinylcholine', re: /\bsuccinylcholine\b|\bsux\b/i },
+    { cls: 'succinylcholine', re: /\bsuccinylcholine\b|\bsux\b|\banectine\b/i },
     { cls: 'anticoagulant',  re: /\bheparin\b|\bLMWH\b|\benoxaparin\b|\brivaroxaban\b|\bapixaban\b/i },
   ],
 
@@ -13073,7 +13073,7 @@ function renderNACStationUI_(targetEl) {
       html += '</div>';
     }
     // BP history
-    var bpHist = VitalsEngine._bpHistory || [];
+    var bpHist = VitalsEngine._bpReadings || [];
     if (bpHist.length > 1) {
       html += '<div style="margin-top:16px;font-size:13px;font-weight:700;color:var(--text-light);margin-bottom:8px">BP History</div>';
       for (var bi = bpHist.length - 1; bi >= 0; bi--) {
@@ -13446,16 +13446,21 @@ function renderPBChatInner() {
       if (!dr.correct) html += '<div style="margin-top:8px"><strong>Answer:</strong> ' + escapeHtml(dr.answer || '?') + '</div>';
       html += '</div>';
     } else if (m.role === 'partial') {
-      // Partial credit diagnosis feedback — inline in chat
       var pc = m.content;
-      html += '<div style="background:rgba(255,193,7,0.12);border:2px solid #f9a825;color:var(--text);padding:16px 20px;margin:12px 0;border-radius:12px;font-size:14px;line-height:1.6">';
-      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
-      html += '<strong style="color:#e65100;font-size:16px">&#x1F7E1; Not quite</strong>';
-      html += '<span style="background:#e65100;color:white;padding:3px 10px;border-radius:8px;font-size:13px;font-weight:700">' + (pc.score || '?') + '/100</span>';
-      html += '</div>';
-      html += 'Your answer is on the right track but incomplete. Keep investigating — order more tests, ask more questions, then try again.';
-      html += '<div style="margin-top:8px;font-size:13px;color:var(--text-light)">You can try once more with the Diagnose button.</div>';
-      html += '</div>';
+      if (typeof pc === 'string') {
+        // Physical exam finding (NAC direct mode tags PE responses as 'partial' for transcript scoring)
+        html += '<div class="chat-message assistant" style="border-left:3px solid var(--primary);padding-left:14px">' + formatMarkdown(pc) + '</div>';
+      } else {
+        // Partial credit diagnosis feedback — inline in chat
+        html += '<div style="background:rgba(255,193,7,0.12);border:2px solid #f9a825;color:var(--text);padding:16px 20px;margin:12px 0;border-radius:12px;font-size:14px;line-height:1.6">';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+        html += '<strong style="color:#e65100;font-size:16px">&#x1F7E1; Not quite</strong>';
+        html += '<span style="background:#e65100;color:white;padding:3px 10px;border-radius:8px;font-size:13px;font-weight:700">' + (pc.score || '?') + '/100</span>';
+        html += '</div>';
+        html += 'Your answer is on the right track but incomplete. Keep investigating — order more tests, ask more questions, then try again.';
+        html += '<div style="margin-top:8px;font-size:13px;color:var(--text-light)">You can try once more with the Diagnose button.</div>';
+        html += '</div>';
+      }
     } else if (m.role === 'system') {
       // Consequence message from clinical engine — color-coded by severity
       var sev = m.severity || 'safe';
