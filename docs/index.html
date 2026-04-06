@@ -4558,11 +4558,11 @@ var VitalsEngine = {
       potassium:      /\bpotassium\b(?!.*\bchloride\b)/i,
       kcl:            /\bKCl\b|\bpotassium chloride\b/i,
       epinephrine:    /\bepinephrine\b(?!.*\bIM\b)|\bepi\b(?!.*\bIM\b)/i,
-      norepinephrine: /\bnorepinephrine\b|\blevophed\b/i,
+      norepinephrine: /\bnorepinephrine\b|\bnoradrenaline\b|\blevophed\b/i,
       lidocaine:      /\blidocaine\b|\blignocaine\b/i,
       insulin:        /\binsulin\b/i,
       digoxin:        /\bdigoxin\b/i,
-      succinylcholine: /\bsuccinylcholine\b|\bsux\b|\bsucchs\b/i,
+      succinylcholine: /\bsuccinylcholine\b|\bsux\b|\banectine\b/i,
       acetaminophen:  /\bacetaminophen\b|\bparacetamol\b|\btylenol\b/i,
     };
     for (var drug in drugPatterns) {
@@ -9226,11 +9226,14 @@ function sendPBMessage() {
     if (!nacSys) { var stN = App.nacStations && App.nacStations[App.nacCurrentStation - 1]; if (stN && stN.nm) nacSys = buildNACSystemPrompt_(stN); }
     if (nacSys) {
       var nacApiMsgs = App.pbHistory.filter(function(m) { return m.role === 'user' || m.role === 'assistant'; });
+      var nacFbTok = App.nacStationToken || 0; // stale-callback guard
       serverCall('askDrData', nacSys, nacApiMsgs.slice(-20)).then(function(result) {
+        if (nacFbTok !== (App.nacStationToken || 0)) return; // stale — station changed while in-flight
         removeEl('pb-typing'); input.disabled = false;
         App.pbHistory.push({ role: 'assistant', content: result.response || result });
         nacTarget(); input.focus();
       }).catch(function(e) {
+        if (nacFbTok !== (App.nacStationToken || 0)) return;
         removeEl('pb-typing'); App.pbHistory.push({ role: 'system', content: 'Error: ' + (e.message || String(e)) }); nacTarget(); input.disabled = false;
       });
     } else {
