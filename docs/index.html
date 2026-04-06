@@ -4513,8 +4513,21 @@ var VitalsEngine = {
 
   // Parse dose from a string like "fentanyl 10mg IV" → micrograms
   _parseDoseMcg: function(msg, drugRegex) {
-    // Look for number + unit near the drug name
-    var doseMatch = msg.match(/(\d+(?:\.\d+)?)\s*(mcg|ug|µg|mg|g|mEq|meq|units?|u\b)/i);
+    // If a drug regex is provided, restrict dose search to text near the drug name
+    // This prevents multi-drug messages (e.g. "morphine 10 mg and fentanyl 2 mcg") from
+    // attributing morphine's dose to fentanyl's lethal threshold check.
+    var searchText = msg;
+    if (drugRegex) {
+      var drugMatch = msg.match(drugRegex);
+      if (drugMatch) {
+        var idx = msg.indexOf(drugMatch[0]);
+        // Window: 20 chars before drug name + drug name + 60 chars after
+        var start = Math.max(0, idx - 20);
+        var end = Math.min(msg.length, idx + drugMatch[0].length + 60);
+        searchText = msg.substring(start, end);
+      }
+    }
+    var doseMatch = searchText.match(/(\d+(?:\.\d+)?)\s*(mcg|ug|µg|mg|g|mEq|meq|units?|u\b)/i);
     if (!doseMatch) return null;
     var num = parseFloat(doseMatch[1]);
     var unit = doseMatch[2].toLowerCase();
@@ -4553,7 +4566,7 @@ var VitalsEngine = {
     };
     for (var drug in drugPatterns) {
       if (drugPatterns[drug].test(msg)) {
-        var doseMcg = self._parseDoseMcg(msg);
+        var doseMcg = self._parseDoseMcg(msg, drugPatterns[drug]); // pass drug pattern to narrow dose search
         var threshold = self.LETHAL_DOSES[drug];
         // If no numeric dose specified, skip lethal check — cannot kill with an unspecified dose
         if (doseMcg === null) continue;
@@ -4757,7 +4770,7 @@ var VitalsEngine = {
         }
         // After 120s → Code Blue from neglect
         if (neglectMs > 120000) {
-          this._triggerCodeBlue({ drug: 'clinical neglect (untreated critical vitals)', doseMcg: 0, cumDoseMcg: 0, threshold: { category: 'cardiac', label: 'Clinical Neglect' }, ratio: 1, pediatric: false });
+          this._triggerCodeBlue({ drug: 'clinical neglect (untreated critical vitals)', doseMcg: 0, cumDoseMcg: 0, threshold: { category: 'cardiac', label: 'Clinical Neglect', note: 'Patient vitals remained critically low for >120 seconds without intervention, leading to cardiac arrest.' }, ratio: 1, pediatric: false });
         }
       } else {
         this._neglectStart = null;
@@ -11772,6 +11785,8 @@ function enterNACStation_() {
 }
 
 function startNACTimer(seconds) {
+  // Clear any stale timer from a previous station before starting
+  if (App.nacTimerInterval) { clearInterval(App.nacTimerInterval); App.nacTimerInterval = null; }
   App.nacTimerSeconds = seconds;
   App.nacTimerInterval = setInterval(function() {
     App.nacTimerSeconds--;
