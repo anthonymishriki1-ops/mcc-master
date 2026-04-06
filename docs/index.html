@@ -8064,11 +8064,13 @@ function handleVoiceCommand_(text) {
       showToast('Ordering: ' + item);
       // Generate lab results for NAC mode
       if (App.nacActive) {
+        var labCmdToken = App.nacStationToken || 0;
         generateLabResults_('order ' + item).then(function(labPayload) {
+          if (labCmdToken !== (App.nacStationToken || 0)) return; // stale — station changed
           if (!labPayload || !labPayload.testName || !Array.isArray(labPayload.values) || labPayload.values.length === 0) return;
           App.nacLabResults = App.nacLabResults || [];
           App.nacLabResults.push(labPayload);
-          renderPBChat();
+          if (!App.nacShowingResults) renderPBChat();
           showToast('Results ready — check Labs tab');
         }).catch(function(e) { console.warn('Lab generation failed:', e); });
       }
@@ -10803,11 +10805,13 @@ function maybeTriggerNacLabResults_(doctorMessage, patientResponse) {
   // Need BOTH an action verb AND a test name, OR just "order X" / "I'd like X"
   var wantPattern = /\b(i'?d?\s*like|i\s*want|let'?s|can\s*we|i'?m\s*(?:going\s*to|gonna)|please)\b/i;
   if (!(actionVerb.test(doctorMessage) && testName.test(doctorMessage)) && !(wantPattern.test(doctorMessage) && testName.test(doctorMessage))) return;
+  var labGenToken = App.nacStationToken || 0;
   generateLabResults_(doctorMessage).then(function(labPayload) {
+    if (labGenToken !== (App.nacStationToken || 0)) return; // stale — station changed during lab gen
     if (!labPayload || !labPayload.testName || !Array.isArray(labPayload.values) || labPayload.values.length === 0) return;
     App.nacLabResults = App.nacLabResults || [];
     App.nacLabResults.push(labPayload);
-    renderPBChat();
+    if (!App.nacShowingResults) renderPBChat();
     showToast('Lab results ready — check Labs tab');
   }).catch(function(e) { console.warn('Lab generation failed:', e); });
 }
@@ -11728,7 +11732,7 @@ function enterNACStation_() {
         App._nacNudgeInFlight = false;
         App._nacLastActivity = Date.now(); // reset after nudge so next one waits full 28s
         response = response.replace(/```[\s\S]*?```/g, '').replace(/\[SYSTEM[^\]]*\]/gi, '').replace(/\*[^*]+\*/g, '').replace(/\s{2,}/g, ' ').trim();
-        if (response && App.nacActive) {
+        if (response && App.nacActive && !App.nacShowingResults) {
           App.nacDoctorSpoke = true;
           App.pbHistory.push({ role: 'assistant', content: response });
           renderPBChat();
@@ -11741,9 +11745,11 @@ function enterNACStation_() {
       });
     } else {
       // Fallback for non-direct mode — still use AI via server if possible
-      App.nacDoctorSpoke = true;
-      App.pbHistory.push({ role: 'assistant', content: '...doc? You still there?' });
-      renderPBChat();
+      if (!App.nacShowingResults) {
+        App.nacDoctorSpoke = true;
+        App.pbHistory.push({ role: 'assistant', content: '...doc? You still there?' });
+        renderPBChat();
+      }
     }
   }, 30000);
 }
