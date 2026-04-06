@@ -11809,7 +11809,8 @@ function enterNACStation_() {
         App._nacNudgeInFlight = false;
       });
     } else {
-      // Fallback for non-direct mode — still use AI via server if possible
+      // Fallback for non-direct mode — scripted nudge
+      App._nacNudgeInFlight = false; // reset so subsequent nudges can fire
       if (!App.nacShowingResults) {
         App.nacDoctorSpoke = true;
         App.pbHistory.push({ role: 'assistant', content: '...doc? You still there?' });
