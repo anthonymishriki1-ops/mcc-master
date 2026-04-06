@@ -3157,7 +3157,7 @@ var POINTS = {
 // VERSION & CHANGELOG
 // =============================================
 
-var APP_VERSION = '12.3';
+var APP_VERSION = '12.4';
 
 // ── API keys fetched from GAS server on login (Script Properties — not in code) ──
 function seedApiKeys_() {
@@ -11620,6 +11620,8 @@ function enterNACStation_() {
   App._nacLastActivity = Date.now();
   App.nacIdleTimer = setInterval(function() {
     if (!App.nacActive || App.pbDiagResolved) { clearInterval(App.nacIdleTimer); return; }
+    // Don't nudge during diagnosis modal
+    if (App.pbDiagnosing) return;
     // Dead patients don't nudge
     if (App.pbHistory.some(function(m) { return m.role === 'death'; })) { clearInterval(App.nacIdleTimer); return; }
     if (!App.nacDoctorSpoke && App.pbHistory.length === 0) return;
@@ -13002,17 +13004,7 @@ function renderNACStationUI_(targetEl) {
 
   html += '</div>'; // end tab content
 
-  // ── Diagnose overlay ──
-  if (App.pbDiagnosing && !App.pbDiagResolved) {
-    html += '<div style="padding:20px;background:var(--card);border-top:2px solid var(--warning);text-align:center">';
-    html += '<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:12px">What is your diagnosis?</div>';
-    html += '<div style="display:flex;gap:8px;max-width:500px;margin:0 auto">';
-    html += '<input type="text" id="pb-diag-input" class="search-bar" placeholder="e.g., Acute appendicitis" autofocus style="flex:1;font-size:15px;padding:12px" onkeydown="if(event.key===\'Enter\')submitPBDiagnosis()">';
-    html += '<button class="btn btn-warning" onclick="submitPBDiagnosis()" style="font-size:15px;padding:12px 20px">Submit</button>';
-    html += '</div>';
-    html += '<button class="btn btn-sm btn-outline" onclick="closeDiagnoseModal()" style="margin-top:10px">Cancel</button>';
-    html += '</div>';
-  }
+  // Diagnose overlay removed — NAC uses the floating modal at the bottom of this function
 
   // ── Bottom: Voice controls ──
   if (!App.pbDiagResolved) {
