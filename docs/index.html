@@ -4727,7 +4727,11 @@ var VitalsEngine = {
   applyDelta: function(d) {
     if (d.hr) this._base.hr = Math.max(30, Math.min(220, this._base.hr + d.hr));
     if (d.sbp) this._base.sbp = Math.max(40, Math.min(250, this._base.sbp + d.sbp));
-    if (d.dbp) this._base.dbp = Math.max(20, Math.min(160, this._base.dbp + (d.dbp || Math.round(d.sbp * 0.6))));
+    // Use explicit d.dbp if provided; fall back to 60% of sbp delta when only sbp is given
+    // (the old guard `if (d.dbp)` made the right side of `||` unreachable dead code — calls
+    //  like applyDelta({sbp:-25}) left diastolic unchanged, creating impossible pulse pressures)
+    var dbpDelta = d.dbp || (d.sbp ? Math.round(d.sbp * 0.6) : 0);
+    if (dbpDelta) this._base.dbp = Math.max(20, Math.min(160, this._base.dbp + dbpDelta));
     if (d.rr) this._base.rr = Math.max(4, Math.min(60, this._base.rr + d.rr));
     if (d.spo2) this._base.spo2 = Math.max(0, Math.min(100, this._base.spo2 + d.spo2));
     if (d.temp) this._base.temp = Math.max(32, Math.min(43, this._base.temp + d.temp));
@@ -8747,8 +8751,8 @@ function sendDrDataMessage() {
   try { window.speechSynthesis.cancel(); } catch(e) {}
   input.value = ''; App.drDataHistory.push({ role: 'user', content: message }); renderDrDataChat();
   var msgs = document.getElementById('drdata-messages');
-  msgs.innerHTML += '<div class="chat-message assistant typing" id="dd-typing">Dr. Data is thinking...</div>';
-  msgs.scrollTop = msgs.scrollHeight; input.disabled = true;
+  if (msgs) { msgs.innerHTML += '<div class="chat-message assistant typing" id="dd-typing">Dr. Data is thinking...</div>'; msgs.scrollTop = msgs.scrollHeight; }
+  input.disabled = true;
 
   serverCall('askDrData', DR_DATA_PERSONA_LOCK, App.drDataHistory.slice(-18)).then(function(result) {
     removeEl('dd-typing'); App.drDataHistory.push({ role: 'assistant', content: result.response }); renderDrDataChat(); ddSpeakLast_(); input.disabled = false; input.focus();
@@ -9272,8 +9276,8 @@ function sendPBMessage() {
   target();
 
   var msgs = document.getElementById('pb-messages');
-  msgs.innerHTML += '<div class="chat-message assistant typing" id="pb-typing">Patient is responding...</div>';
-  msgs.scrollTop = msgs.scrollHeight; input.disabled = true;
+  if (msgs) { msgs.innerHTML += '<div class="chat-message assistant typing" id="pb-typing">Patient is responding...</div>'; msgs.scrollTop = msgs.scrollHeight; }
+  input.disabled = true;
 
   serverCall('sendPatientBotMessage', App.pbCaseId, message, App.pbHistory.slice(-30)).then(function(result) {
     removeEl('pb-typing');
@@ -9322,8 +9326,7 @@ function sendPBMessage() {
 function triggerPBDebrief() {
   var target = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
   var msgs = document.getElementById('pb-messages');
-  msgs.innerHTML += '<div class="chat-message assistant typing" id="pb-typing">Generating debrief...</div>';
-  msgs.scrollTop = msgs.scrollHeight;
+  if (msgs) { msgs.innerHTML += '<div class="chat-message assistant typing" id="pb-typing">Generating debrief...</div>'; msgs.scrollTop = msgs.scrollHeight; }
   var input = document.getElementById('pb-input');
   if (input) input.disabled = true;
 
