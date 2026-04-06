@@ -9169,10 +9169,47 @@ function sendPBMessage() {
     App._nacSilenceCount = 0;
   }
 
+  // Race condition recovery: API key arrived after enterNACStation_ ran — switch to direct mode now
+  if (App.nacActive && !App._nacDirectMode && localStorage.getItem('mcc_anthropic_key')) {
+    var stR = App.nacStations && App.nacStations[App.nacCurrentStation - 1];
+    if (stR && stR.nm) {
+      App._nacDirectMode = true;
+      if (!App._nacSystemPrompt) App._nacSystemPrompt = buildNACSystemPrompt_(stR);
+    }
+  }
+
   // NAC Direct Mode — skip GAS
   if (App._nacDirectMode && App.nacActive) {
     input.value = '';
     sendNACMessageDirect_(message);
+    return;
+  }
+
+  // NAC active but pbCaseId null — use askDrData with NAC prompt instead of kicking to setup
+  if (App.nacActive && !App.pbCaseId) {
+    input.value = '';
+    App.pbHistory.push({ role: 'user', content: message });
+    var nacTarget = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat;
+    nacTarget();
+    var nacMsgsEl = document.getElementById('pb-messages');
+    if (nacMsgsEl) { nacMsgsEl.innerHTML += '<div class="chat-message assistant typing" id="pb-typing">Patient is responding...</div>'; nacMsgsEl.scrollTop = nacMsgsEl.scrollHeight; }
+    input.disabled = true;
+    var nacSys = App._nacSystemPrompt;
+    if (!nacSys) { var stN = App.nacStations && App.nacStations[App.nacCurrentStation - 1]; if (stN && stN.nm) nacSys = buildNACSystemPrompt_(stN); }
+    if (nacSys) {
+      var nacApiMsgs = App.pbHistory.filter(function(m) { return m.role === 'user' || m.role === 'assistant'; });
+      serverCall('askDrData', nacSys, nacApiMsgs.slice(-20)).then(function(result) {
+        removeEl('pb-typing'); input.disabled = false;
+        App.pbHistory.push({ role: 'assistant', content: result.response || result });
+        nacTarget(); input.focus();
+      }).catch(function(e) {
+        removeEl('pb-typing'); App.pbHistory.push({ role: 'system', content: 'Error: ' + (e.message || String(e)) }); nacTarget(); input.disabled = false;
+      });
+    } else {
+      removeEl('pb-typing');
+      App.pbHistory.push({ role: 'system', content: 'Session not ready — please wait a moment and try again.', severity: 'caution' });
+      nacTarget(); input.disabled = false;
+    }
     return;
   }
 
