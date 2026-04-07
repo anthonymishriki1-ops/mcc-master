@@ -7000,20 +7000,65 @@ function buildNACTTSInstructions_() {
   }
 
   var genderWord = sex === 'F' ? 'female' : sex === 'M' ? 'male' : 'non-binary';
-  var roleDesc = speaker.isProxy
-    ? 'You are voicing ' + name + ', a ' + genderWord + ' ' + speaker.role + ' speaking on behalf of their ' +
-      speaker.patientAge + '-year-old patient (' + speaker.patientName + ').'
-    : 'You are voicing ' + name + ', a ' + age + '-year-old ' + genderWord + ' hospital patient.';
 
-  return roleDesc +
-    (ageDir ? ' ' + ageDir : '') +
-    (presentation ? ' Presenting situation: ' + presentation + '.' : '') +
-    ' Speak with raw, REAL human emotion — whatever the text demands.' +
-    ' When the text has sounds like "ugh", "ahh", "ow", "hmm" — VOICE them fully: grunt, gasp, wince, sigh audibly.' +
-    ' Vary pace naturally: rush when panicked, slow when exhausted, trail off when uncertain.' +
-    (cues.length ? ' ' + cues.join('; ') + '.' : '') +
-    ' Sound like a real person — NOT a narrator. Natural hesitations, incomplete sentences, raw messy emotion.' +
-    ' Never sound smooth or polished. Make every line feel lived-in and human.';
+  // Build using the structured Voice Affect/Tone/Pacing/Emotion/Pauses format —
+  // this schema gets significantly better instruction-following from gpt-4o-mini-tts.
+  var affect, tone, pacing, emotion, pauses, pronunciation;
+
+  if (speaker.isProxy) {
+    affect = 'A worried ' + speaker.role + ' holding it together in a hospital — voice tight with fear, protective, trying to stay calm but clearly frightened.';
+    tone = 'Tense and urgent beneath a thin veneer of composure; voice breaks slightly on emotionally charged words about the child.';
+    pacing = 'Slightly faster than normal from anxiety; slow down only when searching for the right words.';
+    emotion = 'Parental fear and helplessness — the kind that makes people hold their breath between sentences.';
+    pauses = 'Brief pauses when describing what the child looked like or when recalling frightening moments.';
+    pronunciation = 'Clear but strained; drops off on sentence endings when overwhelmed.';
+  } else {
+    // Derive affect from vitals + appearance
+    var distressLevel = (spo2 < 88 || hr > 120 || rr > 28) ? 'severe' : (spo2 < 94 || hr > 105 || rr > 22) ? 'moderate' : 'mild';
+    var hasGrimace = appearance.indexOf('grimac') !== -1 || appearance.indexOf('distress') !== -1;
+    var isBreathless = spo2 < 94 || rr > 22;
+    var isWeakened = spo2 < 90 || hr < 55;
+
+    affect = (ageDir ? ageDir + ' ' : '') +
+      (isBreathless ? 'Short of breath — voice comes in fragments, audible effort to push words out.' :
+       hasGrimace ? 'Pained and strained — voice tight as if it hurts to speak.' :
+       distressLevel === 'severe' ? 'Acutely distressed — voice cracking under physical and emotional load.' :
+       'A real hospital patient — not performing wellness, clearly not okay.');
+
+    tone = isWeakened ? 'Weak and drained; voice has little reserve left.' :
+           hasGrimace ? 'Tight and effortful; trying to cooperate despite pain.' :
+           cues.length ? cues[0] + '.' :
+           'Guarded and anxious beneath whatever surface affect the text carries.';
+
+    pacing = isBreathless ? 'Halting — short bursts with audible breathing gaps between phrases; cannot sustain long sentences.' :
+             distressLevel === 'severe' ? 'Irregular — rushes when scared, stalls when pain spikes.' :
+             age >= 70 ? 'Measured and slower than average; deliberate.' :
+             age <= 17 ? 'Slightly rushed and clipped — impatient or anxious energy.' :
+             'Variable; speeds up on familiar info, slows on painful or uncertain moments.';
+
+    emotion = (isBreathless ? 'Fear of not being able to breathe; panic just beneath the surface.' :
+               hasGrimace ? 'Acute pain mixed with fear of what it means.' :
+               'Anxiety, vulnerability, and the particular discomfort of being sick and exposed.') +
+              (cues.length > 1 ? ' ' + cues.slice(1).join('; ') + '.' : '');
+
+    pauses = isBreathless ? 'Frequent — after every clause, as if catching breath; some sentences trail off unfinished.' :
+             hasGrimace ? 'Mid-sentence pauses when pain spikes; brief flinches that interrupt the flow.' :
+             'Natural hesitations on uncertain dates, symptoms, or emotionally charged moments.';
+
+    pronunciation = isWeakened ? 'Slightly slurred or trailing; costs effort.' :
+                    isBreathless ? 'Words cut short at ends; incomplete consonants under breath pressure.' :
+                    'Natural and slightly imperfect — not a news anchor.';
+  }
+
+  return 'Character: ' + name + ', ' + (speaker.isProxy ? genderWord + ' ' + speaker.role + ' of a ' + speaker.patientAge + '-year-old patient' : age + '-year-old ' + genderWord + ' hospital patient') + '.' +
+    (presentation ? ' Situation: ' + presentation + '.' : '') + '\n' +
+    'Voice Affect: ' + affect + '\n' +
+    'Tone: ' + tone + '\n' +
+    'Pacing: ' + pacing + '\n' +
+    'Emotion: ' + emotion + '\n' +
+    'Pauses: ' + pauses + '\n' +
+    'Pronunciation: ' + pronunciation + '\n' +
+    'Style: Sound like a real person — NOT a narrator or announcer. Imperfect, lived-in, human. When text has sounds like "ugh", "ahh", "ow" — voice them as real sounds, not read them as words.';
 }
 
 // Preprocess AI-generated patient text to be more realistic for neural TTS.
@@ -7039,10 +7084,10 @@ function preprocessNACTTS_(text) {
   t = t.replace(/\b(ah+|aah+)\b/gi, function(m) { return m.length < 4 ? m + 'h' : m; }); // stretch short "ah"
   t = t.replace(/\bow+\b/gi, function(m) { return m.length < 3 ? 'oww' : m; }); // stretch "ow"
 
-  // Trailing "..." at end of sentence → keep (great for weakness/trailing off)
-  // But mid-sentence "..." can be tightened to "," + pause word for more natural breath
-  // Only touch mid-sentence ones (not at end)
-  t = t.replace(/\.{3}(?!\s*$)(?!\s*[A-Z])/g, ',');
+  // Trailing "..." at end of sentence → keep (weakness/trailing off, great for TTS)
+  // Mid-sentence "..." followed by lowercase → semicolon (medium pause, no semantic weight)
+  // Research finding: semicolon hits the prosodic sweet spot between comma and period
+  t = t.replace(/\.{3}(?!\s*$)(?!\s*[A-Z])/g, ';');
 
   // "I don't—" / "It's—" em dash stops — these are already great, keep them
   // Ensure em dash has no space before it for tighter cutoff
