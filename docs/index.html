@@ -11270,15 +11270,21 @@ function sendNACMessageDirect_(userMessage) {
 }
 
 // Shared response handler: add to history, render, speak, restart mic
+// IMPORTANT: chat and TTS get different versions of the text:
+//   chat    → parenthetical action sounds stripped (clean readable text)
+//   TTS     → parenthetical sounds KEPT + preprocessor enhancements (for audio realism)
+var _nacActionSoundRe = /\((?:breathes?|gasps?|groans?|winces?|coughs?|sighs?|inhales?|exhales?|pauses?|grunts?|whimpers?|sobs?|sniffles?|moans?|pants?|exhaust\w*)[^)]*\)/gi;
 function nacDirectRespond_(text, role, stationTok) {
-  App.pbHistory.push({ role: role || 'assistant', content: text });
+  // Chat gets clean text — no parenthetical action sounds, no asterisk actions
+  var displayText = text.replace(/\*[^*]+\*/g, '').replace(_nacActionSoundRe, '').replace(/\s{2,}/g, ' ').trim();
+  App.pbHistory.push({ role: role || 'assistant', content: displayText });
   renderPBChat();
   var voice = getOpenAIVoice_();
   var speed = getOpenAISpeed_();
-  // Strip asterisk actions from TTS — keep in chat text, then preprocess for realism
+  // TTS keeps parenthetical sounds and gets preprocessor enhancements on top
   var ttsText = preprocessNACTTS_(text.replace(/\*[^*]+\*/g, '').replace(/\s{2,}/g, ' ').trim());
   var instructions = buildNACTTSInstructions_();
-  callTTSDirect_(ttsText || text, voice, speed, instructions).then(function() {
+  callTTSDirect_(ttsText || displayText, voice, speed, instructions).then(function() {
     restartMicAfterResponse_(stationTok);
   }).catch(function() {
     restartMicAfterResponse_(stationTok);
