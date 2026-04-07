@@ -6923,6 +6923,109 @@ function getOpenAISpeed_() {
   return 1.0;
 }
 
+// Build rich, patient-specific TTS instructions for NAC mode
+function buildNACTTSInstructions_() {
+  var p = App.pbPatientInfo || {};
+  var age = parseInt(p.age) || 35;
+  var sex = (p.sex || 'M').toUpperCase();
+  var name = p.name || 'the patient';
+  var presentation = App.pbPresentation || '';
+  var appearance = (p.appearance || '').toLowerCase();
+
+  // Vitals-based vocal cues
+  var vd = (VitalsEngine && VitalsEngine._display) || App.pbVitals || {};
+  var hr = parseInt(vd.hr || p.hr) || 80;
+  var spo2 = parseInt(vd.spo2 || p.spo2) || 98;
+  var rr = parseInt(vd.rr || p.rr) || 16;
+  var cues = [];
+  if (hr > 115) cues.push('speak fast — heart pounding, adrenaline, panic underneath the words');
+  if (hr < 52) cues.push('speak slowly and sluggishly — weak, possible bradycardia');
+  if (spo2 < 92) cues.push('sound SHORT OF BREATH — short choppy sentences, audible gasps between phrases');
+  if (rr > 24) cues.push('breathe audibly, almost panting between lines');
+
+  // Appearance-based cues
+  if (appearance.indexOf('diaphoretic') !== -1 || appearance.indexOf('sweating') !== -1) cues.push('voice strained and clammy — sounds like physical effort to speak');
+  if (appearance.indexOf('pale') !== -1 || appearance.indexOf('pallor') !== -1) cues.push('voice drained and wan');
+  if (appearance.indexOf('grimac') !== -1 || appearance.indexOf('distress') !== -1) cues.push('wince and hiss audibly when describing pain — break off mid-sentence if it hurts');
+  if (appearance.indexOf('disorient') !== -1 || appearance.indexOf('confus') !== -1) cues.push('sound confused — trail off, repeat fragments, lose your train of thought');
+  if (appearance.indexOf('agitat') !== -1 || appearance.indexOf('restless') !== -1) cues.push('voice edgy and restless — barely sitting still, interrupting your own sentences');
+
+  // Age-specific direction
+  var ageDir = '';
+  if (age <= 10) ageDir = 'You are a young child — sound scared and small, voice higher-pitched, close to crying.';
+  else if (age <= 17) ageDir = 'You are a teenager — guarded, a little sulky, not fully cooperating, occasional eye-roll energy in your voice.';
+  else if (age >= 80) ageDir = 'You are elderly and frail — voice slightly wavering, may pause to catch breath, speak with effort.';
+  else if (age >= 70) ageDir = 'You are an older adult — measured pace, voice has gravitas and slight roughness from years of use.';
+
+  var genderWord = sex === 'F' ? 'female' : sex === 'M' ? 'male' : 'non-binary';
+
+  return 'You are voicing ' + name + ', a ' + age + '-year-old ' + genderWord + ' hospital patient.' +
+    (ageDir ? ' ' + ageDir : '') +
+    (presentation ? ' They are presenting with: ' + presentation + '.' : '') +
+    ' Speak with raw, REAL human emotion — pain, fear, confusion, frustration, or relief — whatever the text demands.' +
+    ' When the text has sounds like "ugh", "ahh", "ow", "hmm" — VOICE them fully: grunt, gasp, wince, sigh audibly.' +
+    ' Vary pace naturally: rush when panicked, slow when exhausted, trail off when uncertain, falter when in pain.' +
+    (cues.length ? ' Additional cues: ' + cues.join('; ') + '.' : '') +
+    ' Sound like a real person in a hospital — NOT a narrator. Natural hesitations, incomplete sentences, raw messy emotion.' +
+    ' Never sound smooth or polished. Make every line feel lived-in and human.';
+}
+
+// Preprocess AI-generated patient text to be more realistic for neural TTS.
+// Neural TTS (gpt-4o-mini-tts) responds to:
+//   — em dashes  → sharp abrupt stop (interruption, sudden pain)
+//   ... ellipsis → trailing off, uncertainty, weakness
+//   Uh, um, er   → vocalized as real hesitation sounds
+//   (gasps) etc  → parenthetical sounds get vocalized as actual audio events
+//   Capitalized  → stressed harder by the model
+//   h-hyphen     → stutter effect on syllables
+//   Elongation   → "nooo", "pleease" stretches the vowel sound
+function preprocessNACTTS_(text) {
+  if (!text) return text;
+  var t = text;
+
+  // "I... I" / "i... i" stutter patterns → em-dash stutter (sounds sharper than ellipsis)
+  t = t.replace(/\bI\.\.\.\s*I\b/gi, 'I— I');
+  t = t.replace(/\bI-I\b/gi, 'I— I');
+
+  // Plain pain/distress interjections → phonetic versions that vocalize better
+  // "ugh" → "Ugh—"  "ahh" → "Ahhh"  "ow" → "Oww"
+  t = t.replace(/\bugh\b/gi, function(m) { return m[0].toUpperCase() === m[0] ? 'Ugh—' : 'ugh—'; });
+  t = t.replace(/\b(ah+|aah+)\b/gi, function(m) { return m.length < 4 ? m + 'h' : m; }); // stretch short "ah"
+  t = t.replace(/\bow+\b/gi, function(m) { return m.length < 3 ? 'oww' : m; }); // stretch "ow"
+
+  // Trailing "..." at end of sentence → keep (great for weakness/trailing off)
+  // But mid-sentence "..." can be tightened to "," + pause word for more natural breath
+  // Only touch mid-sentence ones (not at end)
+  t = t.replace(/\.{3}(?!\s*$)(?!\s*[A-Z])/g, ',');
+
+  // "I don't—" / "It's—" em dash stops — these are already great, keep them
+  // Ensure em dash has no space before it for tighter cutoff
+  t = t.replace(/\s+—/g, '—');
+
+  // Add a breath marker before very long responses (>120 chars) after a period
+  // "(inhales)" gets vocalized as a real breath sound by gpt-4o-mini-tts
+  if (t.length > 120) {
+    t = t.replace(/\.\s+([A-Z])/,  function(match, cap, offset) {
+      // Only inject once, roughly in the first third
+      if (offset < t.length * 0.4) return '. (breathes) ' + cap;
+      return match;
+    });
+  }
+
+  // Stutter pattern: repeated first syllable "I c-can't" → keep, already good
+  // "I can't" → "I c-can't" if describing extreme distress (only if vitals bad)
+  var vd = (VitalsEngine && VitalsEngine._display) || App.pbVitals || {};
+  var spo2 = parseInt((vd || {}).spo2 || (App.pbPatientInfo || {}).spo2) || 98;
+  if (spo2 < 90) {
+    // Very short of breath — break up long words with a micro-pause
+    t = t.replace(/\b(can't|cannot|breathe|hurts)\b/gi, function(m) {
+      return m[0] + '-' + m.slice(1);
+    });
+  }
+
+  return t.trim();
+}
+
 // OpenAI TTS via GAS backend (API key in Script Properties)
 function speakOpenAI_(text, onDone) {
   if (!text) { if (onDone) onDone(); return; }
@@ -10952,7 +11055,7 @@ function generateLabResults_(orderText) {
 }
 
 // ── Direct OpenAI TTS call (browser → OpenAI, no GAS middleman) ──
-function callTTSDirect_(text, voice, speed) {
+function callTTSDirect_(text, voice, speed, instructions) {
   var key = localStorage.getItem('mcc_openai_key');
   if (!key) return Promise.reject(new Error('No OpenAI API key'));
   var clean = text.replace(/\*[^*]+\*/g, '').replace(/\[.*?\]/g, '').replace(/[*_~`#]/g, '').trim();
@@ -10975,7 +11078,7 @@ function callTTSDirect_(text, voice, speed) {
       speed: speed || 1.0,
       response_format: 'mp3'
     }, (localStorage.getItem('mcc_tts_model') || 'gpt-4o-mini-tts') === 'gpt-4o-mini-tts' ? {
-      instructions: 'You are voicing a hospital patient. Speak with REAL emotion — pain, fear, frustration, confusion. ' +
+      instructions: instructions || 'You are voicing a hospital patient. Speak with REAL emotion — pain, fear, frustration, confusion. ' +
         'When the text has pain sounds like "ugh" or "ahh", VOICE them naturally — grunt, gasp, wince audibly. ' +
         'Vary your pace: rush when panicked, slow when exhausted, pause when thinking. ' +
         'Sound like a real person in a hospital, not a narrator reading text.'
@@ -11083,7 +11186,7 @@ function sendNACMessageDirect_(userMessage) {
     }
     renderPBChat();
     var voice = getOpenAIVoice_();
-    callTTSDirect_(deathMsg, voice, getOpenAISpeed_()).catch(function(){});
+    callTTSDirect_(deathMsg, voice, getOpenAISpeed_(), buildNACTTSInstructions_()).catch(function(){});
     return;
   }
 
@@ -11126,9 +11229,10 @@ function nacDirectRespond_(text, role, stationTok) {
   renderPBChat();
   var voice = getOpenAIVoice_();
   var speed = getOpenAISpeed_();
-  // Strip asterisk actions from TTS (they cause silence) — keep in chat text
-  var ttsText = text.replace(/\*[^*]+\*/g, '').replace(/\s{2,}/g, ' ').trim();
-  callTTSDirect_(ttsText || text, voice, speed).then(function() {
+  // Strip asterisk actions from TTS — keep in chat text, then preprocess for realism
+  var ttsText = preprocessNACTTS_(text.replace(/\*[^*]+\*/g, '').replace(/\s{2,}/g, ' ').trim());
+  var instructions = buildNACTTSInstructions_();
+  callTTSDirect_(ttsText || text, voice, speed, instructions).then(function() {
     restartMicAfterResponse_(stationTok);
   }).catch(function() {
     restartMicAfterResponse_(stationTok);
@@ -11820,7 +11924,7 @@ function enterNACStation_() {
           App.pbHistory.push({ role: 'assistant', content: response });
           renderPBChat();
           var voice = localStorage.getItem('mcc_tts_voice_override') || getOpenAIVoice_();
-          callTTSDirect_(response, voice, getOpenAISpeed_()).catch(function() {});
+          callTTSDirect_(preprocessNACTTS_(response), voice, getOpenAISpeed_(), buildNACTTSInstructions_()).catch(function() {});
         }
       }).catch(function() {
         if (!App.nacActive || nudgeStationToken !== (App.nacStationToken || 0)) return;
@@ -12532,8 +12636,8 @@ function renderPBChat() {
   if (App.pbDiagnosing) { var dinput = document.getElementById('pb-diag-input'); if (dinput) dinput.focus(); }
   // Start live ECG animation
   startPBMonitorAnimation();
-  // Speak last patient message if TTS is on
-  if (!App._pbSpeaking) pbSpeakLastMessage_();
+  // Speak last patient message — NAC mode only (regular PatientBot is text-only)
+  if (App.nacActive && !App._pbSpeaking) pbSpeakLastMessage_();
 }
 
 // ── Mic Input Visualizer ──
