@@ -7386,7 +7386,8 @@ function processPBTranscriptText_(text) {
   }).catch(function(e) {
     if (App.nacActive && stationTokenAtSend !== (App.nacStationToken || 0)) return;
     removeEl('pb-typing');
-    App.pbHistory.push({ role: 'assistant', content: 'Error: ' + (e.message || String(e)) });
+    console.warn('[PB] Message send failed:', e);
+    App.pbHistory.push({ role: 'system', content: 'Connection error — please check your internet and try again.', severity: 'caution' });
     target();
     resumeHandsFreeListening_();
   });
@@ -9318,7 +9319,9 @@ function sendPBMessage() {
     if (App.nacActive) maybeTriggerNacLabResults_(message, result.response);
     target(); input.disabled = false; input.focus();
   }).catch(function(e) {
-    removeEl('pb-typing'); App.pbHistory.push({ role: 'assistant', content: 'Error: ' + (e.message || String(e)) });
+    removeEl('pb-typing');
+    console.warn('[PB] Action send failed:', e);
+    App.pbHistory.push({ role: 'system', content: 'Connection error — please check your internet and try again.', severity: 'caution' });
     target(); input.disabled = false;
   });
 }
@@ -10332,7 +10335,9 @@ function submitPBDiagnosis() {
     if (result.expired) { App.pbCaseId = null; if (App.nacActive) { finishNACStation(); return; } showPatientBotSetup(); return; }
     _handleDiagnosisResult(result, App.pbDiagnosis);
   }).catch(function(e) {
-    App.pbDiagnosing = false; App.pbHistory.push({ role: 'assistant', content: 'Error: ' + (e.message || String(e)) });
+    App.pbDiagnosing = false;
+    console.warn('[PB] Diagnosis submit failed:', e);
+    App.pbHistory.push({ role: 'system', content: 'Connection error — please check your internet and try again.', severity: 'caution' });
     var fn = App.dailyPhase === 'pb' ? renderDailyPBChat : renderPBChat; fn();
   });
 }
@@ -11108,7 +11113,8 @@ function sendNACMessageDirect_(userMessage) {
     maybeTriggerNacLabResults_(userMessage, response);
   }).catch(function(e) {
     if (!App.nacActive || stationTokenAtSend !== (App.nacStationToken || 0)) return;
-    App.pbHistory.push({ role: 'system', content: 'Error: ' + (e.message || String(e)) });
+    console.warn('[NAC] Direct message failed:', e);
+    App.pbHistory.push({ role: 'system', content: 'Connection error — please check your internet and try again.', severity: 'caution' });
     renderPBChat();
     restartMicAfterResponse_();
   });
