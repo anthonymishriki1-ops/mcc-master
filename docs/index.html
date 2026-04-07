@@ -6891,12 +6891,44 @@ var pbMicRecognition = null;
 var handsFreeRecognition = null;
 
 // ---- OpenAI TTS Engine ----
-// Maps patient demographics to OpenAI voice IDs
+
+// Returns the demographics of who is ACTUALLY SPEAKING — the patient, OR their parent/guardian
+// when the station name contains "(mother: X)" / "(father: X)" etc.
+// This fixes the bug where a dad speaking for his daughter inherited her voice.
+function getNACSpeaker_() {
+  var p = App.pbPatientInfo || {};
+  var nm = p.name || '';
+  var parentMatch = nm.match(/\((mother|father|parent|guardian|caregiver):\s*([^)]+)\)/i);
+  if (parentMatch) {
+    var role = parentMatch[1].toLowerCase();
+    var parentName = parentMatch[2].trim();
+    var patientAge = parseInt(p.age) || 5;
+    // Estimate parent age: minimum plausible given patient's age
+    var estimatedAge = Math.max(22, Math.min(55, patientAge + 25));
+    return {
+      name: parentName,
+      age: estimatedAge,
+      sex: role === 'mother' ? 'F' : role === 'father' ? 'M' : 'U',
+      role: role,
+      isProxy: true,
+      patientName: nm.replace(/\s*\([^)]+\)/, '').trim(),
+      patientAge: patientAge,
+      patientSex: (p.sex || 'M').toUpperCase()
+    };
+  }
+  return {
+    name: nm,
+    age: parseInt(p.age) || 35,
+    sex: (p.sex || 'M').toUpperCase(),
+    isProxy: false
+  };
+}
+
+// Maps SPEAKER demographics to OpenAI voice IDs
 function getOpenAIVoice_() {
-  var p = App.pbPatientInfo;
-  if (!p) return 'alloy';
-  var sex = (p.sex || '').toUpperCase();
-  var age = parseInt(p.age) || 35;
+  var s = getNACSpeaker_();
+  var sex = s.sex;
+  var age = s.age;
 
   if (sex === 'F') {
     if (age <= 18) return 'shimmer';     // soft, young female
@@ -6912,10 +6944,9 @@ function getOpenAIVoice_() {
 }
 
 function getOpenAISpeed_() {
-  var p = App.pbPatientInfo;
-  if (!p) return 1.0;
-  var age = parseInt(p.age) || 35;
-  // Elderly speak slower, children faster
+  var s = getNACSpeaker_();
+  var age = s.age;
+  // Elderly speak slower, children faster (applies to actual speaker's age)
   if (age <= 12) return 1.15;
   if (age <= 18) return 1.08;
   if (age >= 75) return 0.82;
@@ -6923,50 +6954,65 @@ function getOpenAISpeed_() {
   return 1.0;
 }
 
-// Build rich, patient-specific TTS instructions for NAC mode
+// Build rich, patient-specific TTS instructions for NAC mode.
+// Uses getNACSpeaker_() so parent/guardian stations use the PARENT's voice profile,
+// not the patient's (e.g. dad bringing in daughter → dad's voice, not daughter's).
 function buildNACTTSInstructions_() {
   var p = App.pbPatientInfo || {};
-  var age = parseInt(p.age) || 35;
-  var sex = (p.sex || 'M').toUpperCase();
-  var name = p.name || 'the patient';
+  var speaker = getNACSpeaker_();
+  var age = speaker.age;
+  var sex = speaker.sex;
+  var name = speaker.name || 'the patient';
   var presentation = App.pbPresentation || '';
   var appearance = (p.appearance || '').toLowerCase();
 
-  // Vitals-based vocal cues
+  // Vitals cues only apply to the actual patient's body state
   var vd = (VitalsEngine && VitalsEngine._display) || App.pbVitals || {};
   var hr = parseInt(vd.hr || p.hr) || 80;
   var spo2 = parseInt(vd.spo2 || p.spo2) || 98;
   var rr = parseInt(vd.rr || p.rr) || 16;
   var cues = [];
-  if (hr > 115) cues.push('speak fast — heart pounding, adrenaline, panic underneath the words');
-  if (hr < 52) cues.push('speak slowly and sluggishly — weak, possible bradycardia');
-  if (spo2 < 92) cues.push('sound SHORT OF BREATH — short choppy sentences, audible gasps between phrases');
-  if (rr > 24) cues.push('breathe audibly, almost panting between lines');
 
-  // Appearance-based cues
-  if (appearance.indexOf('diaphoretic') !== -1 || appearance.indexOf('sweating') !== -1) cues.push('voice strained and clammy — sounds like physical effort to speak');
-  if (appearance.indexOf('pale') !== -1 || appearance.indexOf('pallor') !== -1) cues.push('voice drained and wan');
-  if (appearance.indexOf('grimac') !== -1 || appearance.indexOf('distress') !== -1) cues.push('wince and hiss audibly when describing pain — break off mid-sentence if it hurts');
-  if (appearance.indexOf('disorient') !== -1 || appearance.indexOf('confus') !== -1) cues.push('sound confused — trail off, repeat fragments, lose your train of thought');
-  if (appearance.indexOf('agitat') !== -1 || appearance.indexOf('restless') !== -1) cues.push('voice edgy and restless — barely sitting still, interrupting your own sentences');
+  if (speaker.isProxy) {
+    // Parent/guardian: their distress is EMOTIONAL not physical
+    cues.push('you are a worried parent — voice tight with fear and helplessness, holding it together but barely');
+    if (hr > 115 || spo2 < 92) cues.push('your child looks very sick — voice breaks slightly when describing what you saw');
+  } else {
+    // The patient themselves — vitals reflect their physical state
+    if (hr > 115) cues.push('speak fast — heart pounding, adrenaline, panic underneath the words');
+    if (hr < 52) cues.push('speak slowly and sluggishly — weak, possible bradycardia');
+    if (spo2 < 92) cues.push('sound SHORT OF BREATH — short choppy sentences, audible gasps between phrases');
+    if (rr > 24) cues.push('breathe audibly, almost panting between lines');
+    if (appearance.indexOf('diaphoretic') !== -1 || appearance.indexOf('sweating') !== -1) cues.push('voice strained — sounds like physical effort to speak');
+    if (appearance.indexOf('pale') !== -1 || appearance.indexOf('pallor') !== -1) cues.push('voice drained and wan');
+    if (appearance.indexOf('grimac') !== -1 || appearance.indexOf('distress') !== -1) cues.push('wince and hiss audibly when describing pain — break off mid-sentence if it hurts');
+    if (appearance.indexOf('disorient') !== -1 || appearance.indexOf('confus') !== -1) cues.push('sound confused — trail off, repeat fragments, lose your train of thought');
+    if (appearance.indexOf('agitat') !== -1 || appearance.indexOf('restless') !== -1) cues.push('voice edgy and restless — barely sitting still, interrupting your own sentences');
+  }
 
-  // Age-specific direction
+  // Age-specific direction (based on SPEAKER's age, not patient's)
   var ageDir = '';
-  if (age <= 10) ageDir = 'You are a young child — sound scared and small, voice higher-pitched, close to crying.';
-  else if (age <= 17) ageDir = 'You are a teenager — guarded, a little sulky, not fully cooperating, occasional eye-roll energy in your voice.';
-  else if (age >= 80) ageDir = 'You are elderly and frail — voice slightly wavering, may pause to catch breath, speak with effort.';
-  else if (age >= 70) ageDir = 'You are an older adult — measured pace, voice has gravitas and slight roughness from years of use.';
+  if (!speaker.isProxy) {
+    if (age <= 10) ageDir = 'You are a young child — sound scared and small, voice higher-pitched, close to crying.';
+    else if (age <= 17) ageDir = 'You are a teenager — guarded, a little sulky, not fully cooperating, occasional eye-roll energy.';
+    else if (age >= 80) ageDir = 'You are elderly and frail — voice slightly wavering, may pause to catch breath, speak with effort.';
+    else if (age >= 70) ageDir = 'You are an older adult — measured pace, voice has gravitas and slight roughness.';
+  }
 
   var genderWord = sex === 'F' ? 'female' : sex === 'M' ? 'male' : 'non-binary';
+  var roleDesc = speaker.isProxy
+    ? 'You are voicing ' + name + ', a ' + genderWord + ' ' + speaker.role + ' speaking on behalf of their ' +
+      speaker.patientAge + '-year-old patient (' + speaker.patientName + ').'
+    : 'You are voicing ' + name + ', a ' + age + '-year-old ' + genderWord + ' hospital patient.';
 
-  return 'You are voicing ' + name + ', a ' + age + '-year-old ' + genderWord + ' hospital patient.' +
+  return roleDesc +
     (ageDir ? ' ' + ageDir : '') +
-    (presentation ? ' They are presenting with: ' + presentation + '.' : '') +
-    ' Speak with raw, REAL human emotion — pain, fear, confusion, frustration, or relief — whatever the text demands.' +
+    (presentation ? ' Presenting situation: ' + presentation + '.' : '') +
+    ' Speak with raw, REAL human emotion — whatever the text demands.' +
     ' When the text has sounds like "ugh", "ahh", "ow", "hmm" — VOICE them fully: grunt, gasp, wince, sigh audibly.' +
-    ' Vary pace naturally: rush when panicked, slow when exhausted, trail off when uncertain, falter when in pain.' +
-    (cues.length ? ' Additional cues: ' + cues.join('; ') + '.' : '') +
-    ' Sound like a real person in a hospital — NOT a narrator. Natural hesitations, incomplete sentences, raw messy emotion.' +
+    ' Vary pace naturally: rush when panicked, slow when exhausted, trail off when uncertain.' +
+    (cues.length ? ' ' + cues.join('; ') + '.' : '') +
+    ' Sound like a real person — NOT a narrator. Natural hesitations, incomplete sentences, raw messy emotion.' +
     ' Never sound smooth or polished. Make every line feel lived-in and human.';
 }
 
