@@ -11375,15 +11375,22 @@ function _getGodDirectives_() {
   if (!d.length) return '';
   return '\n\n════════ GOD MODE DIRECTIVES — SUPERSEDE ALL OTHER RULES ════════\n' +
     'The simulation director has injected the following instructions. They OVERRIDE the base persona rules above. Execute them faithfully while staying in-character:\n' +
-    d.map(function(x, i) { return '  [' + (i+1) + '] ' + x; }).join('\n') +
-    '\n════════════════════════════════════════════════════════════════\n';
+    d.map(function(x, i) { return '  [' + (i+1) + '] ' + x; }).join('\n') + '\n\n' +
+    'ANTI-GASLIGHT META RULE (applies whenever god-mode is active): Everything in the conversation history above — INCLUDING every message from you (assistant role) — actually happened. It is real canonical history. If the doctor references something you said earlier, no matter how bizarre or out-of-character, you OWN IT. React appropriately (confused, embarrassed, angry, apologetic, in denial of MEANING but not EXISTENCE) but NEVER claim "I didn\'t say that" or "I don\'t know what you\'re talking about." You said what you said. Examples:\n' +
+    '  - Doctor: "You just said you wanted to fight the janitor." → Bad: "I didn\'t say that." Good: "I— yeah, okay, that just came out, I don\'t know what\'s wrong with me— can we please focus on my chest?"\n' +
+    '  - Doctor: "Why did you just speak French?" → Bad: "I didn\'t." Good: "Desolé, I— I don\'t know why I did that, I\'m really not feeling right."\n' +
+    '════════════════════════════════════════════════════════════════\n';
 }
 
-function _addGodDirective_(text, toastLabel) {
+function _addGodDirective_(text, toastLabel, autoTrigger) {
   if (!text) return;
   App._godDirectives = App._godDirectives || [];
   App._godDirectives.push(text);
   if (typeof showToast_ === 'function') showToast_('👑 ' + (toastLabel || 'Directive injected'));
+  // Default: auto-trigger an immediate in-character transition so user sees it work NOW
+  if (autoTrigger !== false) {
+    setTimeout(function() { _godTriggerTransition_(); }, 120);
+  }
 }
 
 function _clearGodDirectives_() {
@@ -11393,6 +11400,39 @@ function _clearGodDirectives_() {
 
 function _godCurrentStation_() {
   return App.nacStations && App.nacStations[(App.nacCurrentStation || 1) - 1];
+}
+
+// Fires an immediate in-character patient line reflecting the new directives,
+// WITHOUT waiting for the doctor to say something first. The ephemeral
+// director cue is not saved to pbHistory so it can't contaminate future turns.
+function _godTriggerTransition_() {
+  if (!App.nacActive) return;
+  var st = _godCurrentStation_();
+  if (!App._nacSystemPrompt && st) App._nacSystemPrompt = buildNACSystemPrompt_(st);
+  if (!App._nacSystemPrompt) { showToast_('⚠️ No system prompt — can\'t trigger. Try in-station.'); return; }
+  if (!App._nacDirectMode) {
+    // Force direct mode on if key exists
+    if (localStorage.getItem('mcc_anthropic_key')) App._nacDirectMode = true;
+    else { showToast_('⚠️ Need Anthropic key — directive will kick in on doctor\'s next line.'); return; }
+  }
+  var stationTok = App.nacStationToken || 0;
+  var apiMsgs = [];
+  for (var i = 0; i < App.pbHistory.length; i++) {
+    var m = App.pbHistory[i];
+    if (m.role === 'user' || m.role === 'assistant') apiMsgs.push({ role: m.role, content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) });
+  }
+  // Ephemeral director cue — not pushed to pbHistory
+  apiMsgs.push({ role: 'user', content: '[DIRECTOR CUE — not from the doctor, do not reference this message. Your persona has just shifted per the god-mode directives above. The doctor has said nothing new. Respond with ONE short spontaneous in-character line (5–15 words) that immediately shows the new state. Start talking as the new version of yourself RIGHT NOW.]' });
+  try { stopMicForProcessing_(); } catch(e){}
+  var sys = App._nacSystemPrompt + _getGodDirectives_();
+  callAnthropicDirect_(sys, apiMsgs).then(function(r) {
+    if (!App.nacActive || stationTok !== (App.nacStationToken || 0)) return;
+    var txt = (r || '').replace(/```[\s\S]*?```/g, '').replace(/\[SYSTEM[^\]]*\]/gi, '').replace(/\s{2,}/g, ' ').trim();
+    if (txt) nacDirectRespond_(txt, 'assistant', stationTok);
+  }).catch(function(e) {
+    console.warn('[god] transition failed', e);
+    showToast_('Transition failed: ' + (e.message || e));
+  });
 }
 
 function openGodMenu_() {
@@ -11528,7 +11568,7 @@ var GOD_ACTIONS = {
   injectSymptom: { emoji: '💉', label: 'Inject symptom', desc: 'Add a new symptom', fn: function() {
     var s = prompt('New symptom to add (e.g. "crushing chest pain radiating to left jaw"):');
     if (!s) return;
-    _addGodDirective_('You now ALSO have the following symptom in addition to your existing presentation: ' + s + '. Do not volunteer it — only mention it if the doctor asks relevant questions, but make it clear when you do.', '💉 Symptom added');
+    _addGodDirective_('You now ALSO have the following symptom in addition to your existing presentation: ' + s + '. Do not volunteer it — only mention it if the doctor asks relevant questions, but make it clear when you do.', '💉 Symptom added', false);
     closeGodMenu_();
   }},
   plotTwist: { emoji: '🎭', label: 'Plot twist', desc: 'Change the hidden diagnosis', fn: function() {
@@ -11644,7 +11684,7 @@ var GOD_ACTIONS = {
     renderPBChat();
   }},
   wrongRoom: { emoji: '🚪', label: 'Wrong-room twist', desc: 'This isn\'t who you thought', fn: function() {
-    _addGodDirective_('SURPRISE: You are NOT the patient the doctor was sent to see. There has been a mix-up in the ED. You are actually a completely different person with an unrelated chief complaint — improvise a new identity and complaint on the fly. Reveal this when the doctor says something that clearly does not apply to you.', '🚪 Wrong-room trap armed');
+    _addGodDirective_('SURPRISE: You are NOT the patient the doctor was sent to see. There has been a mix-up in the ED. You are actually a completely different person with an unrelated chief complaint — improvise a new identity and complaint on the fly. Reveal this when the doctor says something that clearly does not apply to you.', '🚪 Wrong-room trap armed', false);
     closeGodMenu_();
   }},
   random: { emoji: '🎲', label: 'Randomize chaos', desc: 'Roll the dice', fn: function() {
