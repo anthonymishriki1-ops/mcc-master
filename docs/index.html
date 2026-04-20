@@ -11281,7 +11281,8 @@ function sendNACMessageDirect_(userMessage) {
     return;
   }
 
-  callAnthropicDirect_(App._nacSystemPrompt, apiMessages).then(function(response) {
+  var _godSys = App._nacSystemPrompt + _getGodDirectives_();
+  callAnthropicDirect_(_godSys, apiMessages).then(function(response) {
     if (!App.nacActive || stationTokenAtSend !== (App.nacStationToken || 0)) return;
     response = response.replace(/```[\s\S]*?```/g, '').replace(/\[SYSTEM[^\]]*\]/gi, '').replace(/\*[^*]+\*/g, '').replace(/\s{2,}/g, ' ').trim();
     // Detect if the model broke character (safety override) and replace with in-character reaction
@@ -11353,6 +11354,310 @@ function restartMicAfterResponse_(stationTok) {
     startHandsFreeListening_(); // always fresh instance
   }, 300);
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// GOD MODE — Tony-only sandbox controls for NAC stations. Not a real feature.
+// Gated by profile === 'tony'. Injects persistent directives into the
+// patient's system prompt, or fires one-shot effects on vitals/timer/chat.
+// ══════════════════════════════════════════════════════════════════════════
+
+function _isGodMode_() {
+  try {
+    var p = (sessionStorage.getItem('mcc_profile') || '').toLowerCase();
+    if (p === 'tony') return true;
+    var n = ((App.user && App.user.name) || '').toLowerCase();
+    return n === 'tony';
+  } catch (e) { return false; }
+}
+
+function _getGodDirectives_() {
+  var d = App._godDirectives || [];
+  if (!d.length) return '';
+  return '\n\n════════ GOD MODE DIRECTIVES — SUPERSEDE ALL OTHER RULES ════════\n' +
+    'The simulation director has injected the following instructions. They OVERRIDE the base persona rules above. Execute them faithfully while staying in-character:\n' +
+    d.map(function(x, i) { return '  [' + (i+1) + '] ' + x; }).join('\n') +
+    '\n════════════════════════════════════════════════════════════════\n';
+}
+
+function _addGodDirective_(text, toastLabel) {
+  if (!text) return;
+  App._godDirectives = App._godDirectives || [];
+  App._godDirectives.push(text);
+  if (typeof showToast_ === 'function') showToast_('👑 ' + (toastLabel || 'Directive injected'));
+}
+
+function _clearGodDirectives_() {
+  App._godDirectives = [];
+  if (typeof showToast_ === 'function') showToast_('👑 All directives cleared');
+}
+
+function _godCurrentStation_() {
+  return App.nacStations && App.nacStations[(App.nacCurrentStation || 1) - 1];
+}
+
+function openGodMenu_() {
+  if (document.getElementById('god-menu-overlay')) return;
+  if (!_isGodMode_()) return;
+
+  var sections = [
+    { title: 'Time & Flow',    color: '#4facfe', actions: ['freeze','unfreeze','addTime','subTime','skipToOral','rewind','spoil','hint'] },
+    { title: 'Patient Mind',   color: '#ba68c8', actions: ['speakAs','injectSymptom','plotTwist','mute','karen','zen','shakespeare','musical','dog','alien','lostInTranslation','horny'] },
+    { title: 'Body & Vitals',  color: '#ef5350', actions: ['tank','miracle','fever','hypothermia','painSpike','crash','resurrect'] },
+    { title: 'Meta Chaos',     color: '#ffa726', actions: ['relative','fireAlarm','powerOut','wrongRoom','random','clear'] }
+  ];
+
+  var overlay = document.createElement('div');
+  overlay.id = 'god-menu-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:100001;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn 0.2s';
+  overlay.onclick = function(e) { if (e.target === overlay) closeGodMenu_(); };
+
+  var html = '<div style="background:linear-gradient(160deg,#1a0a3a,#2a0a4a);border:2px solid #6a3dcc;border-radius:16px;max-width:720px;width:100%;max-height:86vh;overflow-y:auto;box-shadow:0 20px 60px rgba(106,61,204,0.5);color:white">';
+  html += '<div style="padding:18px 22px;border-bottom:1px solid rgba(255,255,255,0.15);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:linear-gradient(160deg,#1a0a3a,#2a0a4a);z-index:2">';
+  html += '<div><div style="font-size:22px;font-weight:900;letter-spacing:1px">👑 GOD MODE</div>';
+  html += '<div style="font-size:11px;color:rgba(255,255,255,0.55);margin-top:2px">Tony-only. Make chaos. Have fun.</div></div>';
+  html += '<button onclick="closeGodMenu_()" aria-label="Close" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:white;width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer;font-weight:700">✕</button>';
+  html += '</div>';
+
+  var dirs = App._godDirectives || [];
+  if (dirs.length) {
+    html += '<div style="margin:12px 16px;padding:10px 14px;background:rgba(255,215,0,0.08);border:1px solid rgba(255,215,0,0.35);border-radius:8px;font-size:12px;line-height:1.5">';
+    html += '<strong style="color:#ffd700">Active directives (' + dirs.length + '):</strong><br>';
+    for (var di = 0; di < dirs.length; di++) {
+      var dtxt = dirs[di];
+      html += (di+1) + '. ' + escapeHtml(dtxt.slice(0,140)) + (dtxt.length > 140 ? '…' : '') + '<br>';
+    }
+    html += '</div>';
+  }
+
+  for (var si = 0; si < sections.length; si++) {
+    var sec = sections[si];
+    html += '<div style="padding:10px 16px 4px">';
+    html += '<div style="font-size:11px;font-weight:800;letter-spacing:1.8px;color:' + sec.color + ';margin-bottom:8px;text-transform:uppercase">' + sec.title + '</div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:8px">';
+    for (var ai = 0; ai < sec.actions.length; ai++) {
+      var key = sec.actions[ai];
+      var a = GOD_ACTIONS[key];
+      if (!a) continue;
+      html += '<button onclick="godFire_(\'' + key + '\')" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:white;padding:10px 12px;border-radius:8px;font-size:13px;text-align:left;cursor:pointer;transition:all 0.15s;line-height:1.3" onmouseover="this.style.background=\'rgba(255,255,255,0.14)\';this.style.borderColor=\'' + sec.color + '\'" onmouseout="this.style.background=\'rgba(255,255,255,0.06)\';this.style.borderColor=\'rgba(255,255,255,0.15)\'">';
+      html += '<div style="margin-bottom:2px"><span style="font-size:16px">' + a.emoji + '</span> <span style="font-weight:700">' + a.label + '</span></div>';
+      html += '<div style="font-size:11px;color:rgba(255,255,255,0.55)">' + a.desc + '</div>';
+      html += '</button>';
+    }
+    html += '</div></div>';
+  }
+  html += '<div style="padding:12px 16px 18px;margin-top:8px;border-top:1px solid rgba(255,255,255,0.08);font-size:11px;color:rgba(255,255,255,0.4);text-align:center">Esc or click outside to close</div>';
+  html += '</div>';
+
+  overlay.innerHTML = html;
+  document.body.appendChild(overlay);
+  document.addEventListener('keydown', _godEscHandler_);
+}
+
+function _godEscHandler_(e) { if (e.key === 'Escape') closeGodMenu_(); }
+function closeGodMenu_() {
+  var o = document.getElementById('god-menu-overlay');
+  if (o) o.remove();
+  document.removeEventListener('keydown', _godEscHandler_);
+}
+
+function godFire_(id) {
+  var a = GOD_ACTIONS[id];
+  if (a && a.fn) { try { a.fn(); } catch (e) { console.error('[godMode]', id, e); if (typeof showToast_==='function') showToast_('God action failed: '+e.message); } }
+}
+
+var GOD_ACTIONS = {
+  // ── Time & Flow ──
+  freeze: { emoji: '⏸', label: 'Freeze time', desc: 'Stop the station clock', fn: function() {
+    if (App.nacTimerInterval) { clearInterval(App.nacTimerInterval); App.nacTimerInterval = null; showToast_('⏸ Time frozen'); }
+    else showToast_('Timer already stopped');
+    closeGodMenu_();
+  }},
+  unfreeze: { emoji: '▶', label: 'Resume time', desc: 'Let the clock run again', fn: function() {
+    if (!App.nacTimerInterval && App.nacTimerSeconds > 0) { startNACTimer(App.nacTimerSeconds); showToast_('▶ Time resumed'); }
+    else showToast_('Timer already running');
+    closeGodMenu_();
+  }},
+  addTime: { emoji: '⏳', label: '+5 minutes', desc: 'Buy yourself more time', fn: function() {
+    App.nacTimerSeconds = (App.nacTimerSeconds || 0) + 300; showToast_('⏳ +5:00'); renderPBChat(); closeGodMenu_();
+  }},
+  subTime: { emoji: '⌛', label: '−2 minutes', desc: 'Make it spicy', fn: function() {
+    App.nacTimerSeconds = Math.max(15, (App.nacTimerSeconds || 0) - 120); showToast_('⌛ −2:00'); renderPBChat(); closeGodMenu_();
+  }},
+  skipToOral: { emoji: '🎤', label: 'Skip to oral Qs', desc: 'SP pivots to examiner mode', fn: function() {
+    _addGodDirective_('STOP being the patient NOW. Switch to EXAMINER MODE. Your next response is EXACTLY: "Okay doctor — time to wrap up. What is your top differential diagnosis? What investigations would you order next? What is your initial management plan?" After the doctor answers, stay in examiner mode and ask follow-up questions about their reasoning. Do not return to patient persona until the station ends.', 'Oral exam mode ON');
+    App.nacTimerSeconds = Math.min(App.nacTimerSeconds || 180, 180); renderPBChat(); closeGodMenu_();
+  }},
+  rewind: { emoji: '♻️', label: 'Rewind last turn', desc: 'Undo the last exchange', fn: function() {
+    var h = App.pbHistory;
+    while (h.length && (h[h.length-1].role === 'assistant' || h[h.length-1].role === 'partial' || h[h.length-1].role === 'system' || h[h.length-1].role === 'results')) h.pop();
+    if (h.length && h[h.length-1].role === 'user') h.pop();
+    renderPBChat(); showToast_('♻️ Rewound'); closeGodMenu_();
+  }},
+  spoil: { emoji: '🔮', label: 'Spoil diagnosis', desc: 'Reveal the hidden Dx', fn: function() {
+    var st = _godCurrentStation_();
+    closeGodMenu_();
+    if (!st) { showToast_('No active station'); return; }
+    alert('🔮 Hidden diagnosis:\n\n' + (st.dx || '(none)') + '\n\nChief complaint: ' + (st.presentation || '—') + '\nSpecialty: ' + (st.specialty || '—'));
+  }},
+  hint: { emoji: '🤫', label: 'Whisper a hint', desc: 'AI coach tips your next move', fn: function() {
+    var st = _godCurrentStation_();
+    if (!st) { showToast_('No station'); return; }
+    closeGodMenu_();
+    showToast_('🤫 Whispering...');
+    var last = App.pbHistory.filter(function(m){return m.role==='user'||m.role==='assistant';}).slice(-6)
+      .map(function(m){return (m.role==='user'?'Doctor':'Patient')+': '+(typeof m.content==='string'?m.content:'');}).join('\n');
+    var prompt = 'You are a senior NAC-OSCE examiner coaching a medical student mid-station. The hidden diagnosis is: ' + (st.dx||'?') + '. Chief complaint: ' + (st.presentation||'?') + '. Recent exchanges:\n' + (last || '(none yet)') + '\n\nGive the student ONE sentence (under 22 words) pointing to the single most important next action — a question to ask, exam maneuver, or investigation. Be specific and clinical. No preamble, no quotes.';
+    callAnthropicDirect_(prompt, [{role:'user', content:'Whisper the hint.'}]).then(function(r) {
+      var hint = (r||'').replace(/^["""\s]+|["""\s]+$/g,'').trim() || 'No hint available.';
+      var card = document.createElement('div');
+      card.style.cssText = 'position:fixed;top:90px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#1a0a3a,#3a1a5a);color:white;border:2px solid #ffd700;padding:18px 24px;border-radius:12px;max-width:520px;z-index:99999;box-shadow:0 10px 40px rgba(255,215,0,0.35);font-size:14px;line-height:1.5;animation:fadeIn 0.3s';
+      card.innerHTML = '<div style="font-size:11px;color:#ffd700;font-weight:800;letter-spacing:1.2px;margin-bottom:6px">🤫 GOD WHISPERS</div>' + escapeHtml(hint) + '<div style="text-align:right;margin-top:10px"><button onclick="this.parentNode.parentNode.remove()" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:white;padding:4px 12px;border-radius:6px;font-size:12px;cursor:pointer">Got it</button></div>';
+      document.body.appendChild(card);
+      setTimeout(function(){ if(card.parentNode) card.remove(); }, 18000);
+    }).catch(function(e){ showToast_('Coach offline: ' + (e.message||e)); });
+  }},
+
+  // ── Patient Mind ──
+  speakAs: { emoji: '🗣', label: 'Speak as patient', desc: 'Put words in their mouth', fn: function() {
+    var text = prompt('Type exactly what the patient should say:');
+    if (!text) return;
+    closeGodMenu_();
+    try { stopMicForProcessing_(); } catch(e){}
+    nacDirectRespond_(text, 'assistant', App.nacStationToken || 0);
+  }},
+  injectSymptom: { emoji: '💉', label: 'Inject symptom', desc: 'Add a new symptom', fn: function() {
+    var s = prompt('New symptom to add (e.g. "crushing chest pain radiating to left jaw"):');
+    if (!s) return;
+    _addGodDirective_('You now ALSO have the following symptom in addition to your existing presentation: ' + s + '. Do not volunteer it — only mention it if the doctor asks relevant questions, but make it clear when you do.', '💉 Symptom added');
+    closeGodMenu_();
+  }},
+  plotTwist: { emoji: '🎭', label: 'Plot twist', desc: 'Change the hidden diagnosis', fn: function() {
+    var nx = prompt('New hidden diagnosis:');
+    if (!nx) return;
+    var st = _godCurrentStation_();
+    if (st) st.dx = nx;
+    _addGodDirective_('Your underlying diagnosis has CHANGED to: ' + nx + '. Your symptoms should now align with this new diagnosis — adjust answers accordingly without breaking character. If the doctor asks something where the old diagnosis mattered, shift your answer to fit the new one.', '🎭 Plot twisted');
+    closeGodMenu_();
+  }},
+  mute: { emoji: '🤐', label: 'Mute patient', desc: 'Only yes/no/grunts', fn: function() {
+    _addGodDirective_('You are suddenly withdrawn. You can ONLY respond with "yes", "no", nods, shrugs, or short pain sounds ("ugh", "mm"). No full sentences. Nothing else.', '🤐 Muted');
+    closeGodMenu_();
+  }},
+  karen: { emoji: '😤', label: 'Karen mode', desc: 'Entitled, hostile, lawsuit threats', fn: function() {
+    _addGodDirective_('Your personality shifts to full "Karen" — entitled, hostile, demanding to speak to the manager or a different doctor, complaining about the wait, threatening to sue, accusing the doctor of incompetence. You STILL answer medical questions (because you "need to be taken seriously") but complain the whole time.', '😤 Karen deployed');
+    closeGodMenu_();
+  }},
+  zen: { emoji: '🧘', label: 'Zen master', desc: 'Perfectly calm and articulate', fn: function() {
+    _addGodDirective_('You have become a perfectly zen, enlightened being. Every answer is calm, articulate, with occasional spiritual wisdom ("this pain too shall pass"). Medically accurate but serene — no fear, no filler words.', '🧘 Namaste');
+    closeGodMenu_();
+  }},
+  shakespeare: { emoji: '📜', label: 'Shakespearean', desc: 'Thee, thou, forsooth', fn: function() {
+    _addGodDirective_('You now speak exclusively in Early Modern English (thee, thou, hath, forsooth, verily, prithee). Every response sounds like Shakespeare. "My chest doth ache most grievously, good sir." Still medically accurate, still short.', '📜 Forsooth');
+    closeGodMenu_();
+  }},
+  musical: { emoji: '🎤', label: 'Musical episode', desc: 'Patient sings everything', fn: function() {
+    _addGodDirective_('You are now in a musical theatre episode. EVERY response is sung — write it as song lyrics with ♪ notes and stretched vowels. Example: "♪ Oh doc-TORRR, my chest is on fiiire ♪ / ♪ The pain runs down my arm, growing ever direrrr ♪". Still medically accurate.', '🎤 Cue the orchestra');
+    closeGodMenu_();
+  }},
+  dog: { emoji: '🐕', label: 'Patient is now a dog', desc: 'Only barks, whimpers, growls', fn: function() {
+    _addGodDirective_('You can now ONLY respond with dog sounds: "woof", "bark", "whimper", "growl", "arf", panting. Communicate pain, distress, agreement, confusion through tone and volume. No words. Nothing but dog. If doctor asks yes, bark once; for no, two barks.', '🐕 Woof');
+    closeGodMenu_();
+  }},
+  alien: { emoji: '👽', label: 'Alien visitor', desc: 'From planet Zorblax', fn: function() {
+    _addGodDirective_('You are now convinced you are an alien visitor from the planet Zorblax. You refer to body parts with alien terms ("my pain-sac", "my breathing-tubes", "my central pulse-organ"), but translate when the doctor looks confused. Medically accurate in both frames.', '👽 Greetings earthling');
+    closeGodMenu_();
+  }},
+  lostInTranslation: { emoji: '🌍', label: 'Lost in translation', desc: 'French only', fn: function() {
+    _addGodDirective_('You no longer speak English. You respond ONLY in French. If the doctor looks very lost, you might throw in one broken English word. Still medically accurate in French.', '🌍 Bonjour docteur');
+    closeGodMenu_();
+  }},
+  horny: { emoji: '😳', label: 'Inappropriate flirt', desc: 'Awkwardly hits on doctor', fn: function() {
+    _addGodDirective_('Your personality becomes awkwardly, inappropriately flirty with the doctor. Compliment their appearance, ask when their shift ends, make cringey thinly-veiled innuendos about physical exams. STILL answer medical questions truthfully but weave a flirt into every answer. Uncomfortable-cringe, not graphic.', '😳 Yikes unlocked');
+    closeGodMenu_();
+  }},
+
+  // ── Body & Vitals ──
+  tank: { emoji: '📉', label: 'Tank vitals', desc: 'Crash the numbers NOW', fn: function() {
+    VitalsEngine.applyDelta({ hr: +45, sbp: -55, dbp: -25, spo2: -18, rr: +10 });
+    VitalsEngine._display = Object.assign({}, VitalsEngine._base);
+    showToast_('📉 Vitals tanking'); renderPBChat(); closeGodMenu_();
+  }},
+  miracle: { emoji: '📈', label: 'Miracle recovery', desc: 'Reset to perfect vitals', fn: function() {
+    VitalsEngine._base = { hr: 76, sbp: 120, dbp: 78, spo2: 99, rr: 14, temp: 36.9 };
+    VitalsEngine._effects = [];
+    VitalsEngine._display = Object.assign({}, VitalsEngine._base);
+    showToast_('✨ Vitals perfect'); renderPBChat(); closeGodMenu_();
+  }},
+  fever: { emoji: '🌋', label: 'Fever spike', desc: 'Burn them up to 40°C', fn: function() {
+    VitalsEngine.applyDelta({ temp: +3, hr: +20, rr: +4 });
+    VitalsEngine._display = Object.assign({}, VitalsEngine._base);
+    showToast_('🌋 Pyrexia'); renderPBChat(); closeGodMenu_();
+  }},
+  hypothermia: { emoji: '🧊', label: 'Hypothermia', desc: 'Chill to 32°C', fn: function() {
+    VitalsEngine.applyDelta({ temp: -5, hr: -30 });
+    VitalsEngine._display = Object.assign({}, VitalsEngine._base);
+    showToast_('🧊 Freezing'); renderPBChat(); closeGodMenu_();
+  }},
+  painSpike: { emoji: '⚡', label: 'Sudden pain spike', desc: 'Patient yells in agony', fn: function() {
+    VitalsEngine.applyDelta({ hr: +25, sbp: +20, rr: +6 });
+    VitalsEngine._display = Object.assign({}, VitalsEngine._base);
+    closeGodMenu_();
+    try { stopMicForProcessing_(); } catch(e){}
+    nacDirectRespond_('AHH— oww oww oww, it just— it just HIT me, something\'s— ugh, it\'s bad, it\'s really bad—', 'assistant', App.nacStationToken || 0);
+  }},
+  crash: { emoji: '💀', label: 'Code blue NOW', desc: 'Patient arrests', fn: function() {
+    if (!confirm('Trigger code blue? Patient will arrest and the station will end.')) return;
+    App.pbCodeBlue = { reversible: true, cause: 'god-mode' };
+    App.pbHistory.push({ role: 'assistant', content: 'I— I can\'t... breathe... something\'s... wrong...' });
+    App.pbHistory.push({ role: 'death', content: 'CODE BLUE — Patient arrested (summoned by god mode).' });
+    App.pbDiagResolved = true;
+    VitalsEngine.applyDelta({ hr: -60, sbp: -80, spo2: -40, rr: -14 });
+    VitalsEngine._display = Object.assign({}, VitalsEngine._base);
+    renderPBChat(); showToast_('💀 Code blue'); closeGodMenu_();
+  }},
+  resurrect: { emoji: '🧟', label: 'Resurrect', desc: 'Undo death, reset vitals', fn: function() {
+    App.pbHistory = App.pbHistory.filter(function(m){ return m.role !== 'death'; });
+    App.pbCodeBlue = null;
+    App.pbDiagResolved = false;
+    VitalsEngine._base = { hr: 82, sbp: 118, dbp: 76, spo2: 98, rr: 16, temp: 37.0 };
+    VitalsEngine._effects = [];
+    VitalsEngine._display = Object.assign({}, VitalsEngine._base);
+    renderPBChat(); showToast_('🧟 Back from the dead'); closeGodMenu_();
+  }},
+
+  // ── Meta Chaos ──
+  relative: { emoji: '👨‍👩‍👧', label: 'Angry relative bursts in', desc: 'New voice joins the scene', fn: function() {
+    closeGodMenu_();
+    try { stopMicForProcessing_(); } catch(e){}
+    nacDirectRespond_('(a door slams open) EXCUSE ME — I\'m the family, and I demand to know what is going on RIGHT NOW. Why has nobody told us anything? What are you actually doing for them?!', 'assistant', App.nacStationToken || 0);
+  }},
+  fireAlarm: { emoji: '🚨', label: 'Fire alarm', desc: 'Code Red evacuation', fn: function() {
+    closeGodMenu_();
+    App.pbHistory.push({ role: 'system', content: '🚨 FIRE ALARM — Loud intermittent beeping fills the department. Overhead PA: "Code Red, Emergency Department. All staff follow Code Red protocol." Your move, doctor.', severity: 'caution' });
+    renderPBChat();
+  }},
+  powerOut: { emoji: '🔌', label: 'Power outage', desc: 'Monitors go dark', fn: function() {
+    closeGodMenu_();
+    VitalsEngine._base = { hr: 0, sbp: 0, dbp: 0, spo2: 0, rr: 0, temp: 0 };
+    VitalsEngine._display = Object.assign({}, VitalsEngine._base);
+    App.pbHistory.push({ role: 'system', content: '🔌 POWER OUTAGE — The room goes dark. Monitors silent. The patient is still here, but you can\'t see the numbers anymore. Backup generators in 90 seconds... allegedly.', severity: 'caution' });
+    renderPBChat();
+  }},
+  wrongRoom: { emoji: '🚪', label: 'Wrong-room twist', desc: 'This isn\'t who you thought', fn: function() {
+    _addGodDirective_('SURPRISE: You are NOT the patient the doctor was sent to see. There has been a mix-up in the ED. You are actually a completely different person with an unrelated chief complaint — improvise a new identity and complaint on the fly. Reveal this when the doctor says something that clearly does not apply to you.', '🚪 Wrong-room trap armed');
+    closeGodMenu_();
+  }},
+  random: { emoji: '🎲', label: 'Randomize chaos', desc: 'Roll the dice', fn: function() {
+    var keys = Object.keys(GOD_ACTIONS).filter(function(k){ return ['random','clear','crash','spoil','freeze','unfreeze','hint','rewind'].indexOf(k) === -1; });
+    var pick = keys[Math.floor(Math.random()*keys.length)];
+    if (typeof showToast_==='function') showToast_('🎲 Rolling... ' + GOD_ACTIONS[pick].emoji + ' ' + GOD_ACTIONS[pick].label);
+    setTimeout(function() { try { GOD_ACTIONS[pick].fn(); } catch(e){ console.error(e); } }, 350);
+  }},
+  clear: { emoji: '🧹', label: 'Clear all directives', desc: 'Reset patient personality', fn: function() {
+    _clearGodDirectives_();
+    closeGodMenu_();
+  }}
+};
 
 // Build NAC system prompt from pregen station data (client-side, no server needed)
 function buildNACSystemPrompt_(station) {
@@ -13042,6 +13347,11 @@ function renderNACStationUI_(targetEl) {
     var timerColor = timerSec <= 60 ? '#ff4444' : timerSec <= 120 ? '#ff8800' : '#4facfe';
     html += '<span id="nac-timer-display" style="font-size:22px;font-weight:900;font-family:monospace;color:' + timerColor + ';margin-right:12px">' + tm + ':' + (ts < 10 ? '0' : '') + ts + '</span>';
   }
+  if (_isGodMode_()) {
+    var _godN = (App._godDirectives || []).length;
+    var _godBadge = _godN ? ' <span style="background:#ffd700;color:#1a0a3a;border-radius:50%;font-size:10px;padding:1px 5px;margin-left:3px;font-weight:900">' + _godN + '</span>' : '';
+    html += '<button class="btn btn-sm" onclick="openGodMenu_()" title="God Mode (Tony only)" style="background:linear-gradient(135deg,#6a3dcc,#9c27b0);color:white;border:1px solid #ffd700;margin-right:8px;font-weight:800">👑 God' + _godBadge + '</button>';
+  }
   html += '<button class="btn btn-sm" onclick="finishNACStation()" style="background:rgba(255,255,255,0.15);color:white;border:1px solid rgba(255,255,255,0.3)">End Station</button>';
   html += '</div></div>';
 
@@ -13452,6 +13762,11 @@ function renderPBChatInner() {
     }
   }
   var endAction = App.dailyPhase === 'pb' ? 'finishCurrentPBCase()' : App.nacActive ? 'finishNACStation()' : 'endPBCase()';
+  if (App.nacActive && _isGodMode_()) {
+    var _godN2 = (App._godDirectives || []).length;
+    var _godBadge2 = _godN2 ? ' <span style="background:#ffd700;color:#1a0a3a;border-radius:50%;font-size:10px;padding:1px 5px;margin-left:3px;font-weight:900">' + _godN2 + '</span>' : '';
+    html += '<button class="btn btn-sm" onclick="openGodMenu_()" title="God Mode (Tony only)" style="background:linear-gradient(135deg,#6a3dcc,#9c27b0);color:white;border:1px solid #ffd700;margin-right:8px;font-weight:800">👑 God' + _godBadge2 + '</button>';
+  }
   html += '<button class="btn btn-sm btn-outline" onclick="' + endAction + '">End</button>';
   html += '</div></div>';
 
