@@ -11426,7 +11426,13 @@ function _godTriggerTransition_() {
   var apiMsgs = [];
   for (var i = 0; i < App.pbHistory.length; i++) {
     var m = App.pbHistory[i];
-    if (m.role === 'user' || m.role === 'assistant') apiMsgs.push({ role: m.role, content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) });
+    if (m.role === 'user' || m.role === 'assistant') {
+      var content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+      if (m.role === 'assistant' && m.speaker) {
+        content = '[' + m.speaker + ' speaks in the room]: ' + content;
+      }
+      apiMsgs.push({ role: m.role, content: content });
+    }
   }
   // Ephemeral director cue — not pushed to pbHistory
   apiMsgs.push({ role: 'user', content: '[DIRECTOR CUE — not from the doctor, do not reference this message. Your persona has just shifted per the god-mode directives above. The doctor has said nothing new. Respond with ONE short spontaneous in-character line (5–15 words) that immediately shows the new state. Start talking as the new version of yourself RIGHT NOW.]' });
