@@ -11250,12 +11250,19 @@ function sendNACMessageDirect_(userMessage) {
   App.pbHistory.push({ role: 'user', content: userMessage });
   renderPBChat();
 
-  // Build messages array for Anthropic
+  // Build messages array for Anthropic. If a past assistant turn was from an
+  // alternate speaker (e.g., angry family member via god mode), prefix the
+  // content so the model knows a new voice entered the room — otherwise it
+  // treats everything as the patient's own speech and ignores the relative.
   var apiMessages = [];
   for (var i = 0; i < App.pbHistory.length; i++) {
     var m = App.pbHistory[i];
     if (m.role === 'user' || m.role === 'assistant') {
-      apiMessages.push({ role: m.role, content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) });
+      var content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+      if (m.role === 'assistant' && m.speaker) {
+        content = '[' + m.speaker + ' speaks in the room]: ' + content;
+      }
+      apiMessages.push({ role: m.role, content: content });
     }
   }
 
@@ -11668,8 +11675,37 @@ var GOD_ACTIONS = {
   // ── Meta Chaos ──
   relative: { emoji: '👨‍👩‍👧', label: 'Angry relative bursts in', desc: 'New voice joins the scene', fn: function() {
     closeGodMenu_();
+    var st = _godCurrentStation_();
+    var rawName = (st && st.nm) ? st.nm.replace(/\s*\([^)]+\)/, '').trim() : 'the patient';
+    var rels = ['husband','wife','mother','father','son','daughter','sister','brother','partner'];
+    var rel = rels[Math.floor(Math.random() * rels.length)];
+    var variants = [
+      '(slams the door open) What the HELL is going on here?! I\'m ' + rawName + '\'s ' + rel + ' — somebody tell me what is wrong with them RIGHT NOW!',
+      '(barges in) Excuse me?! I\'ve been waiting for HOURS — why has nobody told me what\'s going on with my ' + rel + '?! I\'m calling a lawyer if I don\'t get answers!',
+      '(storms in, frantic) Is my ' + rel + ' okay?! Oh god, oh god— somebody please, just TELL me, how serious is this?!',
+      '(bursts through the curtain) Sorry — I\'m family, I drove two hours — what is the plan here? Are you running tests? Why aren\'t you running tests?!',
+      '(pushes past security) I am ' + rawName + '\'s ' + rel + ' and I have a RIGHT to be here. What medications have you given? Has anyone even looked at their chart?!',
+      '(wild-eyed, panting) Oh my GOD is it bad, just tell me, don\'t sugarcoat it— is my ' + rel + ' dying?! Please don\'t lie to me.'
+    ];
+    var line = variants[Math.floor(Math.random() * variants.length)];
+
     try { stopMicForProcessing_(); } catch(e){}
-    nacDirectRespond_('(a door slams open) EXCUSE ME — I\'m the family, and I demand to know what is going on RIGHT NOW. Why has nobody told us anything? What are you actually doing for them?!', 'assistant', App.nacStationToken || 0);
+
+    // Push with a dedicated speaker label so the UI doesn't attribute it to the patient
+    var display = line.replace(/\*[^*]+\*/g, '').replace(_nacActionSoundRe, '').replace(/\s{2,}/g, ' ').trim();
+    App.pbHistory.push({ role: 'assistant', speaker: 'Family (' + rel + ')', content: display });
+    renderPBChat();
+
+    // Different voice from the patient for clear contrast
+    var femaleRel = /wife|mother|daughter|sister/i.test(rel);
+    var maleRel = /husband|father|son|brother/i.test(rel);
+    var relVoice = femaleRel ? 'nova' : (maleRel ? 'onyx' : (Math.random() < 0.5 ? 'nova' : 'onyx'));
+    var ttsText = preprocessNACTTS_(line.replace(/\*[^*]+\*/g, '').replace(/\s{2,}/g, ' ').trim());
+    var relInstr = 'Voice Affect: frantic, protective adult family member who just burst into the hospital room. Tone: loud, urgent, a little accusatory. Pacing: fast. Real fear underneath the anger. Keep the parenthetical stage direction spoken naturally as an aside if possible, or just convey the frantic entry through tone.';
+    callTTSDirect_(ttsText || display, relVoice, 1.08, relInstr).catch(function(){});
+
+    // After a brief pause, let the patient react to the intrusion
+    setTimeout(function() { _godTriggerTransition_(); }, 900);
   }},
   fireAlarm: { emoji: '🚨', label: 'Fire alarm', desc: 'Code Red evacuation', fn: function() {
     closeGodMenu_();
@@ -13526,12 +13562,14 @@ function renderNACStationUI_(targetEl) {
       }
       var isDoc = cm.role === 'user';
       var align = isDoc ? 'flex-end' : 'flex-start';
-      var bg = isDoc ? 'var(--primary)' : 'var(--bg)';
-      var color = isDoc ? 'white' : 'var(--text)';
-      var label = isDoc ? 'You' : (App.pbPatientInfo ? App.pbPatientInfo.name : 'Patient');
+      var isAltSpeaker = !isDoc && !!cm.speaker;
+      var bg = isDoc ? 'var(--primary)' : (isAltSpeaker ? '#fff4e0' : 'var(--bg)');
+      var color = isDoc ? 'white' : (isAltSpeaker ? '#8a4a00' : 'var(--text)');
+      var border = isAltSpeaker ? '1px solid #ffb74d' : '';
+      var label = isDoc ? 'You' : (cm.speaker || (App.pbPatientInfo ? App.pbPatientInfo.name : 'Patient'));
       html += '<div style="align-self:' + align + ';max-width:80%">';
-      html += '<div style="font-size:10px;color:var(--text-light);margin-bottom:2px;text-align:' + (isDoc ? 'right' : 'left') + '">' + escapeHtml(label) + '</div>';
-      html += '<div style="background:' + bg + ';color:' + color + ';padding:8px 12px;border-radius:12px;font-size:13px;line-height:1.4">' + escapeHtml(typeof cm.content === 'string' ? cm.content : '') + '</div>';
+      html += '<div style="font-size:10px;color:' + (isAltSpeaker ? '#d68910' : 'var(--text-light)') + ';margin-bottom:2px;text-align:' + (isDoc ? 'right' : 'left') + ';font-weight:' + (isAltSpeaker ? '700' : '400') + '">' + escapeHtml(label) + '</div>';
+      html += '<div style="background:' + bg + ';color:' + color + ';padding:8px 12px;border-radius:12px;font-size:13px;line-height:1.4' + (border ? ';border:' + border : '') + '">' + escapeHtml(typeof cm.content === 'string' ? cm.content : '') + '</div>';
       html += '</div>';
     }
     html += '</div>';
