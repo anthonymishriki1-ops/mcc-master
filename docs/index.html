@@ -11288,6 +11288,25 @@ function sendNACMessageDirect_(userMessage) {
     return;
   }
 
+  // If a relative is actively in the room (god mode), route the doctor's
+  // message to the RELATIVE's AI instead of the patient. Relative has their
+  // own system prompt and voice — doctor is talking to them until dismissed.
+  if (App._godActiveRelative) {
+    var relSys = _buildRelativeSystemPrompt_(App._godActiveRelative) + _getGodDirectives_();
+    callAnthropicDirect_(relSys, apiMessages).then(function(rResp) {
+      if (!App.nacActive || stationTokenAtSend !== (App.nacStationToken || 0)) return;
+      rResp = rResp.replace(/```[\s\S]*?```/g, '').replace(/\[SYSTEM[^\]]*\]/gi, '').replace(/\*[^*]+\*/g, '').replace(/\s{2,}/g, ' ').trim();
+      _relativeRespond_(rResp, stationTokenAtSend);
+    }).catch(function(e) {
+      if (!App.nacActive || stationTokenAtSend !== (App.nacStationToken || 0)) return;
+      console.warn('[NAC relative] message failed:', e);
+      App.pbHistory.push({ role: 'system', content: 'Connection error — please check your internet and try again.', severity: 'caution' });
+      renderPBChat();
+      restartMicAfterResponse_(stationTokenAtSend);
+    });
+    return;
+  }
+
   var _godSys = App._nacSystemPrompt + _getGodDirectives_();
   callAnthropicDirect_(_godSys, apiMessages).then(function(response) {
     if (!App.nacActive || stationTokenAtSend !== (App.nacStationToken || 0)) return;
@@ -11409,6 +11428,49 @@ function _godCurrentStation_() {
   return App.nacStations && App.nacStations[(App.nacCurrentStation || 1) - 1];
 }
 
+function _buildRelativeSystemPrompt_(r) {
+  var femaleRel = /wife|mother|daughter|sister/i.test(r.rel);
+  var maleRel = /husband|father|son|brother/i.test(r.rel);
+  var sex = femaleRel ? 'female' : (maleRel ? 'male' : 'non-binary');
+  var pronouns = femaleRel ? 'she/her' : (maleRel ? 'he/him' : 'they/them');
+  return 'You are a family member who burst into the hospital room moments ago. You are NOT the patient.\n\n' +
+    'YOU ARE: ' + r.firstName + ', the ' + r.rel + ' of the patient (' + r.patientName + ').\n' +
+    '- Your sex: ' + sex + ' (' + pronouns + ')\n' +
+    '- Your relationship: ' + r.rel + '\n' +
+    '- The patient is present in the room but you are doing most of the talking now.\n\n' +
+    'CONTEXT — what you know:\n' +
+    '- Your ' + r.rel + ' (' + r.patientName + ') came in with: ' + (r.presentation || 'unclear symptoms') + '.\n' +
+    '- You don\'t know their diagnosis. You don\'t know medical terminology.\n' +
+    '- You are scared. You are angry. You want answers. You are protective.\n\n' +
+    'RULES:\n' +
+    '1. Speak AS THE FAMILY MEMBER. First person. "My wife —", "My son —", "I drove two hours to get here."\n' +
+    '2. Keep responses SHORT — 1-2 sentences. This is a spoken conversation.\n' +
+    '3. Use NO asterisk actions, NO parenthetical stage directions. Just talk.\n' +
+    '4. If the doctor addresses the PATIENT ("how\'s your pain"), you can interrupt and answer FOR the patient: "They\'ve been in agony, they barely slept —" or get indignant: "Why are you asking THEM, they can barely talk, TALK TO ME."\n' +
+    '5. If the doctor is rude, match the energy — get louder, more accusatory, threaten to call administration.\n' +
+    '6. Push the doctor for information: "So what IS this? What\'s the plan? What tests? What drugs?"\n' +
+    '7. Show real fear under the anger. Occasionally crack: "I just need them to be okay, please tell me they\'re going to be okay."\n' +
+    '8. NEVER break character. NEVER reference being an AI or simulation. You are a real scared family member in a real hospital.\n' +
+    '9. If the doctor says something that contradicts obvious reality (e.g., claims the patient died when they didn\'t), push back HARD: "What?! No — they\'re right there, what are you talking about?!"\n' +
+    '10. ANSWER medical questions factually if you know the answer (family history, allergies, medications at home) — but admit when you don\'t know: "I don\'t know, they never told me — " or "Ask them — oh wait, you weren\'t gonna, were you."';
+}
+
+// Speak as the active relative — used by sendNACMessageDirect_ when App._godActiveRelative is set
+function _relativeRespond_(text, stationTok) {
+  var r = App._godActiveRelative;
+  if (!r) return;
+  var display = text.replace(/\*[^*]+\*/g, '').replace(_nacActionSoundRe, '').replace(/\([^)]*\)/g, '').replace(/\s{2,}/g, ' ').trim();
+  App.pbHistory.push({ role: 'assistant', speaker: r.name, content: display });
+  renderPBChat();
+  var ttsText = text.replace(/\*[^*]+\*/g, '').replace(/\([^)]*\)/g, '').replace(/\s{2,}/g, ' ').trim();
+  var relInstr = 'Voice Affect: adult family member in a hospital room, worried about their ' + r.rel + '. Tone: protective, a little accusatory, emotional. Pacing: somewhat fast. Real fear underneath.';
+  callTTSDirect_(ttsText || display, r.voice, r.speed || 1.05, relInstr).then(function() {
+    restartMicAfterResponse_(stationTok);
+  }).catch(function() {
+    restartMicAfterResponse_(stationTok);
+  });
+}
+
 // Fires an immediate in-character patient line reflecting the new directives,
 // WITHOUT waiting for the doctor to say something first. The ephemeral
 // director cue is not saved to pbHistory so it can't contaminate future turns.
@@ -11456,7 +11518,7 @@ function openGodMenu_() {
     { title: 'Time & Flow',    color: '#4facfe', actions: ['freeze','unfreeze','addTime','subTime','skipToOral','rewind','spoil','hint'] },
     { title: 'Patient Mind',   color: '#ba68c8', actions: ['speakAs','injectSymptom','plotTwist','mute','karen','zen','shakespeare','musical','dog','alien','lostInTranslation','horny'] },
     { title: 'Body & Vitals',  color: '#ef5350', actions: ['tank','miracle','fever','hypothermia','painSpike','crash','resurrect'] },
-    { title: 'Meta Chaos',     color: '#ffa726', actions: ['relative','fireAlarm','powerOut','wrongRoom','random','clear'] }
+    { title: 'Meta Chaos',     color: '#ffa726', actions: ['relative','dismissRelative','fireAlarm','powerOut','wrongRoom','random','clear'] }
   ];
 
   var overlay = document.createElement('div');
@@ -11679,12 +11741,22 @@ var GOD_ACTIONS = {
   }},
 
   // ── Meta Chaos ──
-  relative: { emoji: '👨‍👩‍👧', label: 'Angry relative bursts in', desc: 'New voice joins the scene', fn: function() {
+  relative: { emoji: '👨‍👩‍👧', label: 'Angry relative bursts in', desc: 'New speaker takes over — doctor talks to family until dismissed', fn: function() {
     closeGodMenu_();
     var st = _godCurrentStation_();
     var rawName = (st && st.nm) ? st.nm.replace(/\s*\([^)]+\)/, '').trim() : 'the patient';
     var rels = ['husband','wife','mother','father','son','daughter','sister','brother','partner'];
     var rel = rels[Math.floor(Math.random() * rels.length)];
+    var firstNames = {
+      husband: ['Mark','Dave','Greg','Tony','Rob'], wife: ['Karen','Linda','Susan','Jen','Laura'],
+      mother: ['Helen','Barbara','Diane','Margaret','Patricia'], father: ['Richard','Bill','Frank','Steve','Jim'],
+      son: ['Chris','Jake','Ryan','Tyler','Matt'], daughter: ['Emma','Sarah','Jess','Amy','Katie'],
+      sister: ['Nicole','Rachel','Megan','Steph','Claire'], brother: ['Danny','Kevin','Mike','Sean','Paul'],
+      partner: ['Alex','Sam','Jordan','Casey','Morgan']
+    };
+    var pool = firstNames[rel] || ['Alex'];
+    var relFirstName = pool[Math.floor(Math.random() * pool.length)];
+
     var variants = [
       '(slams the door open) What the HELL is going on here?! I\'m ' + rawName + '\'s ' + rel + ' — somebody tell me what is wrong with them RIGHT NOW!',
       '(barges in) Excuse me?! I\'ve been waiting for HOURS — why has nobody told me what\'s going on with my ' + rel + '?! I\'m calling a lawyer if I don\'t get answers!',
@@ -11695,23 +11767,58 @@ var GOD_ACTIONS = {
     ];
     var line = variants[Math.floor(Math.random() * variants.length)];
 
-    try { stopMicForProcessing_(); } catch(e){}
-
-    // Push with a dedicated speaker label so the UI doesn't attribute it to the patient
-    var display = line.replace(/\*[^*]+\*/g, '').replace(_nacActionSoundRe, '').replace(/\s{2,}/g, ' ').trim();
-    App.pbHistory.push({ role: 'assistant', speaker: 'Family (' + rel + ')', content: display });
-    renderPBChat();
-
-    // Different voice from the patient for clear contrast
+    // Pick a voice that CONTRASTS with the patient's voice
+    var patientVoice = (function(){ try { return getOpenAIVoice_(); } catch(e) { return 'echo'; } })();
+    var femalePool = ['nova','shimmer'].filter(function(v){return v !== patientVoice;});
+    var malePool = ['onyx','echo','alloy'].filter(function(v){return v !== patientVoice;});
     var femaleRel = /wife|mother|daughter|sister/i.test(rel);
     var maleRel = /husband|father|son|brother/i.test(rel);
-    var relVoice = femaleRel ? 'nova' : (maleRel ? 'onyx' : (Math.random() < 0.5 ? 'nova' : 'onyx'));
-    var ttsText = preprocessNACTTS_(line.replace(/\*[^*]+\*/g, '').replace(/\s{2,}/g, ' ').trim());
-    var relInstr = 'Voice Affect: frantic, protective adult family member who just burst into the hospital room. Tone: loud, urgent, a little accusatory. Pacing: fast. Real fear underneath the anger. Keep the parenthetical stage direction spoken naturally as an aside if possible, or just convey the frantic entry through tone.';
-    callTTSDirect_(ttsText || display, relVoice, 1.08, relInstr).catch(function(){});
+    var relVoice;
+    if (femaleRel) relVoice = femalePool[0] || 'shimmer';
+    else if (maleRel) relVoice = malePool[0] || 'alloy';
+    else relVoice = (Math.random() < 0.5 ? femalePool[0] : malePool[0]) || 'alloy';
 
-    // After a brief pause, let the patient react to the intrusion
-    setTimeout(function() { _godTriggerTransition_(); }, 900);
+    // Set persistent relative state — subsequent doctor messages go to them
+    App._godActiveRelative = {
+      name: 'Family (' + relFirstName + ', ' + rel + ')',
+      firstName: relFirstName,
+      rel: rel,
+      patientName: rawName,
+      patientSex: (st && st.sx) || '',
+      voice: relVoice,
+      dx: (st && st.dx) || '',
+      presentation: (st && st.presentation) || '',
+      speed: 1.08
+    };
+
+    try { stopMicForProcessing_(); } catch(e){}
+
+    // Push with dedicated speaker label — amber bubble, not the patient
+    var display = line.replace(/\*[^*]+\*/g, '').replace(_nacActionSoundRe, '').replace(/\s{2,}/g, ' ').trim();
+    App.pbHistory.push({ role: 'assistant', speaker: App._godActiveRelative.name, content: display });
+    renderPBChat();
+
+    // TTS — strip ALL parenthetical stage directions before speaking (otherwise
+    // "(slams the door open)" gets read literally)
+    var ttsText = line.replace(/\([^)]*\)/g, '').replace(/\s{2,}/g, ' ').trim();
+    var relInstr = 'Voice Affect: frantic, protective adult family member who has just burst into the hospital room. Tone: loud, urgent, a little accusatory with real fear underneath. Pacing: fast and breathless. This is NOT the patient — this is a completely different person.';
+    var stationTok = App.nacStationToken || 0;
+    callTTSDirect_(ttsText || display, relVoice, 1.08, relInstr).then(function() {
+      restartMicAfterResponse_(stationTok);
+    }).catch(function() {
+      restartMicAfterResponse_(stationTok);
+    });
+    showToast_('👨‍👩‍👧 ' + relFirstName + ' (' + rel + ') is now in the room. Next message goes to them. Use 👑 → 👋 Dismiss to send them out.');
+  }},
+  dismissRelative: { emoji: '👋', label: 'Dismiss relative', desc: 'Send the family member out of the room', fn: function() {
+    if (!App._godActiveRelative) { showToast_('No relative in the room'); closeGodMenu_(); return; }
+    var r = App._godActiveRelative;
+    App._godActiveRelative = null;
+    // Push a brief system note so the model sees the transition
+    App.pbHistory.push({ role: 'system', content: r.firstName + ' has been escorted out of the room. You are back alone with the patient.', severity: 'safe' });
+    renderPBChat();
+    showToast_('👋 ' + r.firstName + ' dismissed. Back to the patient.');
+    closeGodMenu_();
   }},
   fireAlarm: { emoji: '🚨', label: 'Fire alarm', desc: 'Code Red evacuation', fn: function() {
     closeGodMenu_();
@@ -13430,12 +13537,18 @@ function renderNACStationUI_(targetEl) {
     html += '<span id="nac-timer-display" style="font-size:22px;font-weight:900;font-family:monospace;color:' + timerColor + ';margin-right:12px">' + tm + ':' + (ts < 10 ? '0' : '') + ts + '</span>';
   }
   if (_isGodMode_()) {
-    var _godN = (App._godDirectives || []).length;
+    var _godN = (App._godDirectives || []).length + (App._godActiveRelative ? 1 : 0);
     var _godBadge = _godN ? ' <span style="background:#ffd700;color:#1a0a3a;border-radius:50%;font-size:10px;padding:1px 5px;margin-left:3px;font-weight:900">' + _godN + '</span>' : '';
     html += '<button class="btn btn-sm" onclick="openGodMenu_()" title="God Mode (Tony only)" style="background:linear-gradient(135deg,#6a3dcc,#9c27b0);color:white;border:1px solid #ffd700;margin-right:8px;font-weight:800">👑 God' + _godBadge + '</button>';
   }
   html += '<button class="btn btn-sm" onclick="finishNACStation()" style="background:rgba(255,255,255,0.15);color:white;border:1px solid rgba(255,255,255,0.3)">End Station</button>';
   html += '</div></div>';
+  if (App._godActiveRelative) {
+    html += '<div style="background:linear-gradient(90deg,#ff6f00,#ff8f00);color:white;padding:8px 16px;font-size:13px;font-weight:700;display:flex;justify-content:space-between;align-items:center">';
+    html += '<span>👨‍👩‍👧 Talking to ' + escapeHtml(App._godActiveRelative.name) + ' — messages go to them, not the patient.</span>';
+    html += '<button onclick="godFire_(\'dismissRelative\')" style="background:rgba(255,255,255,0.25);color:white;border:1px solid rgba(255,255,255,0.4);padding:4px 12px;border-radius:14px;font-size:12px;font-weight:700;cursor:pointer">👋 Dismiss</button>';
+    html += '</div>';
+  }
 
   // ── Count results for badge indicators ──
   var historyLabResults = App.pbHistory.filter(function(m) { return m.role === 'results' && m.content && !/(x.ray|ct\b|mri|ultrasound|echo|radio|scan|imaging)/i.test(m.content.testName || ''); });
