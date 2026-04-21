@@ -131,18 +131,18 @@
 [data-theme="dark"] .nav-links li.active { background: rgba(255,255,255,0.1); }
 [data-theme="dark"] .btn-outline { border-color: var(--border); color: var(--text); }
 [data-theme="dark"] .btn-outline:hover { background: rgba(255,255,255,0.05); }
-[data-theme="dark"] .pb-patient-bar { background: #1a1a1a; }
-[data-theme="dark"] .pb-info-chip { background: #1e1e1e; border-color: var(--border); }
-[data-theme="dark"] .pb-dotmatrix { background: #1a1a18; border-color: #444; }
-[data-theme="dark"] .pb-dm-holes { background: repeating-linear-gradient(to bottom, transparent 0px, transparent 7px, #2a2a25 7px, #2a2a25 8px); }
-[data-theme="dark"] .pb-dm-holes::before, [data-theme="dark"] .pb-dm-holes::after { border-color: #555; }
-[data-theme="dark"] .pb-dm-holes-left { border-right-color: #333; }
-[data-theme="dark"] .pb-dm-holes-right { border-left-color: #333; }
-[data-theme="dark"] .pb-dm-content { background: repeating-linear-gradient(to bottom, transparent 0px, transparent 17px, #2a2a25 17px, #2a2a25 18px); }
-[data-theme="dark"] .pb-dm-field { color: #c8c8a0; }
-[data-theme="dark"] .pb-dm-label { color: #888870; }
-[data-theme="dark"] .pb-dm-alert { color: #ff6b6b; }
-[data-theme="dark"] .pb-how-to { background: #1a1a1a; border-color: var(--border); }
+[data-theme="dark"] .enc-patient-bar { background: #1a1a1a; }
+[data-theme="dark"] .enc-info-chip { background: #1e1e1e; border-color: var(--border); }
+[data-theme="dark"] .enc-dotmatrix { background: #1a1a18; border-color: #444; }
+[data-theme="dark"] .enc-dm-holes { background: repeating-linear-gradient(to bottom, transparent 0px, transparent 7px, #2a2a25 7px, #2a2a25 8px); }
+[data-theme="dark"] .enc-dm-holes::before, [data-theme="dark"] .enc-dm-holes::after { border-color: #555; }
+[data-theme="dark"] .enc-dm-holes-left { border-right-color: #333; }
+[data-theme="dark"] .enc-dm-holes-right { border-left-color: #333; }
+[data-theme="dark"] .enc-dm-content { background: repeating-linear-gradient(to bottom, transparent 0px, transparent 17px, #2a2a25 17px, #2a2a25 18px); }
+[data-theme="dark"] .enc-dm-field { color: #c8c8a0; }
+[data-theme="dark"] .enc-dm-label { color: #888870; }
+[data-theme="dark"] .enc-dm-alert { color: #ff6b6b; }
+[data-theme="dark"] .enc-how-to { background: #1a1a1a; border-color: var(--border); }
 [data-theme="dark"] .chat-message.user { background: #303f9f; }
 [data-theme="dark"] .chat-message.assistant { background: #1e1e1e; }
 [data-theme="dark"] #sidebar { background: #0a0a0a; }
@@ -1027,9 +1027,9 @@ body {
 .chat-input-area textarea:focus {
   border-color: var(--primary);
 }
-.pb-diagnose-btn { white-space: nowrap; font-weight: 700; }
+.enc-diagnose-btn { white-space: nowrap; font-weight: 700; }
 
-.pb-action-chip {
+.enc-action-chip {
   background: var(--card);
   border: 1.5px solid var(--border);
   border-radius: 20px;
@@ -1042,22 +1042,22 @@ body {
   white-space: nowrap;
   font-weight: 500;
 }
-.pb-action-chip:hover {
+.enc-action-chip:hover {
   background: var(--primary);
   color: white;
   border-color: var(--primary);
   transform: scale(1.03);
 }
 /* Action specification prompt */
-.pb-spec-prompt { background: var(--card-bg); border: 2px solid var(--accent); border-radius: 12px; padding: 12px 16px; margin: 0 16px 8px; animation: slideDown 0.15s ease; }
-.pb-spec-label { font-size: 14px; font-weight: 700; color: var(--accent); margin-bottom: 8px; }
-.pb-spec-row { display: flex; gap: 8px; align-items: center; }
-.pb-spec-input { flex: 1; padding: 8px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; background: var(--bg); color: var(--text); outline: none; }
-.pb-spec-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
+.enc-spec-prompt { background: var(--card-bg); border: 2px solid var(--accent); border-radius: 12px; padding: 12px 16px; margin: 0 16px 8px; animation: slideDown 0.15s ease; }
+.enc-spec-label { font-size: 14px; font-weight: 700; color: var(--accent); margin-bottom: 8px; }
+.enc-spec-row { display: flex; gap: 8px; align-items: center; }
+.enc-spec-input { flex: 1; padding: 8px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; background: var(--bg); color: var(--text); outline: none; }
+.enc-spec-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
 @keyframes slideDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
 
 /* PB Customize Sliders */
-.pb-slider {
+.enc-slider {
   width: 100%;
   -webkit-appearance: none;
   appearance: none;
@@ -1067,7 +1067,7 @@ body {
   outline: none;
   margin: 8px 0 4px;
 }
-.pb-slider::-webkit-slider-thumb {
+.enc-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 22px;
@@ -1078,7 +1078,7 @@ body {
   border: 3px solid white;
   box-shadow: 0 1px 4px rgba(0,0,0,0.2);
 }
-.pb-slider::-moz-range-thumb {
+.enc-slider::-moz-range-thumb {
   width: 22px;
   height: 22px;
   border-radius: 50%;
@@ -1087,7 +1087,7 @@ body {
   border: 3px solid white;
   box-shadow: 0 1px 4px rgba(0,0,0,0.2);
 }
-.pb-slider-labels {
+.enc-slider-labels {
   display: flex;
   justify-content: space-between;
   font-size: 10px;
@@ -1097,7 +1097,7 @@ body {
 
 /* Action bar tabs */
 /* Action palette collapse handle */
-.pb-actions-handle {
+.enc-actions-handle {
   display: flex; align-items: center; justify-content: center;
   width: 100%; padding: 5px 0 4px; gap: 6px;
   background: var(--card); border: none; border-top: 1px solid var(--border);
@@ -1105,20 +1105,20 @@ body {
   font-weight: 700; color: var(--text-light); letter-spacing: 0.4px;
   transition: background 0.15s, color 0.15s;
 }
-.pb-actions-handle:hover { background: var(--bg); color: var(--text); }
-.pb-actions-handle-pill {
+.enc-actions-handle:hover { background: var(--bg); color: var(--text); }
+.enc-actions-handle-pill {
   width: 28px; height: 3px; background: var(--border); border-radius: 2px; transition: background 0.15s;
 }
-.pb-actions-handle:hover .pb-actions-handle-pill { background: var(--text-light); }
+.enc-actions-handle:hover .enc-actions-handle-pill { background: var(--text-light); }
 /* Collapsible wrapper */
 #pb-actions-wrapper {
   overflow: hidden;
   transition: max-height 0.22s cubic-bezier(0.4,0,0.2,1);
   max-height: 380px;
 }
-#pb-actions-wrapper.pb-actions-collapsed { max-height: 0; }
+#pb-actions-wrapper.enc-actions-collapsed { max-height: 0; }
 
-.pb-action-bar {
+.enc-action-bar {
   display: flex;
   gap: 4px;
   overflow-x: auto;
@@ -1127,9 +1127,9 @@ body {
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
-.pb-action-bar::-webkit-scrollbar { display: none; }
+.enc-action-bar::-webkit-scrollbar { display: none; }
 
-.pb-action-tab {
+.enc-action-tab {
   flex-shrink: 0;
   background: var(--bg);
   border: 1.5px solid var(--border);
@@ -1143,37 +1143,37 @@ body {
   white-space: nowrap;
   font-weight: 600;
 }
-.pb-action-tab:hover { border-color: var(--primary); color: var(--primary); }
-.pb-action-tab.active { background: var(--primary); color: white; border-color: var(--primary); }
+.enc-action-tab:hover { border-color: var(--primary); color: var(--primary); }
+.enc-action-tab.active { background: var(--primary); color: white; border-color: var(--primary); }
 
 /* Color-coded tabs */
-.pb-action-tab:nth-child(1) { border-color: #4caf50; color: #4caf50; } /* Exam - green */
-.pb-action-tab:nth-child(2) { border-color: #2196f3; color: #2196f3; } /* Labs - blue */
-.pb-action-tab:nth-child(3) { border-color: #9c27b0; color: #9c27b0; } /* Imaging - purple */
-.pb-action-tab:nth-child(4) { border-color: #ff9800; color: #ff9800; } /* Meds - orange */
-.pb-action-tab:nth-child(5) { border-color: #f44336; color: #f44336; } /* Procedures - red */
-.pb-action-tab:nth-child(6) { border-color: #e91e63; color: #e91e63; } /* Cardiac - pink */
-.pb-action-tab:nth-child(7) { border-color: #ff5722; color: #ff5722; } /* Resus - deep orange */
-.pb-action-tab:nth-child(8) { border-color: #607d8b; color: #607d8b; } /* Position - grey */
-.pb-action-tab:nth-child(9) { border-color: #00bcd4; color: #00bcd4; } /* Scopes - teal */
-.pb-action-tab:nth-child(10) { border-color: #795548; color: #795548; } /* Manage - brown */
-.pb-action-tab:nth-child(11) { border-color: #455a64; color: #455a64; } /* Equip - dark grey */
-.pb-action-tab.active { color: white !important; }
-.pb-action-tab:nth-child(1).active { background: #4caf50; border-color: #4caf50; }
-.pb-action-tab:nth-child(2).active { background: #2196f3; border-color: #2196f3; }
-.pb-action-tab:nth-child(3).active { background: #9c27b0; border-color: #9c27b0; }
-.pb-action-tab:nth-child(4).active { background: #ff9800; border-color: #ff9800; }
-.pb-action-tab:nth-child(5).active { background: #f44336; border-color: #f44336; }
-.pb-action-tab:nth-child(6).active { background: #e91e63; border-color: #e91e63; }
-.pb-action-tab:nth-child(7).active { background: #ff5722; border-color: #ff5722; }
-.pb-action-tab:nth-child(8).active { background: #607d8b; border-color: #607d8b; }
-.pb-action-tab:nth-child(9).active { background: #00bcd4; border-color: #00bcd4; }
-.pb-action-tab:nth-child(10).active { background: #795548; border-color: #795548; }
-.pb-action-tab:nth-child(11).active { background: #455a64; border-color: #455a64; }
+.enc-action-tab:nth-child(1) { border-color: #4caf50; color: #4caf50; } /* Exam - green */
+.enc-action-tab:nth-child(2) { border-color: #2196f3; color: #2196f3; } /* Labs - blue */
+.enc-action-tab:nth-child(3) { border-color: #9c27b0; color: #9c27b0; } /* Imaging - purple */
+.enc-action-tab:nth-child(4) { border-color: #ff9800; color: #ff9800; } /* Meds - orange */
+.enc-action-tab:nth-child(5) { border-color: #f44336; color: #f44336; } /* Procedures - red */
+.enc-action-tab:nth-child(6) { border-color: #e91e63; color: #e91e63; } /* Cardiac - pink */
+.enc-action-tab:nth-child(7) { border-color: #ff5722; color: #ff5722; } /* Resus - deep orange */
+.enc-action-tab:nth-child(8) { border-color: #607d8b; color: #607d8b; } /* Position - grey */
+.enc-action-tab:nth-child(9) { border-color: #00bcd4; color: #00bcd4; } /* Scopes - teal */
+.enc-action-tab:nth-child(10) { border-color: #795548; color: #795548; } /* Manage - brown */
+.enc-action-tab:nth-child(11) { border-color: #455a64; color: #455a64; } /* Equip - dark grey */
+.enc-action-tab.active { color: white !important; }
+.enc-action-tab:nth-child(1).active { background: #4caf50; border-color: #4caf50; }
+.enc-action-tab:nth-child(2).active { background: #2196f3; border-color: #2196f3; }
+.enc-action-tab:nth-child(3).active { background: #9c27b0; border-color: #9c27b0; }
+.enc-action-tab:nth-child(4).active { background: #ff9800; border-color: #ff9800; }
+.enc-action-tab:nth-child(5).active { background: #f44336; border-color: #f44336; }
+.enc-action-tab:nth-child(6).active { background: #e91e63; border-color: #e91e63; }
+.enc-action-tab:nth-child(7).active { background: #ff5722; border-color: #ff5722; }
+.enc-action-tab:nth-child(8).active { background: #607d8b; border-color: #607d8b; }
+.enc-action-tab:nth-child(9).active { background: #00bcd4; border-color: #00bcd4; }
+.enc-action-tab:nth-child(10).active { background: #795548; border-color: #795548; }
+.enc-action-tab:nth-child(11).active { background: #455a64; border-color: #455a64; }
 /* Action panel search */
-.pb-action-search { width: 100%; padding: 10px 14px; border: none; border-bottom: 1px solid var(--border); font-size: 14px; font-family: inherit; background: var(--bg); color: var(--text); outline: none; position: sticky; top: 0; z-index: 5; }
-.pb-action-search:focus { background: var(--card-bg); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-.pb-action-search::placeholder { color: var(--text-light); }
+.enc-action-search { width: 100%; padding: 10px 14px; border: none; border-bottom: 1px solid var(--border); font-size: 14px; font-family: inherit; background: var(--bg); color: var(--text); outline: none; position: sticky; top: 0; z-index: 5; }
+.enc-action-search:focus { background: var(--card-bg); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.enc-action-search::placeholder { color: var(--text-light); }
 
 /* --- Resources --- */
 .resources-grid {
@@ -1292,16 +1292,16 @@ body {
 }
 
 /* --- PatientBot --- */
-.pb-action { color: var(--accent); font-style: italic; }
-.pb-speech { font-weight: 600; }
+.enc-action { color: var(--accent); font-style: italic; }
+.enc-speech { font-weight: 600; }
 
-.pb-setup {
+.enc-setup {
   max-width: 720px;
   margin: 0 auto;
   text-align: center;
 }
 
-.pb-how-to {
+.enc-how-to {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -1312,90 +1312,90 @@ body {
   line-height: 1.8;
 }
 
-.pb-how-to code {
+.enc-how-to code {
   background: #e8e8e8;
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 13px;
 }
 
-.pb-top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px; }
-.pb-top-left h3 { margin: 0; font-size: 16px; }
-.pb-top-right { display: flex; gap: 8px; }
+.enc-top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px; }
+.enc-top-left h3 { margin: 0; font-size: 16px; }
+.enc-top-right { display: flex; gap: 8px; }
 
-.pb-patient-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 10px; padding: 14px 20px; background: #e3f2fd; border-radius: 12px; border: 1px solid #bbdefb; }
-.pb-info-chip { font-size: 16px; color: #1565c0; white-space: nowrap; font-weight: 600; }
-.pb-info-chip strong { font-weight: 800; font-size: 18px; }
+.enc-patient-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 10px; padding: 14px 20px; background: #e3f2fd; border-radius: 12px; border: 1px solid #bbdefb; }
+.enc-info-chip { font-size: 16px; color: #1565c0; white-space: nowrap; font-weight: 600; }
+.enc-info-chip strong { font-weight: 800; font-size: 18px; }
 
 /* Dot matrix hospital printer style */
-.pb-dotmatrix { background: #fffff0; border: none; border-radius: 0; border-top: 2px dashed #bbb; border-bottom: 2px dashed #bbb; padding: 0; gap: 0; font-family: 'Courier New', Courier, monospace; position: relative; }
-.pb-dm-holes { width: 18px; min-height: 100%; display: flex; flex-direction: column; justify-content: space-around; align-items: center; padding: 6px 0; flex-shrink: 0; background: repeating-linear-gradient(to bottom, transparent 0px, transparent 7px, #e8e8d8 7px, #e8e8d8 8px); }
-.pb-dm-holes::before, .pb-dm-holes::after { content: ''; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid #bbb; background: transparent; flex-shrink: 0; }
-.pb-dm-holes-left { border-right: 1px solid #ddd; }
-.pb-dm-holes-right { border-left: 1px solid #ddd; }
-.pb-dm-content { flex: 1; padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; background: repeating-linear-gradient(to bottom, transparent 0px, transparent 17px, #f0f0e0 17px, #f0f0e0 18px); }
-.pb-dm-row { display: flex; flex-wrap: wrap; gap: 4px 18px; line-height: 18px; }
-.pb-dm-field { font-size: 13px; color: #222; letter-spacing: 0.5px; text-transform: uppercase; white-space: nowrap; }
-.pb-dm-label { color: #666; }
-.pb-dm-alert { color: #c00; font-weight: 700; }
-.pb-dm-alert::after { content: ' *'; }
-.pb-dm-appearance { white-space: normal; font-style: italic; color: #444; }
-[data-theme="dark"] .pb-dm-appearance { color: #999880; }
+.enc-dotmatrix { background: #fffff0; border: none; border-radius: 0; border-top: 2px dashed #bbb; border-bottom: 2px dashed #bbb; padding: 0; gap: 0; font-family: 'Courier New', Courier, monospace; position: relative; }
+.enc-dm-holes { width: 18px; min-height: 100%; display: flex; flex-direction: column; justify-content: space-around; align-items: center; padding: 6px 0; flex-shrink: 0; background: repeating-linear-gradient(to bottom, transparent 0px, transparent 7px, #e8e8d8 7px, #e8e8d8 8px); }
+.enc-dm-holes::before, .enc-dm-holes::after { content: ''; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid #bbb; background: transparent; flex-shrink: 0; }
+.enc-dm-holes-left { border-right: 1px solid #ddd; }
+.enc-dm-holes-right { border-left: 1px solid #ddd; }
+.enc-dm-content { flex: 1; padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; background: repeating-linear-gradient(to bottom, transparent 0px, transparent 17px, #f0f0e0 17px, #f0f0e0 18px); }
+.enc-dm-row { display: flex; flex-wrap: wrap; gap: 4px 18px; line-height: 18px; }
+.enc-dm-field { font-size: 13px; color: #222; letter-spacing: 0.5px; text-transform: uppercase; white-space: nowrap; }
+.enc-dm-label { color: #666; }
+.enc-dm-alert { color: #c00; font-weight: 700; }
+.enc-dm-alert::after { content: ' *'; }
+.enc-dm-appearance { white-space: normal; font-style: italic; color: #444; }
+[data-theme="dark"] .enc-dm-appearance { color: #999880; }
 
 /* Bedside monitor */
-.pb-monitor { background: #0a0a0a; border-radius: 6px; margin-bottom: 8px; overflow: hidden; border: 1px solid #333; box-shadow: 0 1px 6px rgba(0,0,0,0.3); position: relative; max-width: 340px; }
-.pb-mon-header { display: flex; justify-content: space-between; align-items: center; padding: 3px 8px; background: #1a1a1a; border-bottom: 1px solid #222; font-family: 'Courier New', Courier, monospace; font-size: 9px; color: #555; text-transform: uppercase; letter-spacing: 0.8px; }
-.pb-mon-header .pb-mon-live { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #00ff41; margin-right: 6px; animation: livePulse 1.5s ease-in-out infinite; }
+.enc-monitor { background: #0a0a0a; border-radius: 6px; margin-bottom: 8px; overflow: hidden; border: 1px solid #333; box-shadow: 0 1px 6px rgba(0,0,0,0.3); position: relative; max-width: 340px; }
+.enc-mon-header { display: flex; justify-content: space-between; align-items: center; padding: 3px 8px; background: #1a1a1a; border-bottom: 1px solid #222; font-family: 'Courier New', Courier, monospace; font-size: 9px; color: #555; text-transform: uppercase; letter-spacing: 0.8px; }
+.enc-mon-header .enc-mon-live { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #00ff41; margin-right: 6px; animation: livePulse 1.5s ease-in-out infinite; }
 @keyframes livePulse { 0%,100% { opacity: 1; box-shadow: 0 0 4px #00ff41; } 50% { opacity: 0.3; box-shadow: none; } }
-.pb-mon-title { color: #666; }
-.pb-mon-id { color: #444; }
-.pb-mon-ecg { padding: 1px 4px 0; height: 26px; overflow: hidden; border-bottom: 1px solid #1a1a1a; position: relative; }
-.pb-ecg-canvas { width: 100%; height: 100%; display: block; }
-.pb-ecg-svg { width: 100%; height: 100%; }
-.pb-ecg-line { fill: none; stroke: #00ff41; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 3px rgba(0,255,65,0.5)); animation: ecgScroll 2.5s linear infinite; }
+.enc-mon-title { color: #666; }
+.enc-mon-id { color: #444; }
+.enc-mon-ecg { padding: 1px 4px 0; height: 26px; overflow: hidden; border-bottom: 1px solid #1a1a1a; position: relative; }
+.enc-ecg-canvas { width: 100%; height: 100%; display: block; }
+.enc-ecg-svg { width: 100%; height: 100%; }
+.enc-ecg-line { fill: none; stroke: #00ff41; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 3px rgba(0,255,65,0.5)); animation: ecgScroll 2.5s linear infinite; }
 @keyframes ecgScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-70px); } }
-.pb-mon-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; padding: 1px; background: #1a1a1a; }
-.pb-mon-cell { padding: 3px 2px; text-align: center; font-family: 'Courier New', Courier, monospace; position: relative; }
-.pb-mon-cell-label { font-size: 8px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1px; opacity: 0.8; }
-.pb-mon-unit { opacity: 0.5; font-size: 7px; }
-.pb-mon-cell-value { font-size: 13px; font-weight: 700; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
-.pb-mon-hr { background: #0a0a0a; color: #00ff41; }
-.pb-mon-hr .pb-mon-cell-label { color: #00cc33; }
-.pb-mon-bp { background: #0a0a0a; color: #ff3333; }
-.pb-mon-bp .pb-mon-cell-label { color: #cc2222; }
-.pb-mon-spo2 { background: #0a0a0a; color: #00ccff; }
-.pb-mon-spo2 .pb-mon-cell-label { color: #0099cc; }
-.pb-mon-rr { background: #0a0a0a; color: #ffff00; }
-.pb-mon-rr .pb-mon-cell-label { color: #cccc00; }
-.pb-mon-temp { background: #0a0a0a; color: #ff9900; }
-.pb-mon-temp .pb-mon-cell-label { color: #cc7700; }
-.pb-mon-cell-value { transition: all 0.5s ease; }
-.pb-mon-alert .pb-mon-cell-value { animation: vitalFlash 1s ease-in-out infinite; }
-.pb-mon-hr-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #00ff41; margin-left: 6px; vertical-align: middle; }
-.pb-mon-hr-dot.beating { animation: heartBeat var(--beat-interval, 1s) ease-in-out infinite; }
+.enc-mon-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; padding: 1px; background: #1a1a1a; }
+.enc-mon-cell { padding: 3px 2px; text-align: center; font-family: 'Courier New', Courier, monospace; position: relative; }
+.enc-mon-cell-label { font-size: 8px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1px; opacity: 0.8; }
+.enc-mon-unit { opacity: 0.5; font-size: 7px; }
+.enc-mon-cell-value { font-size: 13px; font-weight: 700; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+.enc-mon-hr { background: #0a0a0a; color: #00ff41; }
+.enc-mon-hr .enc-mon-cell-label { color: #00cc33; }
+.enc-mon-bp { background: #0a0a0a; color: #ff3333; }
+.enc-mon-bp .enc-mon-cell-label { color: #cc2222; }
+.enc-mon-spo2 { background: #0a0a0a; color: #00ccff; }
+.enc-mon-spo2 .enc-mon-cell-label { color: #0099cc; }
+.enc-mon-rr { background: #0a0a0a; color: #ffff00; }
+.enc-mon-rr .enc-mon-cell-label { color: #cccc00; }
+.enc-mon-temp { background: #0a0a0a; color: #ff9900; }
+.enc-mon-temp .enc-mon-cell-label { color: #cc7700; }
+.enc-mon-cell-value { transition: all 0.5s ease; }
+.enc-mon-alert .enc-mon-cell-value { animation: vitalFlash 1s ease-in-out infinite; }
+.enc-mon-hr-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #00ff41; margin-left: 6px; vertical-align: middle; }
+.enc-mon-hr-dot.beating { animation: heartBeat var(--beat-interval, 1s) ease-in-out infinite; }
 @keyframes heartBeat { 0% { transform: scale(1); opacity: 1; } 15% { transform: scale(1.5); opacity: 1; } 30% { transform: scale(1); opacity: 0.6; } 45% { transform: scale(1.3); opacity: 1; } 60% { transform: scale(1); opacity: 0.6; } 100% { opacity: 0.6; } }
-.pb-mon-flatline .pb-mon-hr .pb-mon-cell-value { color: #ff0000; }
-.pb-mon-flatline .pb-mon-hr-dot { background: #ff0000; animation: none; }
-.pb-mon-spo2-wave { height: 20px; overflow: hidden; margin-top: 2px; }
-.pb-mon-spo2-wave svg { width: 100%; height: 100%; }
+.enc-mon-flatline .enc-mon-hr .enc-mon-cell-value { color: #ff0000; }
+.enc-mon-flatline .enc-mon-hr-dot { background: #ff0000; animation: none; }
+.enc-mon-spo2-wave { height: 20px; overflow: hidden; margin-top: 2px; }
+.enc-mon-spo2-wave svg { width: 100%; height: 100%; }
 @keyframes vitalFlash { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
-.pb-cheat-banner { background: #e8f5e9; border: 1px solid var(--success); border-radius: 8px; padding: 8px 14px; margin-bottom: 10px; font-size: 13px; }
+.enc-cheat-banner { background: #e8f5e9; border: 1px solid var(--success); border-radius: 8px; padding: 8px 14px; margin-bottom: 10px; font-size: 13px; }
 
-.pb-score-banner { border-radius: 8px; padding: 10px 16px; margin-bottom: 10px; font-size: 14px; line-height: 1.5; }
-.pb-score-correct { background: #e8f5e9; border: 1px solid var(--success); color: #2e7d32; }
-.pb-score-wrong { background: #fbe9e7; border: 1px solid var(--error); color: #c62828; }
-.pb-attempts { font-size: 12px; opacity: 0.7; }
+.enc-score-banner { border-radius: 8px; padding: 10px 16px; margin-bottom: 10px; font-size: 14px; line-height: 1.5; }
+.enc-score-correct { background: #e8f5e9; border: 1px solid var(--success); color: #2e7d32; }
+.enc-score-wrong { background: #fbe9e7; border: 1px solid var(--error); color: #c62828; }
+.enc-attempts { font-size: 12px; opacity: 0.7; }
 
-.pb-resolved-bar { text-align: center; padding: 16px; color: var(--text-light); font-size: 14px; }
+.enc-resolved-bar { text-align: center; padding: 16px; color: var(--text-light); font-size: 14px; }
 
 .btn-warning { background: #a16207; color: white; }
 .btn-warning:hover { background: #854d0e; }
 
-.pb-diag-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
-.pb-diag-modal { background: var(--card); border-radius: 16px; padding: 28px; max-width: 450px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
-.pb-diag-modal h3 { margin: 0 0 4px; }
-.pb-diag-modal .search-bar { width: 100%; margin: 0; box-sizing: border-box; }
+.enc-diag-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+.enc-diag-modal { background: var(--card); border-radius: 16px; padding: 28px; max-width: 450px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+.enc-diag-modal h3 { margin: 0 0 4px; }
+.enc-diag-modal .search-bar { width: 100%; margin: 0; box-sizing: border-box; }
 .nac-voice-mode-toggle { display:flex; gap:8px; background:var(--bg); border:1px solid var(--border); border-radius:999px; padding:4px; }
 .nac-voice-mode-btn { border:none; border-radius:999px; background:transparent; color:var(--text-light); font-size:12px; font-weight:700; padding:7px 14px; cursor:pointer; transition:all 0.15s; }
 .nac-voice-mode-btn.active { background:var(--primary); color:#fff; box-shadow:0 2px 8px rgba(26,35,126,0.22); }
@@ -1803,7 +1803,7 @@ body.kb-open #bottom-nav { display: none !important; }
     gap: 20px;
   }
 
-  .pb-setup,
+  .enc-setup,
   .quiz-setup,
   #patientbot-content #nac-setup-content .card,
   #patientbot-content #house-setup-content .card {
@@ -1928,38 +1928,38 @@ body.kb-open #bottom-nav { display: none !important; }
     padding: 14px 18px;
   }
 
-  .pb-patient-bar {
+  .enc-patient-bar {
     padding: 16px 32px;
     gap: 16px;
   }
 
-  .pb-info-chip {
+  .enc-info-chip {
     font-size: 18px;
   }
 
-  .pb-info-chip strong {
+  .enc-info-chip strong {
     font-size: 20px;
   }
 
-  .pb-dotmatrix { padding: 0; }
-  .pb-dm-field { font-size: 14px; }
-  .pb-dm-content { padding: 12px 18px; }
+  .enc-dotmatrix { padding: 0; }
+  .enc-dm-field { font-size: 14px; }
+  .enc-dm-content { padding: 12px 18px; }
 
-  .pb-top-bar {
+  .enc-top-bar {
     padding: 16px 28px;
   }
 
-  .pb-action-bar {
+  .enc-action-bar {
     padding: 8px 16px;
     gap: 6px;
   }
 
-  .pb-action-tab {
+  .enc-action-tab {
     padding: 10px 18px;
     font-size: 15px;
   }
 
-  .pb-action-chip {
+  .enc-action-chip {
     padding: 10px 18px;
     font-size: 15px;
   }
@@ -2131,23 +2131,23 @@ body.kb-open #bottom-nav { display: none !important; }
     flex: 1;
   }
 
-  .pb-diagnose-btn {
+  .enc-diagnose-btn {
     padding: 10px 12px;
     font-size: 13px;
   }
 
-  .pb-action-bar {
+  .enc-action-bar {
     padding: 4px 6px;
     gap: 4px;
   }
 
-  .pb-action-tab {
+  .enc-action-tab {
     padding: 6px 10px;
     font-size: 11px;
     border-radius: 16px;
   }
 
-  .pb-action-chip {
+  .enc-action-chip {
     padding: 6px 12px;
     font-size: 13px;
   }
@@ -2233,31 +2233,31 @@ body.kb-open #bottom-nav { display: none !important; }
     padding: 14px 16px;
   }
 
-  .pb-patient-bar {
+  .enc-patient-bar {
     padding: 10px 14px;
     gap: 8px;
   }
 
-  .pb-info-chip {
+  .enc-info-chip {
     font-size: 14px;
   }
 
-  .pb-info-chip strong {
+  .enc-info-chip strong {
     font-size: 15px;
   }
 
-  .pb-dotmatrix { padding: 0; }
-  .pb-dm-field { font-size: 11px; letter-spacing: 0.3px; }
-  .pb-dm-content { padding: 8px 10px; }
-  .pb-dm-holes { width: 14px; }
-  .pb-dm-holes::before, .pb-dm-holes::after { width: 6px; height: 6px; }
+  .enc-dotmatrix { padding: 0; }
+  .enc-dm-field { font-size: 11px; letter-spacing: 0.3px; }
+  .enc-dm-content { padding: 8px 10px; }
+  .enc-dm-holes { width: 14px; }
+  .enc-dm-holes::before, .enc-dm-holes::after { width: 6px; height: 6px; }
 
-  .pb-mon-grid { grid-template-columns: repeat(3, 1fr); }
-  .pb-mon-cell-value { font-size: 18px; }
-  .pb-mon-cell-label { font-size: 8px; }
-  .pb-mon-ecg { height: 36px; }
+  .enc-mon-grid { grid-template-columns: repeat(3, 1fr); }
+  .enc-mon-cell-value { font-size: 18px; }
+  .enc-mon-cell-label { font-size: 8px; }
+  .enc-mon-ecg { height: 36px; }
 
-  .pb-top-bar {
+  .enc-top-bar {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -2549,10 +2549,10 @@ body.kb-open #bottom-nav { display: none !important; }
 @media (max-width: 768px) {
   .clock-widget, .clock-expanded { display: none !important; }
   #zoom-controls { display: none !important; }
-  .pb-monitor { max-width: 100%; }
-  .pb-mon-cell-value { font-size: 12px; }
-  .pb-mon-cell-label { font-size: 7px; }
-  .pb-mon-ecg { height: 22px; }
+  .enc-monitor { max-width: 100%; }
+  .enc-mon-cell-value { font-size: 12px; }
+  .enc-mon-cell-label { font-size: 7px; }
+  .enc-mon-ecg { height: 22px; }
 }
 
 /* ===== FLAG / REPORT ISSUE ===== */
@@ -2636,7 +2636,7 @@ a:focus-visible {
    Modal base — reusable overlay/panel/close trio.
    Use `.modal-overlay` for the backdrop and `.modal-panel`
    for the content card. Legacy modals (.flag-modal,
-   .pb-diag-modal, #god-menu-overlay) predate this and are
+   .enc-diag-modal, #god-menu-overlay) predate this and are
    being migrated incrementally.
    ============================================================ */
 .modal-overlay {
@@ -2796,9 +2796,9 @@ a:focus-visible {
     </ul>
     <div class="sidebar-footer">
       <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:8px 0">
-        <button onclick="adjustTextSize(-10)" style="width:32px;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:white;cursor:pointer;font-size:14px;font-weight:700" title="Decrease text size">A-</button>
+        <button aria-label="Decrease text size" onclick="adjustTextSize(-10)" style="width:32px;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:white;cursor:pointer;font-size:14px;font-weight:700" title="Decrease text size">A-</button>
         <span id="text-size-label" style="font-size:12px;color:rgba(255,255,255,0.6);min-width:36px;text-align:center">100%</span>
-        <button onclick="adjustTextSize(10)" style="width:32px;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:white;cursor:pointer;font-size:16px;font-weight:700" title="Increase text size">A+</button>
+        <button aria-label="Increase text size" onclick="adjustTextSize(10)" style="width:32px;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:white;cursor:pointer;font-size:16px;font-weight:700" title="Increase text size">A+</button>
       </div>
       <button class="dark-mode-toggle" onclick="toggleDarkMode()" id="dark-mode-btn" title="Toggle dark mode" style="margin-top:8px">&#x1F319; Dark Mode</button>
       <button class="dark-mode-toggle" onclick="showNameEntry()" style="margin-top:6px">&#x1F465; Switch User</button>
@@ -4978,7 +4978,7 @@ var VitalsEngine = {
     if (ecg) ecg.dataset.hr = d.hr;
     var pleth = document.getElementById('pb-pleth-canvas');
     if (pleth) pleth.dataset.hr = d.hr;
-    var toggleAlert = function(id, on) { var el = document.getElementById(id); if (el) el.classList.toggle('pb-mon-alert', !!on); };
+    var toggleAlert = function(id, on) { var el = document.getElementById(id); if (el) el.classList.toggle('enc-mon-alert', !!on); };
     toggleAlert('ve-hr-cell',   d.hr > 120 || d.hr < 50);
     toggleAlert('ve-spo2-cell', d.spo2 < 92);
     toggleAlert('ve-rr-cell',   d.rr > 24 || d.rr < 8);
@@ -5250,7 +5250,7 @@ function checkWeeklyReport_(stats) {
     banner.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:flex-start">' +
       '<div><div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;opacity:0.8;margin-bottom:8px">Weekly Progress Report</div>' +
       '<p style="font-size:14px;line-height:1.7;margin:0;opacity:0.95">' + escapeHtml(result.response) + '</p></div>' +
-      '<button onclick="this.parentElement.parentElement.remove()" style="background:none;border:none;color:white;font-size:18px;cursor:pointer;opacity:0.6;padding:0 0 0 12px">&#x2715;</button></div>';
+      '<button aria-label="Close" onclick="this.parentElement.parentElement.remove()" style="background:none;border:none;color:white;font-size:18px;cursor:pointer;opacity:0.6;padding:0 0 0 12px">&#x2715;</button></div>';
     var dashContent = document.getElementById('dashboard-content');
     if (dashContent) dashContent.insertBefore(banner, dashContent.firstChild);
   }).catch(function() {});
@@ -6248,7 +6248,7 @@ function renderFlashcard() {
   if (App.glossary && !localStorage.getItem('mcc_medterm_hint_seen')) {
     html += '<div id="medterm-hint-banner" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;background:rgba(37,99,235,0.07);border:1px solid rgba(37,99,235,0.18);border-radius:10px;font-size:13px;color:var(--text);line-height:1.4">';
     html += '&#x1F4A1; Tap <span style="color:#2563eb;font-weight:700;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px">blue underlined words</span> to hear audio &amp; translation';
-    html += '<button onclick="dismissMedHint()" style="margin-left:auto;flex-shrink:0;background:none;border:none;cursor:pointer;font-size:17px;color:var(--text-light);padding:0;line-height:1">&#x2715;</button>';
+    html += '<button aria-label="Dismiss hint" onclick="dismissMedHint()" style="margin-left:auto;flex-shrink:0;background:none;border:none;cursor:pointer;font-size:17px;color:var(--text-light);padding:0;line-height:1">&#x2715;</button>';
     html += '</div>';
   }
 
@@ -6272,7 +6272,7 @@ function renderFlashcard() {
     html += '<button class="btn btn-outline" onclick="prevFlashcard()" style="padding:10px 20px;font-size:15px;margin-right:12px;font-weight:700">&#x2190; Back</button>';
   }
   html += '<span style="cursor:pointer" onclick="var r=document.getElementById(\'fc-jump-row\');r.style.display=r.style.display===\'none\'?\'flex\':\'none\'" title="Click to jump to a card">' + current + ' / ' + total + '</span>';
-  html += ' <button onclick="shareFlashcardPosition()" style="background:none;border:none;cursor:pointer;font-size:14px;vertical-align:middle;opacity:0.6" title="Copy link to this card">&#x1F517;</button>';
+  html += ' <button aria-label="Copy flashcard link" onclick="shareFlashcardPosition()" style="background:none;border:none;cursor:pointer;font-size:14px;vertical-align:middle;opacity:0.6" title="Copy link to this card">&#x1F517;</button>';
   if (card.hyFlag) html += ' <span class="hy-badge">&#x2B50; Important</span>';
   html += '<br><span>' + escapeHtml(card.specialty) + ' &mdash; ' + escapeHtml(card.topic) + '</span></div>';
   // Jump-to-card row (hidden by default, shown on click)
@@ -6398,7 +6398,7 @@ function applyAccessibilityEnhancements_() {
     var btn = buttons[i];
     var rawText = (btn.textContent || '').replace(/\s+/g, ' ').trim();
     var hasWord = /[A-Za-z]{2,}/.test(rawText);
-    var isIconButton = !hasWord || btn.classList.contains('flag-btn') || btn.classList.contains('med-inline-btn') || btn.classList.contains('pb-actions-handle');
+    var isIconButton = !hasWord || btn.classList.contains('flag-btn') || btn.classList.contains('med-inline-btn') || btn.classList.contains('enc-actions-handle');
     if (isIconButton) {
       btn.classList.add('icon-touch-target');
       if (!btn.getAttribute('aria-label')) {
@@ -9129,8 +9129,8 @@ function renderDrDataChat() {
     var m = App.drDataHistory[i];
     var msgHtml = m.role === 'assistant' ? formatMarkdown(m.content) : escapeHtml(m.content);
     var flagCtx = m.role === 'assistant' ? escapeHtml(JSON.stringify({type:'drdata',id:i,content:(m.content||'').substring(0,200)})) : '';
-    var flagHtml = m.role === 'assistant' ? ' <button class="flag-btn" style="float:right;margin:4px 0 0 8px;font-size:10px;padding:2px 6px" data-flag-context="' + flagCtx + '" onclick="openFlagModal(JSON.parse(this.dataset.flagContext))">&#x1F6A9;</button>' : '';
-    var speakBtn = m.role === 'assistant' ? '<button class="flag-btn" style="float:right;margin:4px 4px 0 0;font-size:11px;padding:2px 6px" onclick="replayMsg_(' + i + ',\'dd\')" title="Replay">&#x1F50A;</button>' : '';
+    var flagHtml = m.role === 'assistant' ? ' <button aria-label="Flag message" class="flag-btn" style="float:right;margin:4px 0 0 8px;font-size:10px;padding:2px 6px" data-flag-context="' + flagCtx + '" onclick="openFlagModal(JSON.parse(this.dataset.flagContext))">&#x1F6A9;</button>' : '';
+    var speakBtn = m.role === 'assistant' ? '<button aria-label="Replay audio" class="flag-btn" style="float:right;margin:4px 4px 0 0;font-size:11px;padding:2px 6px" onclick="replayMsg_(' + i + ',\'dd\')" title="Replay">&#x1F50A;</button>' : '';
     html += '<div class="chat-message ' + m.role + '">' + speakBtn + flagHtml + msgHtml + '</div>';
   }
   el.innerHTML = html; el.scrollTop = el.scrollHeight;
@@ -9182,7 +9182,7 @@ function showPBTutorial(onDone) {
     var html = '<div style="background:var(--card);border-radius:20px;max-width:440px;width:100%;padding:32px 28px;box-shadow:0 20px 60px rgba(0,0,0,0.3);animation:fadeIn 0.3s">';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">';
     html += '<span style="font-size:12px;color:var(--text-light);font-weight:700">' + (currentStep + 1) + ' / ' + steps.length + '</span>';
-    html += '<button onclick="document.getElementById(\'pb-tutorial-overlay\').remove();(' + onDone.toString() + ')()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-light);padding:4px">&times;</button>';
+    html += '<button aria-label="Close tutorial" onclick="document.getElementById(\'pb-tutorial-overlay\').remove();(' + onDone.toString() + ')()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-light);padding:4px">&times;</button>';
     html += '</div>';
     html += '<h3 style="margin:0 0 12px;font-size:20px;font-weight:800;color:var(--text)">' + s.title + '</h3>';
     html += '<p style="color:var(--text-light);line-height:1.6;margin:0 0 24px;font-size:15px">' + s.text + '</p>';
@@ -9226,7 +9226,7 @@ function showPatientBotSetup() {
   var el = document.getElementById('patientbot-content');
   var specs = App.specialties ? App.specialties.all || [] : [];
 
-  var html = '<div class="pb-setup card">';
+  var html = '<div class="enc-setup card">';
   html += '<div style="font-size:48px;margin-bottom:16px">&#x1F3E5;</div>';
   html += '<h2>PatientBot</h2>';
   html += '<p style="color:var(--text-light);margin:12px 0 20px">Practice clinical skills with simulated patient encounters</p>';
@@ -9300,18 +9300,18 @@ function showPatientBotSetup() {
   // ── Historian / Coop / Aggression sliders ──
   html += '<div class="form-group" style="text-align:left;margin-bottom:14px">';
   html += '<div style="display:flex;justify-content:space-between"><label style="font-size:13px;font-weight:700">Historian Quality</label><span id="pb-historian-label" style="font-size:12px;color:var(--primary);font-weight:700">Random</span></div>';
-  html += '<input type="range" min="0" max="3" value="0" class="pb-slider" id="pb-historian-slider" oninput="updatePBSlider(\'historian\',this.value)">';
-  html += '<div class="pb-slider-labels"><span>Random</span><span>Good</span><span>Poor</span><span>Vague</span></div></div>';
+  html += '<input type="range" min="0" max="3" value="0" class="enc-slider" id="pb-historian-slider" oninput="updatePBSlider(\'historian\',this.value)">';
+  html += '<div class="enc-slider-labels"><span>Random</span><span>Good</span><span>Poor</span><span>Vague</span></div></div>';
 
   html += '<div class="form-group" style="text-align:left;margin-bottom:14px">';
   html += '<div style="display:flex;justify-content:space-between"><label style="font-size:13px;font-weight:700">Cooperativeness</label><span id="pb-coop-label" style="font-size:12px;color:var(--primary);font-weight:700">Random</span></div>';
-  html += '<input type="range" min="0" max="3" value="0" class="pb-slider" id="pb-coop-slider" oninput="updatePBSlider(\'coop\',this.value)">';
-  html += '<div class="pb-slider-labels"><span>Random</span><span>Cooperative</span><span>Reluctant</span><span>Hostile</span></div></div>';
+  html += '<input type="range" min="0" max="3" value="0" class="enc-slider" id="pb-coop-slider" oninput="updatePBSlider(\'coop\',this.value)">';
+  html += '<div class="enc-slider-labels"><span>Random</span><span>Cooperative</span><span>Reluctant</span><span>Hostile</span></div></div>';
 
   html += '<div class="form-group" style="text-align:left;margin-bottom:14px">';
   html += '<div style="display:flex;justify-content:space-between"><label style="font-size:13px;font-weight:700">Aggression</label><span id="pb-aggression-label" style="font-size:12px;color:var(--primary);font-weight:700">Random</span></div>';
-  html += '<input type="range" min="0" max="3" value="0" class="pb-slider" id="pb-aggression-slider" oninput="updatePBSlider(\'aggression\',this.value)">';
-  html += '<div class="pb-slider-labels"><span>Random</span><span>None</span><span>Mild</span><span>Aggressive</span></div></div>';
+  html += '<input type="range" min="0" max="3" value="0" class="enc-slider" id="pb-aggression-slider" oninput="updatePBSlider(\'aggression\',this.value)">';
+  html += '<div class="enc-slider-labels"><span>Random</span><span>None</span><span>Mild</span><span>Aggressive</span></div></div>';
 
   // ── Psychological Archetype ──
   html += '<div class="form-group" style="text-align:left;margin-bottom:14px">';
@@ -9352,7 +9352,7 @@ function showPatientBotSetup() {
 
   html += '</div></div>';
 
-  html += '<div class="pb-how-to">';
+  html += '<div class="enc-how-to">';
   html += '<strong>How to Play:</strong><br>';
   html += '&#x1F4AC; <strong>Interview</strong> — Talk to the patient like a real encounter: "any chest pain?" "when did it start?"<br>';
   html += '&#x1FA7A; <strong>Examine</strong> — Use the action palette or type: "*palpate abdomen*" "*auscultate lungs*"<br>';
@@ -9976,8 +9976,8 @@ function renderHouseChat() {
   var html = '<div style="max-width:780px;margin:0 auto;background:linear-gradient(180deg,#0f172a,#111827 28%,#0b1220);border:1px solid rgba(148,163,184,0.22);border-radius:16px;padding:10px 0 16px;box-shadow:0 18px 36px rgba(2,6,23,0.45)">';
   // Header
   var isFreeplay = !!(cond.freeplay);
-  html += '<div class="pb-top-bar" style="background:transparent;border-bottom:1px solid rgba(148,163,184,0.2)"><div class="pb-top-left"><h3 style="color:#e2e8f0">&#x1F9E0; ' + (isFreeplay ? 'Free Play &mdash; ???' : 'Dr. House Mode &mdash; ' + escapeHtml(cond.name)) + '</h3></div>';
-  html += '<div class="pb-top-right"><span style="font-size:13px;color:#94a3b8">Turn ' + App.pbHouseScore.turns + '</span>';
+  html += '<div class="enc-top-bar" style="background:transparent;border-bottom:1px solid rgba(148,163,184,0.2)"><div class="enc-top-left"><h3 style="color:#e2e8f0">&#x1F9E0; ' + (isFreeplay ? 'Free Play &mdash; ???' : 'Dr. House Mode &mdash; ' + escapeHtml(cond.name)) + '</h3></div>';
+  html += '<div class="enc-top-right"><span style="font-size:13px;color:#94a3b8">Turn ' + App.pbHouseScore.turns + '</span>';
   html += '<button class="btn btn-sm btn-outline" onclick="endHouseMode_()" style="margin-left:8px">End Session</button></div></div>';
 
   if (App.pbHouseScore && App.pbHouseScore.houseDiagnosed) {
@@ -10034,7 +10034,7 @@ function renderHouseChat() {
       html += '<div class="chat-message user">' + escapeHtml(m.content) + '</div>';
     } else if (m.role === 'assistant') {
       var houseFlagCtx = escapeHtml(JSON.stringify({type:'house',id:i,content:(m.content||'').substring(0,200)}));
-      html += '<div class="chat-message assistant" style="border-left:3px solid #7c3aed;padding-left:12px"><button class="flag-btn" style="float:right;font-size:10px;padding:2px 6px;margin:0 0 4px 8px" data-flag-context="' + houseFlagCtx + '" onclick="openFlagModal(JSON.parse(this.dataset.flagContext))">&#x1F6A9;</button><button class="flag-btn" style="float:right;font-size:11px;padding:2px 6px;margin:0 4px 4px 0" onclick="replayMsg_(' + i + ',\'house\')" title="Replay">&#x1F50A;</button><strong>Dr. House:</strong> ' + formatMarkdown(m.content) + '</div>';
+      html += '<div class="chat-message assistant" style="border-left:3px solid #7c3aed;padding-left:12px"><button aria-label="Flag message" class="flag-btn" style="float:right;font-size:10px;padding:2px 6px;margin:0 0 4px 8px" data-flag-context="' + houseFlagCtx + '" onclick="openFlagModal(JSON.parse(this.dataset.flagContext))">&#x1F6A9;</button><button aria-label="Replay audio" class="flag-btn" style="float:right;font-size:11px;padding:2px 6px;margin:0 4px 4px 0" onclick="replayMsg_(' + i + ',\'house\')" title="Replay">&#x1F50A;</button><strong>Dr. House:</strong> ' + formatMarkdown(m.content) + '</div>';
     } else if (m.role === 'typing') {
       var houseThinking_ = [
         'House is thinking... or ignoring you. Hard to tell.',
@@ -10402,14 +10402,14 @@ function togglePBActionsBar() {
   var label = document.getElementById('pb-actions-handle-label');
   if (!wrapper) return;
   if (App.pbActionsHidden) {
-    wrapper.classList.add('pb-actions-collapsed');
+    wrapper.classList.add('enc-actions-collapsed');
     if (label) label.innerHTML = '&#x25B4; Actions';
     // Close any open chip panel
     var panel = document.getElementById('pb-actions-panel');
     if (panel) panel.style.display = 'none';
-    document.querySelectorAll('.pb-action-tab.active').forEach(function(b) { b.classList.remove('active'); });
+    document.querySelectorAll('.enc-action-tab.active').forEach(function(b) { b.classList.remove('active'); });
   } else {
-    wrapper.classList.remove('pb-actions-collapsed');
+    wrapper.classList.remove('enc-actions-collapsed');
     if (label) label.innerHTML = '&#x25BE; Actions';
   }
 }
@@ -10423,11 +10423,11 @@ function togglePBCategory(catIndex, btn) {
   var isOpen = catPanel.style.display !== 'none';
 
   // Hide all categories
-  var allPanels = panel.querySelectorAll('.pb-cat-panel');
+  var allPanels = panel.querySelectorAll('.enc-cat-panel');
   for (var i = 0; i < allPanels.length; i++) allPanels[i].style.display = 'none';
 
   // Deactivate all tabs
-  var allTabs = document.querySelectorAll('.pb-action-tab');
+  var allTabs = document.querySelectorAll('.enc-action-tab');
   for (var i = 0; i < allTabs.length; i++) allTabs[i].classList.remove('active');
 
   // Clear search when switching categories
@@ -10449,16 +10449,16 @@ function filterPBActions(query) {
   query = (query || '').toLowerCase().trim();
   var panel = document.getElementById('pb-actions-panel');
   if (!panel) return;
-  var allPanels = panel.querySelectorAll('.pb-cat-panel');
-  var chips = panel.querySelectorAll('.pb-action-chip');
-  var headers = panel.querySelectorAll('.pb-section-header');
+  var allPanels = panel.querySelectorAll('.enc-cat-panel');
+  var chips = panel.querySelectorAll('.enc-action-chip');
+  var headers = panel.querySelectorAll('.enc-section-header');
 
   if (!query) {
     // Reset: hide all chips, show only the active category
     for (var i = 0; i < chips.length; i++) chips[i].style.display = '';
     for (var i = 0; i < headers.length; i++) headers[i].style.display = '';
     // Restore category-based visibility
-    var activeTab = document.querySelector('.pb-action-tab.active');
+    var activeTab = document.querySelector('.enc-action-tab.active');
     if (activeTab) {
       var catIdx = activeTab.getAttribute('data-cat');
       for (var i = 0; i < allPanels.length; i++) allPanels[i].style.display = 'none';
@@ -10481,17 +10481,17 @@ function filterPBActions(query) {
 
   // Hide headers if their section has no visible chips
   for (var i = 0; i < headers.length; i++) {
-    var wrapper = headers[i].closest('.pb-cat-panel');
+    var wrapper = headers[i].closest('.enc-cat-panel');
     if (!wrapper) continue;
     // Check visible chips in this specific section (between this header and next)
     var parent = headers[i].parentElement;
-    var visibleInSection = parent ? parent.querySelectorAll('.pb-action-chip:not([style*="display: none"])') : [];
+    var visibleInSection = parent ? parent.querySelectorAll('.enc-action-chip:not([style*="display: none"])') : [];
     headers[i].style.display = visibleInSection.length > 0 ? '' : 'none';
   }
 
   // Hide empty category panels
   for (var i = 0; i < allPanels.length; i++) {
-    var visibleChips = allPanels[i].querySelectorAll('.pb-action-chip:not([style*="display: none"])');
+    var visibleChips = allPanels[i].querySelectorAll('.enc-action-chip:not([style*="display: none"])');
     allPanels[i].style.display = visibleChips.length > 0 ? '' : 'none';
   }
 }
@@ -10550,7 +10550,7 @@ function insertPBAction(text) {
   // Close panel
   var panel = document.getElementById('pb-actions-panel');
   if (panel) panel.style.display = 'none';
-  var allTabs = document.querySelectorAll('.pb-action-tab');
+  var allTabs = document.querySelectorAll('.enc-action-tab');
   for (var i = 0; i < allTabs.length; i++) allTabs[i].classList.remove('active');
   // NAC mode: track action + send through pipeline
   if (App.nacActive) {
@@ -10577,7 +10577,7 @@ function showActionSpecPrompt(actionText, spec) {
   // Close the action panel
   var panel = document.getElementById('pb-actions-panel');
   if (panel) panel.style.display = 'none';
-  var allTabs = document.querySelectorAll('.pb-action-tab');
+  var allTabs = document.querySelectorAll('.enc-action-tab');
   for (var i = 0; i < allTabs.length; i++) allTabs[i].classList.remove('active');
 
   // Show inline prompt above the input
@@ -10590,11 +10590,11 @@ function showActionSpecPrompt(actionText, spec) {
   var div = document.createElement('div');
   div.id = 'pb-spec-prompt';
   div.className = 'pb-spec-prompt';
-  div.innerHTML = '<div class="pb-spec-label">' + escapeHtml(spec.prompt) + '</div>' +
-    '<div class="pb-spec-row">' +
-    '<input type="text" id="pb-spec-input" class="pb-spec-input" placeholder="' + escapeHtml(spec.placeholder) + '" autocomplete="off" />' +
-    '<button class="btn btn-sm btn-primary pb-spec-go" onclick="submitActionSpec()">Go</button>' +
-    '<button class="btn btn-sm btn-outline pb-spec-cancel" onclick="cancelActionSpec()">Cancel</button>' +
+  div.innerHTML = '<div class="enc-spec-label">' + escapeHtml(spec.prompt) + '</div>' +
+    '<div class="enc-spec-row">' +
+    '<input type="text" id="pb-spec-input" class="enc-spec-input" placeholder="' + escapeHtml(spec.placeholder) + '" autocomplete="off" />' +
+    '<button class="btn btn-sm btn-primary enc-spec-go" onclick="submitActionSpec()">Go</button>' +
+    '<button class="btn btn-sm btn-outline enc-spec-cancel" onclick="cancelActionSpec()">Cancel</button>' +
     '</div>';
   container.parentNode.insertBefore(div, container);
 
@@ -10936,7 +10936,7 @@ function showNACSetup() {
   App.nacActive = false;
   App.nacShowingResults = false;
   var el = document.getElementById('nac-sim-content');
-  var html = '<div class="pb-setup card">';
+  var html = '<div class="enc-setup card">';
   html += '<div style="font-size:48px;margin-bottom:16px">&#x1FA7A;</div>';
   html += '<h2>NAC-OSCE Simulator</h2>';
   html += '<p style="color:var(--text-light);margin:12px 0 20px">Practice the National Assessment Collaboration OSCE. Each station is a timed patient encounter with structured scoring.</p>';
@@ -10969,7 +10969,7 @@ function showNACSetup() {
   var hasAnthropicKey = !!localStorage.getItem('mcc_anthropic_key');
   var hasOpenAIKey = !!localStorage.getItem('mcc_openai_key');
 
-  html += '<div class="pb-how-to">';
+  html += '<div class="enc-how-to">';
   html += '<strong>How It Works:</strong><br>';
   html += '&#x1F3E5; Each station is a PatientBot encounter with a specific clinical presentation<br>';
   html += '&#x23F1; Timer counts down (if enabled) — manage your time like the real NAC<br>';
@@ -13240,7 +13240,7 @@ function showScorecardModal_() {
   h += '<div style="background:var(--card);border-radius:20px;padding:28px;max-width:520px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);position:relative">';
 
   // Close button
-  h += '<button onclick="document.getElementById(\'scorecard-modal\').remove()" style="position:absolute;top:12px;right:16px;background:none;border:none;font-size:22px;cursor:pointer;color:var(--text-light);padding:4px 8px">&times;</button>';
+  h += '<button aria-label="Close scorecard" onclick="document.getElementById(\'scorecard-modal\').remove()" style="position:absolute;top:12px;right:16px;background:none;border:none;font-size:22px;cursor:pointer;color:var(--text-light);padding:4px 8px">&times;</button>';
 
   // Header with grade badge
   h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">';
@@ -13417,7 +13417,7 @@ function renderPBChat() {
   // Restore action palette collapsed state
   if (App.pbActionsHidden) {
     var wrapper = document.getElementById('pb-actions-wrapper');
-    if (wrapper) wrapper.classList.add('pb-actions-collapsed');
+    if (wrapper) wrapper.classList.add('enc-actions-collapsed');
   }
   var msgs = document.getElementById('pb-messages');
   if (msgs) msgs.scrollTop = msgs.scrollHeight;
@@ -13720,13 +13720,13 @@ function renderNACStationUI_(targetEl) {
   var html = '';
 
   // ── Top bar: Station info + timer + controls ──
-  html += '<div class="pb-top-bar" style="background:linear-gradient(135deg,#0d1442,#1a237e)">';
+  html += '<div class="enc-top-bar" style="background:linear-gradient(135deg,#0d1442,#1a237e)">';
   var nacHeaderTitle = App.nacRandomMode
     ? 'NAC-OSCE &mdash; Random Case &mdash; Station ' + App.nacCurrentStation + '/' + App.nacTotalStations
     : 'NAC-OSCE &mdash; Test ' + (App.nacTestNumber || '') + ' &mdash; Station ' + App.nacCurrentStation + '/' + App.nacTotalStations;
-  html += '<div class="pb-top-left"><h3 style="color:white">' + nacHeaderTitle + '</h3>';
+  html += '<div class="enc-top-left"><h3 style="color:white">' + nacHeaderTitle + '</h3>';
   html += '<div style="font-size:12px;color:rgba(255,255,255,0.6);margin-top:2px">' + escapeHtml(App.pbSpecialty || '') + ' &mdash; ' + escapeHtml(App.pbPresentation || '') + '</div></div>';
-  html += '<div class="pb-top-right">';
+  html += '<div class="enc-top-right">';
   if (App.nacTimerMinutes > 0 && !App.pbDiagResolved) {
     var timerSec = App.nacTimerSeconds || 0;
     var tm = Math.floor(timerSec / 60);
@@ -14071,7 +14071,7 @@ function renderNACStationUI_(targetEl) {
       html += '<div id="hf-interim-caption" style="min-height:18px;max-width:90%;font-size:12px;color:var(--text-light);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(App.pbInterimTranscript || '') + '</div>';
       html += '<div style="font-size:11px;color:var(--text-light);text-align:center">Speak naturally &bull; <strong>"my diagnosis is..."</strong> to diagnose &bull; <strong>"order..."</strong> for orders</div>';
     } else {
-      html += '<button class="nac-ptt-button' + (App.nacPTTRecording ? ' recording' : '') + '" ' +
+      html += '<button aria-label="Push to talk" class="nac-ptt-button' + (App.nacPTTRecording ? ' recording' : '') + '" ' +
         'onclick="toggleNACPtt_()" ' +
         'title="' + (App.nacPTTRecording ? 'Tap to send' : 'Tap to record') + '">&#x1F3A4;</button>';
       html += '<div id="nac-ptt-caption" style="min-height:18px;max-width:92%;font-size:12px;color:var(--text-light);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(App.pbInterimTranscript || (App.nacPTTRecording ? 'Listening... tap mic to send' : 'Tap mic to speak, tap again to send')) + '</div>';
@@ -14155,8 +14155,8 @@ function renderPBChatInner() {
   var caseLabel = App.pbTotalCases > 1 ? ' (Case ' + App.pbCurrentCase + '/' + App.pbTotalCases + ')' : '';
   var p = App.pbPatientInfo;
 
-  var html = '<div class="pb-top-bar"><div class="pb-top-left"><h3>PatientBot &mdash; ' + escapeHtml(App.pbSpecialty) + caseLabel + '</h3></div>';
-  html += '<div class="pb-top-right">';
+  var html = '<div class="enc-top-bar"><div class="enc-top-left"><h3>PatientBot &mdash; ' + escapeHtml(App.pbSpecialty) + caseLabel + '</h3></div>';
+  html += '<div class="enc-top-right">';
   // NAC timer display
   if (App.nacActive && App.nacTimerMinutes > 0 && !App.pbDiagResolved) {
     var timerSec = App.nacTimerSeconds || 0;
@@ -14226,34 +14226,34 @@ function renderPBChatInner() {
       var isFlatline = vd.hr === 0 || vd.spo2 === 0;
       var beatInterval = vd.hr > 0 ? (60 / vd.hr) : 0;
       if (!App.pbMRN) App.pbMRN = Math.floor(Math.random()*900000+100000);
-      html += '<div class="pb-monitor' + (isFlatline ? ' pb-mon-flatline' : '') + '" id="pb-live-monitor">';
-      html += '<div class="pb-mon-header"><span class="pb-mon-title"><span class="pb-mon-live"></span>BEDSIDE MONITOR</span><span class="pb-mon-id">MRN ' + App.pbMRN + '</span></div>';
-      html += '<div class="pb-mon-ecg"><canvas class="pb-ecg-canvas" id="pb-ecg-canvas" data-hr="' + (vd.hr || 0) + '"></canvas></div>';
-      html += '<div style="padding:0 8px;height:20px;overflow:hidden;background:#0a0a0a;border-bottom:1px solid #1a1a1a"><canvas class="pb-ecg-canvas" id="pb-pleth-canvas" data-hr="' + (vd.hr || 0) + '" style="height:20px"></canvas></div>';
-      html += '<div class="pb-mon-grid">';
-      html += '<div class="pb-mon-cell pb-mon-hr" id="ve-hr-cell">';
-      html += '<div class="pb-mon-cell-label">HR <span class="pb-mon-unit">bpm</span></div>';
-      html += '<div class="pb-mon-cell-value"><span id="ve-hr">' + (vd.hr || '--') + '</span><span class="pb-mon-hr-dot' + (vd.hr > 0 ? ' beating' : '') + '" id="ve-hr-dot" style="--beat-interval:' + (beatInterval > 0 ? beatInterval.toFixed(2) : 1) + 's"></span></div></div>';
+      html += '<div class="enc-monitor' + (isFlatline ? ' enc-mon-flatline' : '') + '" id="pb-live-monitor">';
+      html += '<div class="enc-mon-header"><span class="enc-mon-title"><span class="enc-mon-live"></span>BEDSIDE MONITOR</span><span class="enc-mon-id">MRN ' + App.pbMRN + '</span></div>';
+      html += '<div class="enc-mon-ecg"><canvas class="enc-ecg-canvas" id="pb-ecg-canvas" data-hr="' + (vd.hr || 0) + '"></canvas></div>';
+      html += '<div style="padding:0 8px;height:20px;overflow:hidden;background:#0a0a0a;border-bottom:1px solid #1a1a1a"><canvas class="enc-ecg-canvas" id="pb-pleth-canvas" data-hr="' + (vd.hr || 0) + '" style="height:20px"></canvas></div>';
+      html += '<div class="enc-mon-grid">';
+      html += '<div class="enc-mon-cell enc-mon-hr" id="ve-hr-cell">';
+      html += '<div class="enc-mon-cell-label">HR <span class="enc-mon-unit">bpm</span></div>';
+      html += '<div class="enc-mon-cell-value"><span id="ve-hr">' + (vd.hr || '--') + '</span><span class="enc-mon-hr-dot' + (vd.hr > 0 ? ' beating' : '') + '" id="ve-hr-dot" style="--beat-interval:' + (beatInterval > 0 ? beatInterval.toFixed(2) : 1) + 's"></span></div></div>';
       var latBP = VitalsEngine.getLatestBP();
       var bpHTML = VitalsEngine._bpMeasuring ? '<span style="font-size:10px">Measuring...</span>' : (latBP ? latBP.sbp+'/'+latBP.dbp : '--/--');
-      html += '<div class="pb-mon-cell pb-mon-bp" id="ve-bp-cell">';
-      html += '<div class="pb-mon-cell-label">NIBP <span class="pb-mon-unit">mmHg</span></div>';
-      html += '<div class="pb-mon-cell-value" id="ve-bp">' + bpHTML + '</div></div>';
-      html += '<div class="pb-mon-cell pb-mon-spo2" id="ve-spo2-cell">';
-      html += '<div class="pb-mon-cell-label">SpO2 <span class="pb-mon-unit">%</span></div>';
-      html += '<div class="pb-mon-cell-value"><span id="ve-spo2">' + (vd.spo2 || '--') + '</span>%</div></div>';
-      html += '<div class="pb-mon-cell pb-mon-rr" id="ve-rr-cell">';
-      html += '<div class="pb-mon-cell-label">RR <span class="pb-mon-unit">/min</span></div>';
-      html += '<div class="pb-mon-cell-value"><span id="ve-rr">' + (vd.rr || '--') + '</span></div></div>';
-      html += '<div class="pb-mon-cell pb-mon-temp" id="ve-temp-cell">';
-      html += '<div class="pb-mon-cell-label">TEMP <span class="pb-mon-unit">&deg;C</span></div>';
-      html += '<div class="pb-mon-cell-value"><span id="ve-temp">' + (vd.temp || '--') + '</span></div></div>';
+      html += '<div class="enc-mon-cell enc-mon-bp" id="ve-bp-cell">';
+      html += '<div class="enc-mon-cell-label">NIBP <span class="enc-mon-unit">mmHg</span></div>';
+      html += '<div class="enc-mon-cell-value" id="ve-bp">' + bpHTML + '</div></div>';
+      html += '<div class="enc-mon-cell enc-mon-spo2" id="ve-spo2-cell">';
+      html += '<div class="enc-mon-cell-label">SpO2 <span class="enc-mon-unit">%</span></div>';
+      html += '<div class="enc-mon-cell-value"><span id="ve-spo2">' + (vd.spo2 || '--') + '</span>%</div></div>';
+      html += '<div class="enc-mon-cell enc-mon-rr" id="ve-rr-cell">';
+      html += '<div class="enc-mon-cell-label">RR <span class="enc-mon-unit">/min</span></div>';
+      html += '<div class="enc-mon-cell-value"><span id="ve-rr">' + (vd.rr || '--') + '</span></div></div>';
+      html += '<div class="enc-mon-cell enc-mon-temp" id="ve-temp-cell">';
+      html += '<div class="enc-mon-cell-label">TEMP <span class="enc-mon-unit">&deg;C</span></div>';
+      html += '<div class="enc-mon-cell-value"><span id="ve-temp">' + (vd.temp || '--') + '</span></div></div>';
       html += '</div></div>';
     }
   }
 
   if (App.pbCheatMode && !App.pbDiagResolved) {
-    html += '<div class="pb-cheat-banner"><strong>Cheat Mode</strong> &mdash; Diagnosis: ' + escapeHtml(App.pbDiagnosis || '?') + '</div>';
+    html += '<div class="enc-cheat-banner"><strong>Cheat Mode</strong> &mdash; Diagnosis: ' + escapeHtml(App.pbDiagnosis || '?') + '</div>';
   }
 
   // Partial feedback now shown inline in chat history
@@ -14358,7 +14358,7 @@ function renderPBChatInner() {
       html += '<strong>' + escapeHtml(actionVerb) + ':</strong> ' + escapeHtml(actionText);
       html += '</div>';
     } else if (m.role === 'assistant') {
-      html += '<div class="chat-message assistant"><button class="flag-btn" style="float:right;font-size:11px;padding:2px 6px;margin:0 0 4px 4px" onclick="replayMsg_(' + i + ',\'pb\')" title="Replay">&#x1F50A;</button>' + formatMarkdown(stripPatientJSON(m.content)) + '</div>';
+      html += '<div class="chat-message assistant"><button aria-label="Replay audio" class="flag-btn" style="float:right;font-size:11px;padding:2px 6px;margin:0 0 4px 4px" onclick="replayMsg_(' + i + ',\'pb\')" title="Replay">&#x1F50A;</button>' + formatMarkdown(stripPatientJSON(m.content)) + '</div>';
     } else {
       html += '<div class="chat-message ' + m.role + '">' + formatPBInput(m.content) + '</div>';
     }
@@ -14502,8 +14502,8 @@ function renderPBChatInner() {
     // ─────────────────────────────────────────────────────────────────────
 
     // Collapse handle — tap to hide/show the action palette
-    html += '<button class="pb-actions-handle" id="pb-actions-handle" onclick="togglePBActionsBar()" title="Hide/show action palette">';
-    html += '<span class="pb-actions-handle-pill"></span>';
+    html += '<button class="enc-actions-handle" id="pb-actions-handle" onclick="togglePBActionsBar()" title="Hide/show action palette">';
+    html += '<span class="enc-actions-handle-pill"></span>';
     html += '<span id="pb-actions-handle-label">' + (App.pbActionsHidden ? '&#x25B4; Actions' : '&#x25BE; Actions') + '</span>';
     html += '</button>';
 
@@ -14511,18 +14511,18 @@ function renderPBChatInner() {
     html += '<div id="pb-actions-wrapper">';
 
     // Quick action tabs — always visible
-    html += '<div class="pb-action-bar">';
+    html += '<div class="enc-action-bar">';
     for (var ci = 0; ci < categories.length; ci++) {
       var cat = categories[ci];
-      html += '<button class="pb-action-tab" onclick="togglePBCategory(' + ci + ', this)" data-cat="' + ci + '">' + cat.icon + ' ' + cat.name + '</button>';
+      html += '<button class="enc-action-tab" onclick="togglePBCategory(' + ci + ', this)" data-cat="' + ci + '">' + cat.icon + ' ' + cat.name + '</button>';
     }
     html += '</div>';
 
     // Expandable chip panels per category
     html += '<div id="pb-actions-panel" style="display:none;border-top:1px solid var(--border);background:var(--bg);max-height:40vh;overflow-y:auto">';
-    html += '<input type="text" class="pb-action-search" id="pb-action-search" placeholder="Search actions, meds, procedures..." oninput="filterPBActions(this.value)" autocomplete="off" />';
+    html += '<input type="text" class="enc-action-search" id="pb-action-search" placeholder="Search actions, meds, procedures..." oninput="filterPBActions(this.value)" autocomplete="off" />';
     for (var ci = 0; ci < categories.length; ci++) {
-      html += '<div class="pb-cat-panel" id="pb-cat-' + ci + '" style="display:none;padding:10px 16px">';
+      html += '<div class="enc-cat-panel" id="pb-cat-' + ci + '" style="display:none;padding:10px 16px">';
       html += '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">';
       for (var ai = 0; ai < categories[ci].items.length; ai++) {
         var item = categories[ci].items[ai];
@@ -14530,9 +14530,9 @@ function renderPBChatInner() {
           // Section header
           var label = item.replace(/---/g, '').trim();
           if (ai > 0) html += '</div><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px">';
-          html += '<span class="pb-section-header" style="font-size:11px;font-weight:800;color:var(--text-light);text-transform:uppercase;letter-spacing:0.5px;width:100%;margin:4px 0 2px">' + escapeHtml(label) + '</span>';
+          html += '<span class="enc-section-header" style="font-size:11px;font-weight:800;color:var(--text-light);text-transform:uppercase;letter-spacing:0.5px;width:100%;margin:4px 0 2px">' + escapeHtml(label) + '</span>';
         } else {
-          html += '<button class="pb-action-chip" data-action="' + escapeHtml(item.toLowerCase()) + '" onclick="insertPBAction(\'' + item.replace(/'/g, "\\'") + '\')">' + escapeHtml(item) + '</button>';
+          html += '<button class="enc-action-chip" data-action="' + escapeHtml(item.toLowerCase()) + '" onclick="insertPBAction(\'' + item.replace(/'/g, "\\'") + '\')">' + escapeHtml(item) + '</button>';
         }
       }
       html += '</div></div>';
@@ -14545,7 +14545,7 @@ function renderPBChatInner() {
       html += '<div class="chat-input-area" style="flex-direction:column;align-items:center;padding:16px 20px;gap:12px">';
       html += '<div style="display:flex;align-items:center;gap:12px;width:100%;justify-content:center">';
       html += '<div id="hf-indicator" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:20px;background:#c62828;color:white;font-size:13px;font-weight:700;animation:pulse 1.5s infinite"><span style="font-size:12px">&#x1F534;</span><span id="hf-indicator-status">Listening...</span></div>';
-      html += '<button class="btn btn-warning pb-diagnose-btn" onclick="showDiagnoseModal()" style="font-size:13px">Diagnose</button>';
+      html += '<button class="btn btn-warning enc-diagnose-btn" onclick="showDiagnoseModal()" style="font-size:13px">Diagnose</button>';
       html += '<button class="btn" onclick="stopHandsFree_()" style="background:#c62828;color:white;font-size:13px;padding:8px 16px;border-radius:20px" title="End hands-free">&#x1F4F5; Hang Up</button>';
       html += '</div>';
       html += '<div id="hf-interim-caption" style="min-height:18px;max-width:90%;font-size:12px;color:var(--text-light);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(App.pbInterimTranscript || '') + '</div>';
@@ -14556,7 +14556,7 @@ function renderPBChatInner() {
       html += '<div class="chat-input-area">';
       html += '<textarea id="pb-input" placeholder="Talk to the patient..." rows="2" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendPBMessage()}"></textarea>';
       html += '<button class="btn btn-primary" onclick="sendPBMessage()">Send</button>';
-      html += '<button class="btn btn-warning pb-diagnose-btn" onclick="showDiagnoseModal()">Diagnose</button>';
+      html += '<button class="btn btn-warning enc-diagnose-btn" onclick="showDiagnoseModal()">Diagnose</button>';
       html += buildFlagButton({ type: 'patientbot', id: App.pbCaseId || 0, specialty: App.pbSpecialty || '', content: 'Case: ' + (App.pbSpecialty || 'Unknown') });
       html += '</div>';
     }
@@ -14636,8 +14636,8 @@ function renderPBChatInner() {
   html += '</div>';
 
   if (App.pbDiagnosing) {
-    html += '<div class="pb-diag-overlay" onclick="closeDiagnoseModal()">';
-    html += '<div class="pb-diag-modal" onclick="event.stopPropagation()">';
+    html += '<div class="enc-diag-overlay" onclick="closeDiagnoseModal()">';
+    html += '<div class="enc-diag-modal" onclick="event.stopPropagation()">';
     html += '<h3>Submit Your Diagnosis</h3>';
     html += '<p style="color:var(--text-light);font-size:13px;margin:8px 0 16px">What do you think this patient has?</p>';
     html += '<input type="text" id="pb-diag-input" class="search-bar" placeholder="e.g., Acute appendicitis" autofocus onkeydown="if(event.key===\'Enter\')submitPBDiagnosis()">';
@@ -15374,11 +15374,11 @@ function toggleMedPanel(e) {
   var displayLabel = isAbbrev ? (dispTerm + ' (' + abbrevExpanded + ')') : dispTerm;
 
   var inner = '';
-  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + escapeHtml(JSON.stringify(speakTerm)) + ',1.0)" title="Say term">&#x1F50A;</button>';
-  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + escapeHtml(JSON.stringify(speakTerm)) + ',0.45)" title="Say term (slow)">&#x1F40C;</button>';
+  inner += '<button aria-label="Play pronunciation" class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + escapeHtml(JSON.stringify(speakTerm)) + ',1.0)" title="Say term">&#x1F50A;</button>';
+  inner += '<button aria-label="Play slow pronunciation" class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + escapeHtml(JSON.stringify(speakTerm)) + ',0.45)" title="Say term (slow)">&#x1F40C;</button>';
   // Read definition aloud button
   var defForSpeak = translation ? (speakTerm + '. ' + translation) : speakTerm;
-  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + escapeHtml(JSON.stringify(defForSpeak)) + ',0.9)" title="Read definition aloud" style="font-size:12px">&#x1F4D6;</button>';
+  inner += '<button aria-label="Read definition aloud" class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + escapeHtml(JSON.stringify(defForSpeak)) + ',0.9)" title="Read definition aloud" style="font-size:12px">&#x1F4D6;</button>';
   if (isAbbrev) {
     inner += '<span style="font-size:11px;color:var(--text-light);margin:0 3px;font-style:italic">' + escapeHtml(abbrevExpanded) + '</span>';
   }
@@ -15408,8 +15408,8 @@ function closeMedPanel() {
 
 function _patternPillInner_(termKey, data) {
   var inner = '';
-  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + escapeHtml(JSON.stringify(termKey)) + ',1.0)" title="Listen">&#x1F50A;</button>';
-  inner += '<button class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + escapeHtml(JSON.stringify(termKey)) + ',0.45)" title="Listen (slow)">&#x1F40C;</button>';
+  inner += '<button aria-label="Play pronunciation" class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + escapeHtml(JSON.stringify(termKey)) + ',1.0)" title="Listen">&#x1F50A;</button>';
+  inner += '<button aria-label="Play slow pronunciation" class="med-inline-btn" onclick="event.stopPropagation();pronounceMedTerm(' + escapeHtml(JSON.stringify(termKey)) + ',0.45)" title="Listen (slow)">&#x1F40C;</button>';
   if (data) {
     var def = data.definition || data.Definition || '';
     var trans = data.translation || data.Translation || '';
@@ -15717,7 +15717,7 @@ function showChangelogModal() {
 
   var html = '<div class="changelog-modal">';
   html += '<div class="changelog-modal-header"><h3 style="margin:0">Changelog & Bug Fixes</h3>';
-  html += '<button onclick="document.getElementById(\'changelog-modal-overlay\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-light)">&#x2715;</button></div>';
+  html += '<button aria-label="Close changelog" onclick="document.getElementById(\'changelog-modal-overlay\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-light)">&#x2715;</button></div>';
   html += '<div class="changelog-modal-body">';
 
   for (var c = 0; c < APP_CHANGELOG.length; c++) {
