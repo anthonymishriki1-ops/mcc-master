@@ -11467,6 +11467,26 @@ function sendNACMessageDirect_(userMessage) {
     return;
   }
 
+  // If we've crossed into the oral-exam phase (8-min mark), route to the EXAMINER
+  // persona, not the SP. The examiner asks structured oral questions (Dx/DDx/Ix/Mx)
+  // and does NOT roleplay as the patient.
+  if (App.nacExaminerPhase) {
+    var exStation = (typeof _godCurrentStation_ === 'function' && _godCurrentStation_()) || {};
+    var exSys = buildNACExaminerPrompt_(exStation);
+    callAnthropicDirect_(exSys, apiMessages).then(function(exResp) {
+      if (!App.nacActive || stationTokenAtSend !== (App.nacStationToken || 0)) return;
+      exResp = exResp.replace(/```[\s\S]*?```/g, '').replace(/\[SYSTEM[^\]]*\]/gi, '').replace(/\*[^*]+\*/g, '').replace(/\s{2,}/g, ' ').trim();
+      _examinerRespond_(exResp, stationTokenAtSend);
+    }).catch(function(e) {
+      if (!App.nacActive || stationTokenAtSend !== (App.nacStationToken || 0)) return;
+      console.warn('[NAC examiner] message failed:', e);
+      App.pbHistory.push({ role: 'system', content: 'Connection error — please check your internet and try again.', severity: 'caution' });
+      renderPBChat();
+      restartMicAfterResponse_(stationTokenAtSend);
+    });
+    return;
+  }
+
   var _godSys = App._nacSystemPrompt + _getGodDirectives_();
   callAnthropicDirect_(_godSys, apiMessages).then(function(response) {
     if (!App.nacActive || stationTokenAtSend !== (App.nacStationToken || 0)) return;
@@ -12294,6 +12314,11 @@ function startNACExamInner_() {
   App.nacScoreHistory = _loadNACScoreHistory();
   App.nacTimerMinutes = App.nacTimerMinutes || 11;
   App.nacDifficulty = App.nacDifficulty || 'medium';
+  // Real-exam format: at the 8-min mark the SP leaves and an examiner takes over for 3 min of structured oral questions.
+  // Users can opt out by explicitly setting App.nacRealExamFormat = false before starting.
+  if (typeof App.nacRealExamFormat === 'undefined') App.nacRealExamFormat = true;
+  App.nacExaminerPhase = false;
+  App.nacExaminerTriggered = false;
 
   // Wire into PB infrastructure
   App.pbCheatMode = false;
@@ -12397,6 +12422,8 @@ function startNextNACStation() {
   App.nacPTTRecording = false;
   App.pbCodeBlue = null; // reset death state from previous station
   App.nacStationFinished = false; // allow finishNACStation to fire again
+  App.nacExaminerPhase = false; // reset oral-phase state between stations
+  App.nacExaminerTriggered = false;
   App.nacStationEvalLoading = false;
   // Reset trauma accumulation
   if (typeof VitalsEngine !== 'undefined' && VitalsEngine._traumaScore) VitalsEngine._traumaScore = 0;
@@ -12492,6 +12519,59 @@ function startNextNACStation() {
   });
 }
 
+// ── NAC Station-Type Classifier ──
+// Real NAC OSCE stations are not uniform "hx + pe + plan". The door task varies:
+//   • hx_pe         focused history + focused physical exam (most medicine/surgery/ID)
+//   • hx_mse        psychiatric history + mental status exam (most psychiatry)
+//   • counseling    no exam needed — talk through options/safety plan/harm reduction
+//   • resus         ACLS/ATLS/anaphylaxis — assess + manage
+//   • peds_parent   parent/caregiver historian, exam child as appropriate
+//   • antenatal     obstetric hx + focused exam (pregnancy stations)
+//   • disclosure    breaking bad news / disclosing test results
+function deriveNACStationType_(station) {
+  if (!station) return 'hx_pe';
+  var f  = String(station.focus || '').toLowerCase();
+  var pr = String(station.presentation || '').toLowerCase();
+  var sp = String(station.specialty || '').toLowerCase();
+  var blob = f + ' || ' + pr + ' || ' + sp;
+
+  // Resuscitation / emergency management (order matters — check before generic EM)
+  if (/\barrest|acls|atls|primary survey|anaphylaxis|burn|tension pneumo|stemi (?:management|workup)|sepsis (?:bundle|resus)/.test(blob)) return 'resus';
+
+  // Disclosure / breaking bad news
+  if (/\b(disclosure|breaking bad news|disclose|bad news)\b/.test(blob)) return 'disclosure';
+
+  // Counseling (behaviour change, safety planning, harm reduction, screening talks)
+  if (/\b(counseling|counselling|safety plan|harm reduction|smoking cessation|lifestyle|sleep hygiene)\b/.test(f)) return 'counseling';
+
+  // Psych — history + MSE, no physical
+  if (sp.indexOf('psychiatry') !== -1) return 'hx_mse';
+
+  // Pediatric — parent/caregiver historian
+  if (sp.indexOf('pediatric') !== -1) return 'peds_parent';
+
+  // Antenatal / pregnancy-complication stations
+  if (/\b(prenatal|antenatal|gestational|pregnancy concern|preeclampsia|placenta|gdm)\b/.test(blob)) return 'antenatal';
+
+  // Default
+  return 'hx_pe';
+}
+
+var NAC_DOOR_TASKS = {
+  hx_pe:       { icon: '&#x1F3AF;', label: 'Focused Hx + PE',    text: 'Take a focused history, perform a relevant focused physical examination, and state your differential diagnosis, investigations, and initial management plan to the examiner.' },
+  hx_mse:      { icon: '&#x1F9E0;', label: 'Psych Hx + MSE',     text: 'Take a focused psychiatric history and perform a mental status examination. State your differential diagnosis, risk assessment, and management plan to the examiner. A full physical examination is not required.' },
+  counseling:  { icon: '&#x1F4AC;', label: 'Counseling',         text: 'Counsel this patient regarding their condition. Address their concerns, discuss management options, and answer their questions. A physical examination is not required unless directly relevant.' },
+  resus:       { icon: '&#x1F6A8;', label: 'Assess &amp; Manage',    text: 'Assess and manage this patient. Verbalize your primary/secondary survey, resuscitation steps, and ongoing management as you proceed. State any orders and investigations to the examiner.' },
+  peds_parent: { icon: '&#x1F476;', label: 'Pediatric — Parent', text: 'Take a focused history from the parent/caregiver. Perform a relevant physical examination on the child as appropriate. State your differential diagnosis and management plan to the examiner.' },
+  antenatal:   { icon: '&#x1F930;', label: 'Antenatal',          text: 'Take a focused obstetric history and perform a relevant focused examination. State your assessment and management plan to the examiner.' },
+  disclosure:  { icon: '&#x1F4E2;', label: 'Disclosure',         text: 'Disclose the relevant findings/results to the patient. Check understanding, address concerns, and outline the next steps. A physical examination is not required.' }
+};
+
+function getNACDoorTask_(station) {
+  var t = (station && station.stationType) || deriveNACStationType_(station);
+  return NAC_DOOR_TASKS[t] || NAC_DOOR_TASKS.hx_pe;
+}
+
 // ── NAC Reading Period (2 min door prompt + notepad) ──
 function showNACReadingPeriod_(station) {
   navigateTo('nac-sim'); // ensure NAC page is active
@@ -12549,8 +12629,11 @@ function showNACReadingPeriod_(station) {
       html += '</div>';
       html += '<div style="margin-top:8px;font-size:12px;color:var(--text-light);font-style:italic">Loading patient details...</div>';
     }
-    html += '<div style="margin-top:14px;font-size:13px;color:var(--text);border-top:1px solid var(--border);padding-top:10px">';
-    html += 'Take a focused history, perform a relevant physical examination, order appropriate investigations, and provide your diagnosis and management plan.';
+    // Station-type badge + tailored candidate task
+    var doorTask = getNACDoorTask_(station);
+    html += '<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">';
+    html += '<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(99,102,241,0.12);color:var(--primary);border:1px solid rgba(99,102,241,0.35);border-radius:999px;padding:4px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px" role="status" aria-label="Station type: ' + doorTask.label.replace(/&amp;/g,'and') + '">' + doorTask.icon + ' ' + doorTask.label + '</div>';
+    html += '<div style="font-size:13px;color:var(--text);line-height:1.55"><strong>Candidate Task:</strong> ' + doorTask.text + '</div>';
     html += '</div>';
     html += '</div>';
 
@@ -12731,19 +12814,122 @@ function enterNACStation_() {
   }, 30000);
 }
 
+// ── NAC Oral/Examiner Phase ──
+// In a real NAC-OSCE station the standardized patient leaves at the 8-minute mark
+// and an examiner takes over for ~3 min of structured oral questions (Dx, DDx, Ix, Mx).
+// We implement that by pivoting the AI persona from SP → examiner when the timer
+// crosses the 3-min-remaining boundary. The examiner uses a distinct system prompt,
+// voice, and chat bubble style (amber, like the existing alt-speaker/relative mechanic).
+function buildNACExaminerPrompt_(station) {
+  var sp = (station && station.specialty) || 'general';
+  var pr = (station && station.presentation) || 'undifferentiated complaint';
+  var stype = (typeof deriveNACStationType_ === 'function') ? deriveNACStationType_(station) : 'hx_pe';
+  return 'You are a NAC-OSCE EXAMINER in the final 3 minutes of a station. The standardized patient has LEFT the room. You are now evaluating the candidate through structured oral questions.\n\n' +
+    'Station: ' + pr + ' (' + sp + ') — type: ' + stype + '\n\n' +
+    'Your role:\n' +
+    '1. Ask ONE question at a time. Wait for the candidate\'s full answer before the next.\n' +
+    '2. Opening question is always: "What is your most likely diagnosis?" (If the opening already happened in history, do NOT repeat — move to the next unanswered question.)\n' +
+    '3. Follow-ups, in order: top differentials (2–3), investigations + rationale, initial management, then station-specific (psych: risk + disposition; peds: parent counselling; resus: next protocol step; counselling: red-flag safety-net).\n' +
+    '4. Be brief, neutral, clinical. ONE short question per turn, maximum ~20 words. Do not coach, hint, or reveal answers.\n' +
+    '5. If the candidate is incorrect or off-track, acknowledge tersely ("Okay.") and move on — do not argue or explain.\n' +
+    '6. NEVER roleplay as the patient. NEVER add small-talk or warmth. You are a senior physician evaluator.\n' +
+    '7. When time runs out the harness ends the station automatically — do not say goodbye.\n\n' +
+    'Output format: just the question (no preamble, no quotation marks, no stage directions).';
+}
+
+// Brief two-tone audible buzzer via Web Audio — no asset needed.
+function _playNACBuzzer_() {
+  try {
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    var ctx = new Ctx();
+    var now = ctx.currentTime;
+    function tone(freq, start, dur) {
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = freq;
+      osc.connect(gain); gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(0.0001, now + start);
+      gain.gain.exponentialRampToValueAtTime(0.12, now + start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + start + dur);
+      osc.start(now + start); osc.stop(now + start + dur + 0.02);
+    }
+    tone(880, 0, 0.22);
+    tone(660, 0.25, 0.35);
+  } catch(e) { /* silent */ }
+}
+
+// Render-and-speak an examiner message (amber alt-speaker bubble + distinct voice).
+function _examinerRespond_(text, stationTok) {
+  var display = (text || '').replace(/\*[^*]+\*/g, '').replace(_nacActionSoundRe, '').replace(/\([^)]*\)/g, '').replace(/\s{2,}/g, ' ').trim();
+  if (!display) { restartMicAfterResponse_(stationTok); return; }
+  App.pbHistory.push({ role: 'assistant', speaker: 'Dr. Examiner', content: display });
+  renderPBChat();
+  var exInstr = 'Voice Affect: neutral, clinical, senior physician examiner. Tone: formal, efficient, no warmth. Pacing: measured. This is an oral exam question, not roleplay.';
+  callTTSDirect_(display, 'onyx', 1.0, exInstr).then(function() {
+    restartMicAfterResponse_(stationTok);
+  }).catch(function() {
+    restartMicAfterResponse_(stationTok);
+  });
+}
+
+// Fired once at the 8-min mark (3-min-remaining). Announces the pivot, plays a buzzer,
+// and kicks off the opening examiner question.
+function nacEnterOralPhase_() {
+  if (App.nacExaminerPhase || App.nacExaminerTriggered) return;
+  if (!App.nacActive) return;
+  App.nacExaminerPhase = true;
+  App.nacExaminerTriggered = true;
+
+  var station = (typeof _godCurrentStation_ === 'function' && _godCurrentStation_()) || {};
+
+  // Cancel any in-flight patient TTS so the pivot banner isn't stepped on
+  App._ttsSeq = (App._ttsSeq || 0) + 1;
+  _stopTTSAudio_();
+  try { window.speechSynthesis.cancel(); } catch(e) {}
+
+  _playNACBuzzer_();
+  showToast_('\u23F0 Oral exam phase — 3 minutes remaining');
+
+  // Banner message — renders as amber alt-speaker bubble thanks to the existing
+  // speaker-field logic in renderPBChat.
+  App.pbHistory.push({
+    role: 'assistant',
+    speaker: 'Dr. Examiner',
+    content: '\u23F0 The standardized patient has left the room. We have about 3 minutes. What is your most likely diagnosis?'
+  });
+  renderPBChat();
+
+  // Speak the opening line via the examiner voice rather than re-asking the LLM
+  // (the banner IS the opening question — keeps the flow tight and saves a roundtrip).
+  var stationTok = App.nacStationToken || 0;
+  var exInstr = 'Voice Affect: neutral, clinical, senior physician examiner. Tone: formal, efficient, no warmth. Pacing: measured.';
+  callTTSDirect_('The standardized patient has left the room. We have about three minutes. What is your most likely diagnosis?', 'onyx', 1.0, exInstr).then(function() {
+    restartMicAfterResponse_(stationTok);
+  }).catch(function() {
+    restartMicAfterResponse_(stationTok);
+  });
+}
+
 function startNACTimer(seconds) {
   // Clear any stale timer from a previous station before starting
   if (App.nacTimerInterval) { clearInterval(App.nacTimerInterval); App.nacTimerInterval = null; }
   App.nacTimerSeconds = seconds;
   App.nacTimerInterval = setInterval(function() {
     App.nacTimerSeconds--;
+    // Real-exam format: auto-pivot to examiner oral phase at 3-min-remaining (8-min mark).
+    // Users can disable by setting App.nacRealExamFormat = false.
+    if (App.nacRealExamFormat !== false && App.nacTimerSeconds === 180 && !App.nacExaminerTriggered) {
+      nacEnterOralPhase_();
+    }
     var timerEl = document.getElementById('nac-timer-display');
     if (timerEl) {
       var m = Math.floor(App.nacTimerSeconds / 60);
       var s = App.nacTimerSeconds % 60;
       timerEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
       if (App.nacTimerSeconds <= 60) timerEl.style.color = '#c62828';
-      else if (App.nacTimerSeconds <= 120) timerEl.style.color = '#e65100';
+      else if (App.nacTimerSeconds <= 180) timerEl.style.color = '#e65100';
     }
     if (App.nacTimerSeconds <= 0) {
       clearInterval(App.nacTimerInterval);
@@ -12788,6 +12974,7 @@ function skipNACStation_() {
 function finishNACStation() {
   if (App.nacStationFinished) return; // prevent double-fire
   App.nacStationFinished = true;
+  App.nacExaminerPhase = false; // exit oral phase when station ends
   stopNACPttRecording_(false);
   stopHandsFree_();
   stopNACTimer();
@@ -13733,6 +13920,9 @@ function renderNACStationUI_(targetEl) {
     var ts = timerSec % 60;
     var timerColor = timerSec <= 60 ? '#ff4444' : timerSec <= 120 ? '#ff8800' : '#4facfe';
     html += '<span id="nac-timer-display" style="font-size:22px;font-weight:900;font-family:monospace;color:' + timerColor + ';margin-right:12px">' + tm + ':' + (ts < 10 ? '0' : '') + ts + '</span>';
+    if (App.nacExaminerPhase) {
+      html += '<span role="status" aria-label="Oral exam phase — examiner in room" style="display:inline-flex;align-items:center;gap:4px;background:#8a4a00;color:#fff4e0;border:1px solid #ffb74d;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;margin-right:12px">&#x1F399;&#xFE0F; Oral Exam</span>';
+    }
   }
   if (_isGodMode_()) {
     var _godN = (App._godDirectives || []).length + (App._godActiveRelative ? 1 : 0);
