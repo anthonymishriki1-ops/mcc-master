@@ -12424,6 +12424,7 @@ function startNextNACStation() {
   App.nacStationFinished = false; // allow finishNACStation to fire again
   App.nacExaminerPhase = false; // reset oral-phase state between stations
   App.nacExaminerTriggered = false;
+  App.nacOneMinBuzzed = false; // reset 1-min warning buzzer
   App.nacStationEvalLoading = false;
   // Reset trauma accumulation
   if (typeof VitalsEngine !== 'undefined' && VitalsEngine._traumaScore) VitalsEngine._traumaScore = 0;
@@ -12517,6 +12518,66 @@ function startNextNACStation() {
     if (thisGen !== _nacStationGen) return;
     App.nacCaseError = e.message || String(e);
   });
+}
+
+// ── MCC Clinical Presentations (CP) blueprint mapping ──
+// Each NAC-OSCE station maps to one (or more) of the 78 MCC Clinical Presentations
+// that make up the Part 2 blueprint. We map by the station's `presentation` field so
+// learners know which CP they're drilling. Source: MCC objectives CP list (condensed
+// to 26 entries that cover our pregen stations — add more as new presentations land).
+var MCC_CP_MAP = {
+  'chest pain':                { code: 'CP-24', name: 'Chest pain' },
+  'dyspnea':                   { code: 'CP-32', name: 'Dyspnea / Respiratory distress' },
+  'abdominal pain':            { code: 'CP-3',  name: 'Abdominal pain' },
+  'trauma/injury':             { code: 'CP-72', name: 'Trauma' },
+  'vaginal bleeding':          { code: 'CP-103',name: 'Vaginal bleeding (abnormal uterine bleeding)' },
+  'pelvic pain':               { code: 'CP-100',name: 'Pelvic pain' },
+  'pediatric fever':           { code: 'CP-41', name: 'Fever in the immunocompetent child' },
+  'crying/irritable child':    { code: 'CP-30', name: 'Crying / fussing child' },
+  'depressed mood':            { code: 'CP-78', name: 'Mood disorders (depression)' },
+  'anxiety':                   { code: 'CP-9',  name: 'Anxiety' },
+  'hypertension':              { code: 'CP-47', name: 'Hypertension' },
+  'headache':                  { code: 'CP-44', name: 'Headache' },
+  'peripheral edema':          { code: 'CP-34', name: 'Edema (generalized / peripheral)' },
+  'jaundice':                  { code: 'CP-50', name: 'Jaundice' },
+  'gi bleeding':               { code: 'CP-43', name: 'GI bleeding' },
+  'poisoning/overdose':        { code: 'CP-76', name: 'Substance-related disorders / poisoning' },
+  'amenorrhea':                { code: 'CP-5',  name: 'Amenorrhea / oligomenorrhea' },
+  'pregnancy concern':         { code: 'CP-84', name: 'Prenatal / antenatal care' },
+  'rash in a child':           { code: 'CP-87', name: 'Rash / skin lesions' },
+  'developmental delay':       { code: 'CP-31', name: 'Developmental delay' },
+  'psychosis':                 { code: 'CP-85', name: 'Psychotic symptoms' },
+  'suicidal ideation':         { code: 'CP-96', name: 'Suicidal behaviour / self-harm' },
+  'back pain':                 { code: 'CP-13', name: 'Back pain' },
+  'polyuria/polydipsia':       { code: 'CP-77', name: 'Polyuria / polydipsia' },
+  'breast lump':               { code: 'CP-15', name: 'Breast lump / mass' },
+  'failure to thrive':         { code: 'CP-37', name: 'Failure to thrive (infant/child)' },
+  'wheezing':                  { code: 'CP-110',name: 'Wheezing' },
+  'substance abuse':           { code: 'CP-76', name: 'Substance-related disorders' },
+  'insomnia':                  { code: 'CP-95', name: 'Sleep-wake disorders' },
+  'skin rash':                 { code: 'CP-87', name: 'Rash / skin lesions' },
+  'fever':                     { code: 'CP-40', name: 'Fever / fever of unknown origin' },
+  'fracture/trauma':           { code: 'CP-72', name: 'Trauma' },
+  'altered mental status':     { code: 'CP-6',  name: 'Altered mental status' },
+  'anemia':                    { code: 'CP-8',  name: 'Anemia' },
+  'palpable mass':             { code: 'CP-71', name: 'Neck mass / lymph node / head & neck lumps' },
+  'allergic reaction':         { code: 'CP-4',  name: 'Allergic reaction / anaphylaxis' },
+  'fatigue':                   { code: 'CP-39', name: 'Fatigue' },
+  'hematuria':                 { code: 'CP-45', name: 'Hematuria' },
+  'joint pain':                { code: 'CP-51', name: 'Joint pain' },
+  'wound/ulcer':               { code: 'CP-108',name: 'Skin ulcers / wounds' },
+  'burns':                     { code: 'CP-19', name: 'Burns' },
+  'seizures':                  { code: 'CP-92', name: 'Seizures' },
+  'cardiac arrest':            { code: 'CP-20', name: 'Cardiac arrest / life-threatening event' },
+  'syncope':                   { code: 'CP-97', name: 'Syncope / pre-syncope' },
+  'lymphadenopathy':           { code: 'CP-57', name: 'Lymphadenopathy' },
+  'cough':                     { code: 'CP-29', name: 'Cough' },
+  'weight loss':               { code: 'CP-106',name: 'Weight loss / unintentional' }
+};
+function getMCCCodeForStation_(station) {
+  if (!station || !station.presentation) return null;
+  var key = String(station.presentation).toLowerCase().trim();
+  return MCC_CP_MAP[key] || null;
 }
 
 // ── NAC Station-Type Classifier ──
@@ -12629,10 +12690,16 @@ function showNACReadingPeriod_(station) {
       html += '</div>';
       html += '<div style="margin-top:8px;font-size:12px;color:var(--text-light);font-style:italic">Loading patient details...</div>';
     }
-    // Station-type badge + tailored candidate task
+    // Station-type badge + MCC CP blueprint code + tailored candidate task
     var doorTask = getNACDoorTask_(station);
+    var mccCp = getMCCCodeForStation_(station);
     html += '<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">';
-    html += '<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(99,102,241,0.12);color:var(--primary);border:1px solid rgba(99,102,241,0.35);border-radius:999px;padding:4px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px" role="status" aria-label="Station type: ' + doorTask.label.replace(/&amp;/g,'and') + '">' + doorTask.icon + ' ' + doorTask.label + '</div>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">';
+    html += '<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(99,102,241,0.12);color:var(--primary);border:1px solid rgba(99,102,241,0.35);border-radius:999px;padding:4px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px" role="status" aria-label="Station type: ' + doorTask.label.replace(/&amp;/g,'and') + '">' + doorTask.icon + ' ' + doorTask.label + '</div>';
+    if (mccCp) {
+      html += '<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(46,125,50,0.12);color:#2e7d32;border:1px solid rgba(46,125,50,0.35);border-radius:999px;padding:4px 12px;font-size:11px;font-weight:700;letter-spacing:0.5px" title="MCC Clinical Presentation blueprint code" aria-label="MCC blueprint code ' + mccCp.code + ': ' + mccCp.name + '">&#x1F4DA; ' + mccCp.code + ' \u00B7 ' + escapeHtml(mccCp.name) + '</div>';
+    }
+    html += '</div>';
     html += '<div style="font-size:13px;color:var(--text);line-height:1.55"><strong>Candidate Task:</strong> ' + doorTask.text + '</div>';
     html += '</div>';
     html += '</div>';
@@ -12922,6 +12989,23 @@ function startNACTimer(seconds) {
     // Users can disable by setting App.nacRealExamFormat = false.
     if (App.nacRealExamFormat !== false && App.nacTimerSeconds === 180 && !App.nacExaminerTriggered) {
       nacEnterOralPhase_();
+    }
+    // 1-minute warning buzzer — quick single tone, no pivot
+    if (App.nacTimerSeconds === 60 && !App.nacOneMinBuzzed) {
+      App.nacOneMinBuzzed = true;
+      try {
+        var Ctx1 = window.AudioContext || window.webkitAudioContext;
+        if (Ctx1) {
+          var c1 = new Ctx1(); var n1 = c1.currentTime;
+          var o1 = c1.createOscillator(); var g1 = c1.createGain();
+          o1.type = 'sine'; o1.frequency.value = 1100; o1.connect(g1); g1.connect(c1.destination);
+          g1.gain.setValueAtTime(0.0001, n1);
+          g1.gain.exponentialRampToValueAtTime(0.10, n1 + 0.02);
+          g1.gain.exponentialRampToValueAtTime(0.0001, n1 + 0.30);
+          o1.start(n1); o1.stop(n1 + 0.32);
+        }
+      } catch(e) {}
+      showToast_('\u23F1\uFE0F 1 minute remaining');
     }
     var timerEl = document.getElementById('nac-timer-display');
     if (timerEl) {
