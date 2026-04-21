@@ -13147,9 +13147,56 @@ function _renderNACResultsScreen(score, evalResult) {
       h += '<strong style="min-width:30px;text-align:right;font-size:14px">' + v + '/3</strong>';
       h += '</div>';
     }
-    h += '<div style="display:flex;justify-content:space-between;align-items:center;padding-top:12px;border-top:1px solid var(--border);margin-top:8px">';
+    // Implicit-rule checks (hand hygiene + closing ritual) — pass/fail pills
+    var implicitRows = [];
+    if (typeof evalResult.handHygiene !== 'undefined') implicitRows.push({ label: 'Hand Hygiene', pass: !!evalResult.handHygiene, icon: '&#x1F9FC;' });
+    if (typeof evalResult.closingRitual !== 'undefined') implicitRows.push({ label: 'Closing Ritual', pass: !!evalResult.closingRitual, icon: '&#x1F517;' });
+    if (implicitRows.length) {
+      h += '<div style="padding-top:10px;margin-top:8px;border-top:1px dashed var(--border);display:flex;gap:8px;flex-wrap:wrap">';
+      for (var iri = 0; iri < implicitRows.length; iri++) {
+        var ir = implicitRows[iri];
+        var pBg = ir.pass ? 'rgba(76,175,80,0.12)' : 'rgba(244,67,54,0.10)';
+        var pBorder = ir.pass ? 'rgba(76,175,80,0.45)' : 'rgba(244,67,54,0.40)';
+        var pColor = ir.pass ? '#2e7d32' : '#c62828';
+        var pIcon = ir.pass ? '\u2713' : '\u2717';
+        h += '<span style="display:inline-flex;align-items:center;gap:6px;background:' + pBg + ';border:1px solid ' + pBorder + ';color:' + pColor + ';padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700">' + ir.icon + ' ' + ir.label + ' ' + pIcon + '</span>';
+      }
+      h += '</div>';
+    }
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;padding-top:12px;border-top:1px solid var(--border);margin-top:12px">';
     h += '<span style="font-size:15px;font-weight:600;color:var(--text)">Total</span>';
     h += '<strong style="font-size:22px;color:var(--primary)">' + (evalResult.total || 0) + '/18</strong></div>';
+
+    // Real-exam scaled score — rolls 6 domains into 3 MCC composites + 400-700 overall.
+    // This is an APPROXIMATION (not an official score) to give learners a feel for the
+    // MCCQE Part 2 scale, where the national pass is historically ~425-ish.
+    var scaled = _computeMCCScaledScores_(evalResult);
+    if (scaled) {
+      var passColor = scaled.overall >= 450 ? '#2e7d32' : scaled.overall >= 400 ? '#ef6c00' : '#c62828';
+      h += '<div style="margin-top:14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">';
+      h += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">';
+      h += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-light)">Estimated MCC-Scale Score <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;color:var(--text-light);opacity:0.8" title="Approximate — not an official MCCQE score">&#9432;</span></div>';
+      h += '<strong style="font-size:20px;color:' + passColor + '">' + scaled.overall + '</strong>';
+      h += '</div>';
+      h += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:12px">';
+      var composites = [
+        { label: 'Data Acquisition', v: scaled.dataAcq },
+        { label: 'Problem Solving',  v: scaled.problemSolving },
+        { label: 'Communication',    v: scaled.communication }
+      ];
+      for (var ci = 0; ci < composites.length; ci++) {
+        var c = composites[ci];
+        var cColor = c.v >= 200 ? '#2e7d32' : c.v >= 150 ? '#ef6c00' : '#c62828';
+        h += '<div style="text-align:center;padding:8px 4px;background:var(--card);border:1px solid var(--border);border-radius:8px">';
+        h += '<div style="font-size:11px;color:var(--text-light);margin-bottom:2px">' + c.label + '</div>';
+        h += '<div style="font-size:16px;font-weight:800;color:' + cColor + '">' + c.v + '</div>';
+        h += '</div>';
+      }
+      h += '</div>';
+      h += '<div style="margin-top:8px;font-size:10px;color:var(--text-light);text-align:center;opacity:0.75">Approximate only — scale 400\u2013700, historical national pass ~425. Not an official MCCQE score.</div>';
+      h += '</div>';
+    }
+
     if (evalResult.summary) {
       h += '<div style="margin-top:12px;font-size:13px;color:var(--text-light);line-height:1.5;background:var(--bg);border-radius:8px;padding:10px 14px">' + escapeHtml(evalResult.summary) + '</div>';
     }
@@ -13244,6 +13291,38 @@ function advanceNACStation_(userInitiated) {
   }
 }
 
+// Deterministic implicit-rule check (hand hygiene + closing ritual) — scored client-side
+// so the LLM doesn't have to be relied on for something this binary. Runs against the
+// full student-side transcript (and the examiner-phase turns, which count toward closing).
+function _osceImplicitRulesCheck_(history) {
+  var allStudent = [];
+  for (var i = 0; i < history.length; i++) {
+    var m = history[i];
+    if (m && m.role === 'user' && typeof m.content === 'string') allStudent.push(m.content);
+  }
+  var full = allStudent.join(' \u2502 ').toLowerCase();
+  var last3 = allStudent.slice(-3).join(' \u2502 ').toLowerCase();
+
+  // Hand hygiene — must be mentioned anywhere on the student side
+  var handRx = /\b(wash(?:ing)?\s+(?:my\s+)?hands|hand\s*hygiene|sanitiz|alcohol\s*(?:gel|rub|foam)|foam(?:ed|ing)?\s+in|gel(?:ed|ing)?\s+in|scrub(?:bed|bing)?\s+in|purell)\b/;
+  // Closing ritual — summarize + safety-net + follow-up (any 2 of 3 in last 3 turns is good)
+  var summarizeRx = /\b(to summariz|in summary|recap|so what i\'?ve|what i\'?ve heard|my plan is|our plan|treatment plan|management plan|to wrap up)\b/;
+  var safetyNetRx = /\b(red flags?|come back|return (?:to|if)|worsen|get worse|new symptoms|don\'?t hesitate|emergency|call 911|go to the (?:er|emergency))\b/;
+  var followupRx  = /\b(follow[\s-]*up|see you (?:again|back)|next visit|next appointment|recheck|i\'?ll see you|book (?:a|another))\b/;
+  var anyQuestionsRx = /\b(any (?:other )?questions|questions (?:for|you\'?d) (?:me|like)|anything else (?:i can|on your mind)|what else can i|concerns (?:you\'?d|for me))\b/;
+
+  var closingHits = 0;
+  if (summarizeRx.test(last3)) closingHits++;
+  if (safetyNetRx.test(last3)) closingHits++;
+  if (followupRx.test(last3) || anyQuestionsRx.test(last3)) closingHits++;
+
+  return {
+    handHygiene: handRx.test(full) ? 1 : 0,
+    closingRitual: closingHits >= 2 ? 1 : 0,
+    closingHits: closingHits // raw count for debug
+  };
+}
+
 function evaluateNACStationOSCE_(history) {
   var transcript = '';
   for (var i = 0; i < history.length; i++) {
@@ -13252,7 +13331,8 @@ function evaluateNACStationOSCE_(history) {
     if (m.role === 'user') {
       transcript += 'Student: ' + String(m.content || '').substring(0, 400) + '\n';
     } else if (m.role === 'assistant') {
-      transcript += 'Patient: ' + String(m.content || '').substring(0, 400) + '\n';
+      var spkr = m.speaker ? m.speaker : 'Patient';
+      transcript += spkr + ': ' + String(m.content || '').substring(0, 400) + '\n';
     } else if (m.role === 'partial' && typeof m.content === 'string') {
       // Physical exam findings — valuable for scoring Physical Exam domain
       transcript += '[Exam Finding] ' + m.content.substring(0, 400) + '\n';
@@ -13262,13 +13342,18 @@ function evaluateNACStationOSCE_(history) {
     }
     // Skip partial with object content (diagnosis feedback) — confuses evaluator
   }
+  var implicit = _osceImplicitRulesCheck_(history);
   var prompt = [
     'You are a strict NAC-OSCE examiner.',
     'Evaluate this student encounter and score each domain from 0 to 3 (integer only).',
     'Domains: History Taking, Physical Exam, Communication, Clinical Reasoning, Investigations, Diagnosis.',
     'Use only evidence from transcript. If missing, score low.',
+    'If the student did not wash their hands / sanitize, penalize Communication by 1 point.',
+    'If the student did not close the encounter (summary + safety-net + follow-up or "any questions"), penalize Communication by 1 point.',
     'Return STRICT JSON with this schema and no extra text:',
     '{"historyTaking":0,"physicalExam":0,"communication":0,"clinicalReasoning":0,"investigations":0,"diagnosis":0,"summary":"max 2 short sentences"}',
+    '',
+    'Implicit-rules check (pre-computed): handHygiene=' + implicit.handHygiene + ', closingRitual=' + implicit.closingRitual + ' (closingHits=' + implicit.closingHits + '/3).',
     '',
     'Transcript:',
     transcript || 'No meaningful interaction captured.'
@@ -13284,8 +13369,17 @@ function evaluateNACStationOSCE_(history) {
       clinicalReasoning: clampEvalScore_(parsed.clinicalReasoning),
       investigations: clampEvalScore_(parsed.investigations),
       diagnosis: clampEvalScore_(parsed.diagnosis),
+      handHygiene: implicit.handHygiene,
+      closingRitual: implicit.closingRitual,
       summary: String(parsed.summary || '').substring(0, 600)
     };
+    // Append implicit-rule feedback to summary so the learner sees it
+    var extra = [];
+    if (!implicit.handHygiene) extra.push('\u26A0\uFE0F No hand hygiene observed (wash/sanitize before the encounter).');
+    if (!implicit.closingRitual) extra.push('\u26A0\uFE0F Incomplete closing ritual — aim for summary + safety-net + follow-up/questions.');
+    if (extra.length) {
+      out.summary = (out.summary ? out.summary + ' ' : '') + extra.join(' ');
+    }
     out.total = out.historyTaking + out.physicalExam + out.communication + out.clinicalReasoning + out.investigations + out.diagnosis;
     return out;
   });
@@ -13295,6 +13389,29 @@ function clampEvalScore_(v) {
   var n = parseInt(v, 10);
   if (isNaN(n)) return 0;
   return Math.max(0, Math.min(3, n));
+}
+
+// Roll the 6 raw rubric domains into MCCQE Part 2's 3 composite domains + an overall
+// 400-700 scaled score. APPROXIMATION ONLY — the real exam uses calibrated psychometrics;
+// we just want learners to see a familiar number so they know roughly where they stand.
+//   dataAcq       ← historyTaking + physicalExam          (0..6)
+//   problemSolving ← clinicalReasoning + investigations + diagnosis  (0..9)
+//   communication  ← communication + handHygiene + closingRitual      (0..5)
+// Each composite scaled to 100..300 (centered on 200). Overall = 400 + 300 * (total/max).
+function _computeMCCScaledScores_(e) {
+  if (!e) return null;
+  var dataMax = 6, psMax = 9, commMax = 5;
+  var dataRaw = (e.historyTaking || 0) + (e.physicalExam || 0);
+  var psRaw   = (e.clinicalReasoning || 0) + (e.investigations || 0) + (e.diagnosis || 0);
+  var commRaw = (e.communication || 0) + (typeof e.handHygiene === 'number' ? e.handHygiene : 0) + (typeof e.closingRitual === 'number' ? e.closingRitual : 0);
+  function scale(raw, max) { return Math.round(100 + (raw / max) * 200); }
+  var dataAcq = scale(dataRaw, dataMax);
+  var problemSolving = scale(psRaw, psMax);
+  var communication = scale(commRaw, commMax);
+  // Overall uses 6 primary domains only (keep same total cap the UI already shows)
+  var primaryTotal = (e.historyTaking || 0) + (e.physicalExam || 0) + (e.communication || 0) + (e.clinicalReasoning || 0) + (e.investigations || 0) + (e.diagnosis || 0);
+  var overall = Math.round(400 + (primaryTotal / 18) * 300);
+  return { dataAcq: dataAcq, problemSolving: problemSolving, communication: communication, overall: overall };
 }
 
 function pickNextRandomStation_() {
