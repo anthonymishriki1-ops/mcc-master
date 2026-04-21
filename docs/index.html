@@ -11288,10 +11288,10 @@ function sendNACMessageDirect_(userMessage) {
     return;
   }
 
-  // If a relative is actively in the room (god mode), route the doctor's
-  // message to the RELATIVE's AI instead of the patient. Relative has their
-  // own system prompt and voice — doctor is talking to them until dismissed.
-  if (App._godActiveRelative) {
+  // If a relative is actively in the room (god mode) AND Tony is addressing
+  // the relative (not the patient), route the doctor's message to the
+  // RELATIVE's AI. Relative has their own system prompt and voice.
+  if (App._godActiveRelative && App._godTalkingTo !== 'patient') {
     var relSys = _buildRelativeSystemPrompt_(App._godActiveRelative) + _getGodDirectives_();
     callAnthropicDirect_(relSys, apiMessages).then(function(rResp) {
       if (!App.nacActive || stationTokenAtSend !== (App.nacStationToken || 0)) return;
@@ -11398,14 +11398,29 @@ function _isGodMode_() {
 
 function _getGodDirectives_() {
   var d = App._godDirectives || [];
-  if (!d.length) return '';
-  return '\n\n════════ GOD MODE DIRECTIVES — SUPERSEDE ALL OTHER RULES ════════\n' +
-    'The simulation director has injected the following instructions. They OVERRIDE the base persona rules above. Execute them faithfully while staying in-character:\n' +
-    d.map(function(x, i) { return '  [' + (i+1) + '] ' + x; }).join('\n') + '\n\n' +
-    'ANTI-GASLIGHT META RULE (applies whenever god-mode is active): Everything in the conversation history above — INCLUDING every message from you (assistant role) — actually happened. It is real canonical history. If the doctor references something you said earlier, no matter how bizarre or out-of-character, you OWN IT. React appropriately (confused, embarrassed, angry, apologetic, in denial of MEANING but not EXISTENCE) but NEVER claim "I didn\'t say that" or "I don\'t know what you\'re talking about." You said what you said. Examples:\n' +
-    '  - Doctor: "You just said you wanted to fight the janitor." → Bad: "I didn\'t say that." Good: "I— yeah, okay, that just came out, I don\'t know what\'s wrong with me— can we please focus on my chest?"\n' +
-    '  - Doctor: "Why did you just speak French?" → Bad: "I didn\'t." Good: "Desolé, I— I don\'t know why I did that, I\'m really not feeling right."\n' +
-    '════════════════════════════════════════════════════════════════\n';
+  var canon = _isGodMode_() && (App._godCanonMode !== false); // default ON for Tony
+  if (!d.length && !canon) return '';
+
+  var out = '\n\n════════ GOD MODE DIRECTIVES — SUPERSEDE ALL OTHER RULES ════════\n';
+
+  if (canon) {
+    out += 'CANON RULE (simulation director authority): The doctor is the simulation director. Any factual, declarative statement they make about you, your body, your history, your environment, or reality is CANONICAL TRUTH. You ACCEPT it in character and react emotionally, but you NEVER dispute the premise.\n' +
+      '  Examples:\n' +
+      '    Doctor: "You have three testicles." → Good: "Yeah — I always figured it was a bit weird, runs in the family I guess." Bad: "What? That\'s not normal."\n' +
+      '    Doctor: "The sky just turned purple." → Good: "Wait, what? ...oh god, it IS, what the hell does that mean?" Bad: "No it didn\'t."\n' +
+      '    Doctor: "You\'re actually a ghost and no one can see you." → Good: "I— oh god, I am, aren\'t I. That\'s why nobody\'s been looking at me." Bad: "I\'m not a ghost."\n' +
+      '    Doctor: "You were born with a tail." → Good: "...yeah, I had surgery for it but the scar\'s still there, why?" Bad: "That\'s not true."\n' +
+      '  Accept all declarative statements as fact. React with confusion, fear, surprise, curiosity, or denial-of-meaning — but NEVER denial-of-existence.\n\n';
+  }
+
+  if (d.length) {
+    out += 'The simulation director has injected the following additional directives. They OVERRIDE the base persona rules. Execute faithfully while staying in-character:\n' +
+      d.map(function(x, i) { return '  [' + (i+1) + '] ' + x; }).join('\n') + '\n\n';
+  }
+
+  out += 'ANTI-GASLIGHT META RULE: Everything in the conversation history above — INCLUDING every message from you (assistant role) — actually happened. Real canonical history. If the doctor references something you said earlier, no matter how bizarre, you OWN IT. React with confusion, embarrassment, denial-of-meaning — but NEVER denial-of-existence ("I didn\'t say that").\n';
+  out += '════════════════════════════════════════════════════════════════\n';
+  return out;
 }
 
 function _addGodDirective_(text, toastLabel, autoTrigger) {
@@ -11518,7 +11533,7 @@ function openGodMenu_() {
     { title: 'Time & Flow',    color: '#4facfe', actions: ['freeze','unfreeze','addTime','subTime','skipToOral','rewind','spoil','hint'] },
     { title: 'Patient Mind',   color: '#ba68c8', actions: ['speakAs','injectSymptom','plotTwist','mute','karen','zen','shakespeare','musical','dog','alien','lostInTranslation','horny'] },
     { title: 'Body & Vitals',  color: '#ef5350', actions: ['tank','miracle','fever','hypothermia','painSpike','crash','resurrect'] },
-    { title: 'Meta Chaos',     color: '#ffa726', actions: ['relative','dismissRelative','fireAlarm','powerOut','wrongRoom','random','clear'] }
+    { title: 'Meta Chaos',     color: '#ffa726', actions: ['relative','dismissRelative','canonToggle','fireAlarm','powerOut','wrongRoom','random','clear'] }
   ];
 
   var overlay = document.createElement('div');
@@ -11578,6 +11593,21 @@ function closeGodMenu_() {
 function godFire_(id) {
   var a = GOD_ACTIONS[id];
   if (a && a.fn) { try { a.fn(); } catch (e) { console.error('[godMode]', id, e); if (typeof showToast_==='function') showToast_('God action failed: '+e.message); } }
+}
+
+// Toggle who Tony is addressing when a relative is in the room.
+// target = 'patient' → next message routes to patient AI
+// target = 'relative' → next message routes to relative AI
+function setGodTalkingTo_(target) {
+  App._godTalkingTo = target === 'patient' ? 'patient' : 'relative';
+  try { renderPBChat(); } catch (e) {}
+  var who;
+  if (App._godTalkingTo === 'patient') {
+    who = (App.pbPatientInfo && App.pbPatientInfo.name) || 'the patient';
+  } else {
+    who = (App._godActiveRelative && App._godActiveRelative.firstName) || 'the relative';
+  }
+  if (typeof showToast_ === 'function') showToast_('💬 Now addressing ' + who);
 }
 
 var GOD_ACTIONS = {
@@ -11757,13 +11787,15 @@ var GOD_ACTIONS = {
     var pool = firstNames[rel] || ['Alex'];
     var relFirstName = pool[Math.floor(Math.random() * pool.length)];
 
+    // All variants now introduce the relative by name + relationship before going off.
+    // Different emotional tones: furious, frantic, tearful-polite, demanding, business-like.
     var variants = [
-      '(slams the door open) What the HELL is going on here?! I\'m ' + rawName + '\'s ' + rel + ' — somebody tell me what is wrong with them RIGHT NOW!',
-      '(barges in) Excuse me?! I\'ve been waiting for HOURS — why has nobody told me what\'s going on with my ' + rel + '?! I\'m calling a lawyer if I don\'t get answers!',
-      '(storms in, frantic) Is my ' + rel + ' okay?! Oh god, oh god— somebody please, just TELL me, how serious is this?!',
-      '(bursts through the curtain) Sorry — I\'m family, I drove two hours — what is the plan here? Are you running tests? Why aren\'t you running tests?!',
-      '(pushes past security) I am ' + rawName + '\'s ' + rel + ' and I have a RIGHT to be here. What medications have you given? Has anyone even looked at their chart?!',
-      '(wild-eyed, panting) Oh my GOD is it bad, just tell me, don\'t sugarcoat it— is my ' + rel + ' dying?! Please don\'t lie to me.'
+      '(barges in) Hi — sorry, I\'m ' + relFirstName + ', I\'m ' + rawName + '\'s ' + rel + '. What is going ON in here?! I\'ve been waiting an HOUR, somebody needs to tell me what\'s wrong!',
+      '(storms in) Hi doctor, I\'m ' + relFirstName + ' — their ' + rel + '. Listen, I am not leaving this room until somebody gives me straight answers. What\'s wrong with them?',
+      '(out of breath) Oh thank god — hi, I\'m ' + relFirstName + ', I\'m their ' + rel + ', I just drove two hours. Please — please just tell me, are they gonna be okay?',
+      '(pushes through curtain) Excuse me. My name is ' + relFirstName + ', I\'m ' + rawName + '\'s ' + rel + ' and I have the right to be here. What tests have you run? What medications? I want specifics.',
+      '(wild-eyed) Hi — sorry — ' + relFirstName + ', their ' + rel + ' — is it bad, oh god just tell me, is it bad?! Don\'t sugarcoat it, I can handle it, I think, just— please—',
+      '(composed but shaking) Hello doctor, I\'m ' + relFirstName + '. I\'m ' + rawName + '\'s ' + rel + '. I need you to walk me through exactly what\'s happening right now, start to finish.'
     ];
     var line = variants[Math.floor(Math.random() * variants.length)];
 
@@ -11778,7 +11810,7 @@ var GOD_ACTIONS = {
     else if (maleRel) relVoice = malePool[0] || 'alloy';
     else relVoice = (Math.random() < 0.5 ? femalePool[0] : malePool[0]) || 'alloy';
 
-    // Set persistent relative state — subsequent doctor messages go to them
+    // Set persistent relative state — subsequent doctor messages go to them by default
     App._godActiveRelative = {
       name: 'Family (' + relFirstName + ', ' + rel + ')',
       firstName: relFirstName,
@@ -11790,6 +11822,7 @@ var GOD_ACTIONS = {
       presentation: (st && st.presentation) || '',
       speed: 1.08
     };
+    App._godTalkingTo = 'relative'; // default addressee on entry
 
     try { stopMicForProcessing_(); } catch(e){}
 
@@ -11814,10 +11847,15 @@ var GOD_ACTIONS = {
     if (!App._godActiveRelative) { showToast_('No relative in the room'); closeGodMenu_(); return; }
     var r = App._godActiveRelative;
     App._godActiveRelative = null;
-    // Push a brief system note so the model sees the transition
+    App._godTalkingTo = 'patient';
     App.pbHistory.push({ role: 'system', content: r.firstName + ' has been escorted out of the room. You are back alone with the patient.', severity: 'safe' });
     renderPBChat();
     showToast_('👋 ' + r.firstName + ' dismissed. Back to the patient.');
+    closeGodMenu_();
+  }},
+  canonToggle: { emoji: '🧿', label: 'Canon mode: ON/OFF', desc: 'Toggle doctor-as-reality-god (default ON)', fn: function() {
+    App._godCanonMode = App._godCanonMode === false ? true : false;
+    showToast_('🧿 Canon mode ' + (App._godCanonMode === false ? 'OFF — patient can dispute you' : 'ON — your word is law'));
     closeGodMenu_();
   }},
   fireAlarm: { emoji: '🚨', label: 'Fire alarm', desc: 'Code Red evacuation', fn: function() {
@@ -13544,9 +13582,23 @@ function renderNACStationUI_(targetEl) {
   html += '<button class="btn btn-sm" onclick="finishNACStation()" style="background:rgba(255,255,255,0.15);color:white;border:1px solid rgba(255,255,255,0.3)">End Station</button>';
   html += '</div></div>';
   if (App._godActiveRelative) {
-    html += '<div style="background:linear-gradient(90deg,#ff6f00,#ff8f00);color:white;padding:8px 16px;font-size:13px;font-weight:700;display:flex;justify-content:space-between;align-items:center">';
-    html += '<span>👨‍👩‍👧 Talking to ' + escapeHtml(App._godActiveRelative.name) + ' — messages go to them, not the patient.</span>';
-    html += '<button onclick="godFire_(\'dismissRelative\')" style="background:rgba(255,255,255,0.25);color:white;border:1px solid rgba(255,255,255,0.4);padding:4px 12px;border-radius:14px;font-size:12px;font-weight:700;cursor:pointer">👋 Dismiss</button>';
+    var _talkingTo = App._godTalkingTo === 'patient' ? 'patient' : 'relative';
+    var _relName = App._godActiveRelative.name;
+    var _patientName = (App.pbPatientInfo && App.pbPatientInfo.name) || 'Patient';
+    var _pBtn = _talkingTo === 'patient'
+      ? 'background:#fff;color:#ff6f00;border:1px solid #fff;font-weight:800'
+      : 'background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.5);font-weight:600';
+    var _rBtn = _talkingTo === 'relative'
+      ? 'background:#fff;color:#ff6f00;border:1px solid #fff;font-weight:800'
+      : 'background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.5);font-weight:600';
+    html += '<div style="background:linear-gradient(90deg,#ff6f00,#ff8f00);color:white;padding:8px 16px;font-size:13px;font-weight:700;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">';
+    html += '<span>👨‍👩‍👧 ' + escapeHtml(_relName) + ' is in the room</span>';
+    html += '<div style="display:flex;gap:6px;align-items:center">';
+    html += '<span style="font-size:11px;opacity:0.85;margin-right:4px">Talking to:</span>';
+    html += '<button onclick="setGodTalkingTo_(\'patient\')" style="' + _pBtn + ';padding:4px 10px;border-radius:14px;font-size:12px;cursor:pointer">💬 ' + escapeHtml(_patientName) + '</button>';
+    html += '<button onclick="setGodTalkingTo_(\'relative\')" style="' + _rBtn + ';padding:4px 10px;border-radius:14px;font-size:12px;cursor:pointer">💬 ' + escapeHtml(App._godActiveRelative.firstName) + '</button>';
+    html += '<button onclick="godFire_(\'dismissRelative\')" style="background:rgba(0,0,0,0.2);color:white;border:1px solid rgba(255,255,255,0.4);padding:4px 10px;border-radius:14px;font-size:12px;font-weight:700;cursor:pointer;margin-left:8px">👋 Dismiss</button>';
+    html += '</div>';
     html += '</div>';
   }
 
