@@ -11623,6 +11623,189 @@ function _godCurrentStation_() {
   return App.nacStations && App.nacStations[(App.nacCurrentStation || 1) - 1];
 }
 
+// Hot-swap the current NAC station for a different pregen patient.
+// Called by god-mode "pick patient" and "random patient" actions.
+function _nacSwapStation_(newStation) {
+  if (!newStation || !App.nacStations || !App.nacCurrentStation) { showToast_('No active station'); return; }
+  // Tear down everything tied to the current station so startNextNACStation has a clean slate.
+  try { stopNACTimer(); } catch(e){}
+  try { stopHandsFree_(); } catch(e){}
+  try { stopNACPttRecording_(false); } catch(e){}
+  if (App.nacReadingInterval) { try { clearInterval(App.nacReadingInterval); } catch(e){} App.nacReadingInterval = null; }
+  if (App.nacIdleTimer) { try { clearInterval(App.nacIdleTimer); } catch(e){} App.nacIdleTimer = null; }
+  App._ttsSeq = (App._ttsSeq || 0) + 1;
+  try { _stopTTSAudio_(); } catch(e){}
+  // Clear any god-mode directives + relatives (they were aimed at the previous patient)
+  App._godDirectives = [];
+  App._godActiveRelative = null;
+  App._godTalkingTo = 'patient';
+  // Overwrite the current slot so the roster stays indexable.
+  App.nacStations[App.nacCurrentStation - 1] = newStation;
+  // Decrement so startNextNACStation's pre-increment lands us back on the swapped slot.
+  App.nacCurrentStation--;
+  // Reset flags that the reading-period and timer logic expect to be fresh.
+  App.nacStationFinished = false;
+  App.nacExaminerPhase = false;
+  App.nacExaminerTriggered = false;
+  App.nacOneMinBuzzed = false;
+  App.pbDiagnosing = false;
+  App.pbDiagResolved = false;
+  // Also pop any partial score that may have been written for this slot (shouldn't be, but be safe).
+  if (Array.isArray(App.nacScores)) {
+    App.nacScores = App.nacScores.filter(function(s){ return s.station !== (App.nacCurrentStation + 1); });
+  }
+  try { startNextNACStation(); } catch(e){ console.error('[swap] startNextNACStation failed', e); showToast_('Swap failed: ' + (e.message||e)); return; }
+  showToast_('🔄 Swapped to ' + (newStation.nm || 'patient') + ' — ' + (newStation.presentation || newStation.dx || ''));
+}
+
+// Build the picker modal listing all 84 pregen stations from NAC_PRACTICE_TESTS.
+// On selection, hot-swap via _nacSwapStation_.
+function openNACPatientPicker_() {
+  if (typeof NAC_PRACTICE_TESTS === 'undefined' || !NAC_PRACTICE_TESTS.length) { showToast_('No patient roster loaded'); return; }
+  // Flatten with test + index metadata so we can group in the UI.
+  var flat = [];
+  NAC_PRACTICE_TESTS.forEach(function(test, ti) {
+    test.forEach(function(st, si) {
+      flat.push({ st: st, testNum: ti + 1, slotNum: si + 1 });
+    });
+  });
+
+  // Remove any existing picker first (idempotent open).
+  var existing = document.getElementById('nac-patient-picker');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'nac-patient-picker';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:100000;display:flex;align-items:center;justify-content:center;padding:24px;backdrop-filter:blur(6px)';
+
+  var modal = document.createElement('div');
+  modal.style.cssText = 'background:linear-gradient(135deg,#0f1024,#1a1a3e);border:2px solid #10b981;border-radius:16px;width:min(920px,100%);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 25px 70px rgba(16,185,129,0.35);overflow:hidden';
+
+  var header = document.createElement('div');
+  header.style.cssText = 'padding:18px 22px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;gap:12px;flex-wrap:wrap';
+  header.innerHTML = '<div style="flex:1;min-width:200px"><div style="font-size:11px;letter-spacing:1.4px;color:#10b981;font-weight:800">👑 STATION DIRECTOR</div><div style="font-size:18px;font-weight:700;color:#fff;margin-top:2px">Pick your patient</div><div style="font-size:11px;color:rgba(255,255,255,0.5);margin-top:3px">' + flat.length + ' pregen stations across ' + NAC_PRACTICE_TESTS.length + ' practice tests — click to hot-swap</div></div>';
+
+  var closeBtn = document.createElement('button');
+  closeBtn.textContent = '✕ Close';
+  closeBtn.style.cssText = 'background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#fff;padding:8px 14px;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600';
+  closeBtn.onmouseover = function(){ closeBtn.style.background = 'rgba(255,255,255,0.18)'; };
+  closeBtn.onmouseout  = function(){ closeBtn.style.background = 'rgba(255,255,255,0.08)'; };
+  closeBtn.onclick = function(){ overlay.remove(); };
+  header.appendChild(closeBtn);
+
+  var searchWrap = document.createElement('div');
+  searchWrap.style.cssText = 'padding:14px 22px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;gap:10px;align-items:center;flex-wrap:wrap';
+  var search = document.createElement('input');
+  search.type = 'text';
+  search.placeholder = '🔍 Filter by presentation, specialty, name, or diagnosis…';
+  search.style.cssText = 'flex:1;min-width:240px;background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.15);color:#fff;padding:10px 14px;border-radius:8px;font-size:13px;outline:none';
+  search.onfocus = function(){ search.style.borderColor = '#10b981'; };
+  search.onblur  = function(){ search.style.borderColor = 'rgba(255,255,255,0.15)'; };
+  searchWrap.appendChild(search);
+
+  // Specialty filter chips (derived from the roster)
+  var specialtySet = {};
+  flat.forEach(function(f){ if (f.st.specialty) specialtySet[f.st.specialty] = true; });
+  var specialties = Object.keys(specialtySet).sort();
+  var activeSpecialty = null;
+  var chipRow = document.createElement('div');
+  chipRow.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-top:2px';
+  function mkChip(label, value) {
+    var c = document.createElement('button');
+    c.textContent = label;
+    c.dataset.value = value || '';
+    c.style.cssText = 'background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.75);padding:5px 10px;border-radius:999px;font-size:11px;cursor:pointer;font-weight:600;letter-spacing:0.3px';
+    c.onclick = function() {
+      activeSpecialty = (activeSpecialty === value) ? null : value;
+      Array.prototype.forEach.call(chipRow.children, function(ch){
+        var on = (ch.dataset.value || '') === (activeSpecialty || '');
+        ch.style.background    = on ? 'rgba(16,185,129,0.22)' : 'rgba(255,255,255,0.06)';
+        ch.style.borderColor   = on ? '#10b981'               : 'rgba(255,255,255,0.12)';
+        ch.style.color         = on ? '#bbf7d0'               : 'rgba(255,255,255,0.75)';
+      });
+      render();
+    };
+    return c;
+  }
+  chipRow.appendChild(mkChip('All specialties', null));
+  specialties.forEach(function(sp){ chipRow.appendChild(mkChip(sp, sp)); });
+  // Highlight "All" by default
+  chipRow.children[0].style.background = 'rgba(16,185,129,0.22)';
+  chipRow.children[0].style.borderColor = '#10b981';
+  chipRow.children[0].style.color = '#bbf7d0';
+  searchWrap.appendChild(chipRow);
+
+  var body = document.createElement('div');
+  body.style.cssText = 'overflow-y:auto;flex:1;padding:8px 10px 16px';
+
+  function matches(f) {
+    if (activeSpecialty && f.st.specialty !== activeSpecialty) return false;
+    var q = (search.value || '').trim().toLowerCase();
+    if (!q) return true;
+    var hay = [f.st.presentation, f.st.specialty, f.st.focus, f.st.nm, f.st.dx, f.st.eth, 'test ' + f.testNum].join(' ').toLowerCase();
+    return hay.indexOf(q) !== -1;
+  }
+
+  function render() {
+    body.innerHTML = '';
+    var shown = 0;
+    var currentSlot = (App.nacCurrentStation || 0);
+    NAC_PRACTICE_TESTS.forEach(function(test, ti) {
+      var visibleInTest = test.filter(function(st, si){ return matches({ st: st, testNum: ti + 1, slotNum: si + 1 }); });
+      if (!visibleInTest.length) return;
+      var group = document.createElement('div');
+      group.style.cssText = 'margin:14px 12px 4px';
+      var gh = document.createElement('div');
+      gh.style.cssText = 'font-size:10px;letter-spacing:1.4px;color:#10b981;font-weight:800;margin-bottom:6px';
+      gh.textContent = 'PRACTICE TEST ' + (ti + 1) + ' · ' + visibleInTest.length + ' station' + (visibleInTest.length === 1 ? '' : 's');
+      group.appendChild(gh);
+      var grid = document.createElement('div');
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px';
+      test.forEach(function(st, si) {
+        if (!matches({ st: st, testNum: ti + 1, slotNum: si + 1 })) return;
+        var isCurrent = (currentSlot === si + 1) && (App.nacStations && App.nacStations[si] === st);
+        var card = document.createElement('button');
+        card.style.cssText = 'text-align:left;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:#fff;padding:10px 12px;border-radius:10px;cursor:pointer;transition:all 0.15s;font-family:inherit' + (isCurrent ? ';border-color:#10b981;background:rgba(16,185,129,0.12)' : '');
+        card.onmouseover = function() { card.style.background = isCurrent ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.12)'; card.style.borderColor = '#10b981'; card.style.transform = 'translateY(-1px)'; };
+        card.onmouseout  = function() { card.style.background = isCurrent ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.04)'; card.style.borderColor = isCurrent ? '#10b981' : 'rgba(255,255,255,0.08)'; card.style.transform = 'translateY(0)'; };
+        var name = st.nm ? st.nm.replace(/\s*\([^)]+\)/, '') : '(no name)';
+        var demo = (st.age != null ? st.age + 'y' : '') + (st.sx ? ' ' + st.sx : '');
+        card.innerHTML =
+          '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">' +
+            '<div style="font-weight:700;font-size:13px">' + escapeHtml(st.presentation || '—') + '</div>' +
+            '<div style="font-size:10px;color:rgba(255,255,255,0.5);white-space:nowrap">#' + (si + 1) + (isCurrent ? ' · NOW' : '') + '</div>' +
+          '</div>' +
+          '<div style="font-size:11px;color:rgba(255,255,255,0.65);margin-top:2px">' + escapeHtml(st.specialty || '') + (st.focus ? ' · ' + escapeHtml(st.focus) : '') + '</div>' +
+          '<div style="font-size:11px;color:rgba(255,255,255,0.75);margin-top:6px">👤 ' + escapeHtml(name) + (demo ? ' <span style="color:rgba(255,255,255,0.45)">(' + escapeHtml(demo.trim()) + ')</span>' : '') + '</div>' +
+          (st.dx ? '<div style="font-size:10px;color:#ffd700;margin-top:4px;opacity:0.85">Dx: ' + escapeHtml(st.dx) + '</div>' : '');
+        card.onclick = function() {
+          overlay.remove();
+          try { closeGodMenu_(); } catch(e){}
+          _nacSwapStation_(st);
+        };
+        grid.appendChild(card);
+        shown++;
+      });
+      group.appendChild(grid);
+      body.appendChild(group);
+    });
+    if (!shown) {
+      body.innerHTML = '<div style="padding:40px 20px;text-align:center;color:rgba(255,255,255,0.5);font-size:13px">No stations match your filter. Try clearing the search or specialty chip.</div>';
+    }
+  }
+
+  search.oninput = render;
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+
+  modal.appendChild(header);
+  modal.appendChild(searchWrap);
+  modal.appendChild(body);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  render();
+  setTimeout(function(){ try { search.focus(); } catch(e){} }, 50);
+}
+
 function _buildRelativeSystemPrompt_(r) {
   var femaleRel = /wife|mother|daughter|sister/i.test(r.rel);
   var maleRel = /husband|father|son|brother/i.test(r.rel);
@@ -11710,10 +11893,11 @@ function openGodMenu_() {
   if (!_isGodMode_()) return;
 
   var sections = [
-    { title: 'Time & Flow',    color: '#4facfe', actions: ['freeze','unfreeze','addTime','subTime','skipToOral','rewind','spoil','hint'] },
+    { title: 'Station Director', color: '#10b981', actions: ['pickPatient','randomPatient','spoil','hint'] },
+    { title: 'Time & Flow',    color: '#4facfe', actions: ['freeze','unfreeze','addTime','subTime','skipToOral','rewind'] },
     { title: 'Patient Mind',   color: '#ba68c8', actions: ['speakAs','injectSymptom','plotTwist','mute','karen','zen','shakespeare','musical','dog','alien','lostInTranslation','horny'] },
     { title: 'Body & Vitals',  color: '#ef5350', actions: ['tank','miracle','fever','hypothermia','painSpike','crash','resurrect'] },
-    { title: 'Meta Chaos',     color: '#ffa726', actions: ['relative','dismissRelative','canonToggle','fireAlarm','powerOut','wrongRoom','random','clear'] }
+    { title: 'Meta Chaos',     color: '#ffa726', actions: ['relative','dismissRelative','canonToggle','fireAlarm','powerOut','wrongRoom','clear'] }
   ];
 
   var overlay = document.createElement('div');
@@ -11791,6 +11975,24 @@ function setGodTalkingTo_(target) {
 }
 
 var GOD_ACTIONS = {
+  // ── Station Director ──
+  pickPatient: { emoji: '🎭', label: 'Pick a patient', desc: 'Swap to any of the 84 pregen stations', fn: function() {
+    closeGodMenu_();
+    try { openNACPatientPicker_(); } catch(e){ console.error('[god] pickPatient', e); showToast_('Picker failed: ' + (e.message||e)); }
+  }},
+  randomPatient: { emoji: '🎲', label: 'Random patient', desc: 'Roll the dice on the full roster', fn: function() {
+    closeGodMenu_();
+    if (typeof NAC_PRACTICE_TESTS === 'undefined' || !NAC_PRACTICE_TESTS.length) { showToast_('No roster loaded'); return; }
+    var flat = [];
+    NAC_PRACTICE_TESTS.forEach(function(test){ test.forEach(function(st){ flat.push(st); }); });
+    if (!flat.length) { showToast_('Roster is empty'); return; }
+    // Avoid re-rolling the same patient we're already on
+    var current = _godCurrentStation_();
+    var pool = flat.filter(function(s){ return s !== current; });
+    var pick = pool[Math.floor(Math.random() * pool.length)] || flat[0];
+    _nacSwapStation_(pick);
+  }},
+
   // ── Time & Flow ──
   freeze: { emoji: '⏸', label: 'Freeze time', desc: 'Stop the station clock', fn: function() {
     if (App.nacTimerInterval) { clearInterval(App.nacTimerInterval); App.nacTimerInterval = null; showToast_('⏸ Time frozen'); }
