@@ -6851,8 +6851,8 @@ function showQuizSetup() {
   html += '</div>';
   if (examMode) {
     html += '<div style="background:rgba(198,40,40,0.08);border:1px solid rgba(198,40,40,0.3);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--text);line-height:1.6">';
-    html += '<strong style="color:#c62828">Real MCCQE Part I Conditions:</strong><br>';
-    html += '115 MCQs &bull; 2h 40m timer &bull; No going back &bull; No answer reveal until end &bull; All specialties';
+    html += '<strong style="color:#c62828">Real MCCQE Part I Conditions (post-April 2025):</strong><br>';
+    html += '230 MCQs total &bull; 2 sections of 115 &bull; 2h 40m per section (~83s/Q) &bull; Score 300\u2013600, pass at 439 &bull; No CDM &bull; No back-navigation &bull; No answer reveal until end';
     html += '</div>';
   }
   html += '<h3 style="margin-bottom:20px;text-align:center">' + (examMode ? 'Exam Settings' : 'Quiz Setup') + '</h3>';
@@ -6902,17 +6902,20 @@ function showQuizSetup() {
   html += '<input type="number" id="quiz-count" placeholder="Or enter custom number..." value="10" min="1" max="999">';
   html += '</div>';
 
-  html += '<div class="form-group"><label>Timer <span style="font-size:11px;color:var(--text-light);font-weight:400">(real MCCQE = ~90s/question)</span></label>';
+  html += '<div class="form-group"><label>Timer <span style="font-size:11px;color:var(--text-light);font-weight:400">(real MCCQE Part I pace \u2248 83s/question \u2014 160min \u00f7 115Qs)</span></label>';
   html += '<div class="quiz-count-btns">';
   html += '<button class="quiz-count-btn active" id="timer-btn-0" onclick="setQuizTimer(0,this)">No Timer</button>';
-  html += '<button class="quiz-count-btn" id="timer-btn-90" onclick="setQuizTimer(90,this)">90s/q &mdash; MCCQE</button>';
+  html += '<button class="quiz-count-btn" id="timer-btn-83" onclick="setQuizTimer(83,this)">83s/q &mdash; MCCQE Pace</button>';
   html += '<button class="quiz-count-btn" id="timer-btn-60" onclick="setQuizTimer(60,this)">60s/q &mdash; Hard</button>';
   html += '</div>';
   html += '<input type="number" id="quiz-timer-custom" placeholder="Or custom total minutes..." min="1" max="300" style="margin-top:6px">';
   html += '</div>';
 
   if (examMode) {
-    html += '<button class="btn" style="width:100%;padding:14px;font-size:16px;margin-top:8px;background:linear-gradient(135deg,#c62828,#e53935);color:white;font-weight:700" onclick="App.quizExamActive=true;document.getElementById(\'quiz-count\').value=115;document.getElementById(\'quiz-specialty\').value=\'All\';setQuizTimer(90);startQuiz()">Begin Exam (115 Qs &bull; 2h40m)</button>';
+    html += '<div style="display:flex;gap:8px;margin-top:8px">';
+    html += '<button class="btn" style="flex:1;padding:14px;font-size:15px;background:linear-gradient(135deg,#c62828,#e53935);color:white;font-weight:700" onclick="App.quizExamActive=true;document.getElementById(\'quiz-count\').value=115;document.getElementById(\'quiz-specialty\').value=\'All\';setQuizTimer(83);startQuiz()">One Section (115 Qs &bull; 2h 40m)</button>';
+    html += '<button class="btn" style="flex:1;padding:14px;font-size:15px;background:linear-gradient(135deg,#8e0000,#c62828);color:white;font-weight:700" onclick="App.quizExamActive=true;document.getElementById(\'quiz-count\').value=230;document.getElementById(\'quiz-specialty\').value=\'All\';setQuizTimer(83);startQuiz()" title="Full exam: 2 back-to-back sections of 115, ~5h 20m total">Full Exam (230 Qs &bull; 5h 20m)</button>';
+    html += '</div>';
   } else {
     html += '<button class="btn btn-success" style="width:100%;padding:14px;font-size:16px;margin-top:8px" onclick="App.quizExamActive=false;startQuiz()">Start Quiz</button>';
   }
@@ -8578,7 +8581,7 @@ function sortWeakCardsFirst_(cards) {
 
 function setQuizTimer(secs, btn) {
   App.quizSecondsPerQ = secs;
-  // btn is optional — exam mode calls setQuizTimer(90) without a button element
+  // btn is optional — exam mode calls setQuizTimer(83) without a button element
   if (btn) {
     var btns = btn.parentElement.querySelectorAll('.quiz-count-btn');
     for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
@@ -12774,7 +12777,9 @@ var MCC_CP_MAP = {
   'syncope':                   { code: 'CP-97', name: 'Syncope / pre-syncope' },
   'lymphadenopathy':           { code: 'CP-57', name: 'Lymphadenopathy' },
   'cough':                     { code: 'CP-29', name: 'Cough' },
-  'weight loss':               { code: 'CP-106',name: 'Weight loss / unintentional' }
+  'weight loss':               { code: 'CP-106',name: 'Weight loss / unintentional' },
+  'memory loss':               { code: 'CP-62', name: 'Memory loss / dementia' },
+  'thyroid enlargement':       { code: 'CP-98', name: 'Thyroid enlargement / goitre / thyroid mass' }
 };
 function getMCCCodeForStation_(station) {
   if (!station || !station.presentation) return null;
