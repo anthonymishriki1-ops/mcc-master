@@ -10944,6 +10944,11 @@ function showNACSetup() {
   html += '<h2>NAC-OSCE Simulator</h2>';
   html += '<p style="color:var(--text-light);margin:12px 0 20px">Practice the National Assessment Collaboration OSCE. Each station is a timed patient encounter with structured scoring.</p>';
 
+  html += '<div style="background:rgba(46,125,50,0.08);border:1px solid rgba(46,125,50,0.3);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--text);line-height:1.6;text-align:left">';
+  html += '<strong style="color:#2e7d32">Real NAC Examination Format:</strong><br>';
+  html += '12 stations (2 pilot unscored) &bull; 11 min each, 2 min between &bull; 2 min read + 8 min SP + 3 min examiner oral &bull; Scale 500\u2013700, pass 577 (mean 600, SD 25) &bull; 3 composite domains: Data Acquisition, Problem Solving, Communication';
+  html += '</div>';
+
   html += '<div class="form-group" style="text-align:left"><label>Practice Test</label>';
   html += '<div class="quiz-count-btns" style="flex-wrap:wrap">';
   var selectedTest = (typeof App.nacSelectedTest === 'number') ? App.nacSelectedTest : 1;
@@ -12726,10 +12731,13 @@ function startNextNACStation() {
 }
 
 // ── MCC Clinical Presentations (CP) blueprint mapping ──
-// Each NAC-OSCE station maps to one (or more) of the 78 MCC Clinical Presentations
-// that make up the Part 2 blueprint. We map by the station's `presentation` field so
-// learners know which CP they're drilling. Source: MCC objectives CP list (condensed
-// to 26 entries that cover our pregen stations — add more as new presentations land).
+// Each NAC-OSCE station maps to one of the MCC Clinical Presentations from the
+// MCC objectives — the same blueprint the NAC Examination samples from. We map
+// by the station's `presentation` field so learners know which CP they're
+// drilling. The `code` field is an app-internal id (NOT the MCC's official
+// numbering — MCC uses hierarchical codes like "78-11" that change over time);
+// only the `name` is surfaced to users. Source: MCC objectives CP list
+// (condensed to ~48 entries that cover our pregen stations).
 var MCC_CP_MAP = {
   'chest pain':                { code: 'CP-24', name: 'Chest pain' },
   'dyspnea':                   { code: 'CP-32', name: 'Dyspnea / Respiratory distress' },
@@ -12804,16 +12812,17 @@ function deriveNACStationType_(station) {
   var blob = f + ' || ' + pr + ' || ' + sp;
 
   // Resuscitation / emergency management (order matters — check before generic EM)
-  if (/\barrest|acls|atls|primary survey|anaphylaxis|burn|tension pneumo|stemi (?:management|workup)|sepsis (?:bundle|resus)/.test(blob)) return 'resus';
+  if (/\barrest|acls|atls|primary survey|anaphylaxis|burn|tension pneumo|stemi (?:management|workup)|sepsis (?:bundle|resus)|\bdka\b|diabetic ketoacidosis|hyperosmolar|status epilepticus|shock (?:management|resus)/.test(blob)) return 'resus';
 
   // Disclosure / breaking bad news
   if (/\b(disclosure|breaking bad news|disclose|bad news)\b/.test(blob)) return 'disclosure';
 
+  // Psych — history + MSE, no physical (check BEFORE counseling so a
+  // psychiatry station with "safety plan" in the focus still gets MSE routing)
+  if (sp.indexOf('psychiatry') !== -1) return 'hx_mse';
+
   // Counseling (behaviour change, safety planning, harm reduction, screening talks)
   if (/\b(counseling|counselling|safety plan|harm reduction|smoking cessation|lifestyle|sleep hygiene)\b/.test(f)) return 'counseling';
-
-  // Psych — history + MSE, no physical
-  if (sp.indexOf('psychiatry') !== -1) return 'hx_mse';
 
   // Pediatric — parent/caregiver historian
   if (sp.indexOf('pediatric') !== -1) return 'peds_parent';
@@ -12904,7 +12913,7 @@ function showNACReadingPeriod_(station) {
     html += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">';
     html += '<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(99,102,241,0.12);color:var(--primary);border:1px solid rgba(99,102,241,0.35);border-radius:999px;padding:4px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px" role="status" aria-label="Station type: ' + doorTask.label.replace(/&amp;/g,'and') + '">' + doorTask.icon + ' ' + doorTask.label + '</div>';
     if (mccCp) {
-      html += '<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(46,125,50,0.12);color:#2e7d32;border:1px solid rgba(46,125,50,0.35);border-radius:999px;padding:4px 12px;font-size:11px;font-weight:700;letter-spacing:0.5px" title="MCC Clinical Presentation blueprint code" aria-label="MCC blueprint code ' + mccCp.code + ': ' + mccCp.name + '">&#x1F4DA; ' + mccCp.code + ' \u00B7 ' + escapeHtml(mccCp.name) + '</div>';
+      html += '<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(46,125,50,0.12);color:#2e7d32;border:1px solid rgba(46,125,50,0.35);border-radius:999px;padding:4px 12px;font-size:11px;font-weight:700;letter-spacing:0.5px" title="Mapped MCC Clinical Presentation (from the MCC objectives)" aria-label="MCC Clinical Presentation: ' + mccCp.name + '">&#x1F4DA; ' + escapeHtml(mccCp.name) + '</div>';
     }
     html += '</div>';
     html += '<div style="font-size:13px;color:var(--text);line-height:1.55"><strong>Candidate Task:</strong> ' + doorTask.text + '</div>';
@@ -13458,15 +13467,16 @@ function _renderNACResultsScreen(score, evalResult) {
     h += '<span style="font-size:15px;font-weight:600;color:var(--text)">Total</span>';
     h += '<strong style="font-size:22px;color:var(--primary)">' + (evalResult.total || 0) + '/18</strong></div>';
 
-    // Real-exam scaled score — rolls 6 domains into 3 MCC composites + 400-700 overall.
-    // This is an APPROXIMATION (not an official score) to give learners a feel for the
-    // MCCQE Part 2 scale, where the national pass is historically ~425-ish.
+    // Real-exam scaled score — rolls 6 domains into the 3 NAC Examination composites
+    // plus an overall 500–700 scaled score. APPROXIMATION only (not an official score)
+    // to give learners a feel for the NAC scale, where the May 2023+ pass is 577
+    // (mean 600, SD 25 per the MCC standard-setting report).
     var scaled = _computeMCCScaledScores_(evalResult);
     if (scaled) {
-      var passColor = scaled.overall >= 450 ? '#2e7d32' : scaled.overall >= 400 ? '#ef6c00' : '#c62828';
+      var passColor = scaled.overall >= 577 ? '#2e7d32' : scaled.overall >= 550 ? '#ef6c00' : '#c62828';
       h += '<div style="margin-top:14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">';
       h += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">';
-      h += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-light)">Estimated MCC-Scale Score <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;color:var(--text-light);opacity:0.8" title="Approximate — not an official MCCQE score">&#9432;</span></div>';
+      h += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-light)">Estimated NAC-Scale Score <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;color:var(--text-light);opacity:0.8" title="Approximate — not an official NAC score">&#9432;</span></div>';
       h += '<strong style="font-size:20px;color:' + passColor + '">' + scaled.overall + '</strong>';
       h += '</div>';
       h += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:12px">';
@@ -13477,14 +13487,14 @@ function _renderNACResultsScreen(score, evalResult) {
       ];
       for (var ci = 0; ci < composites.length; ci++) {
         var c = composites[ci];
-        var cColor = c.v >= 200 ? '#2e7d32' : c.v >= 150 ? '#ef6c00' : '#c62828';
+        var cColor = c.v >= 577 ? '#2e7d32' : c.v >= 550 ? '#ef6c00' : '#c62828';
         h += '<div style="text-align:center;padding:8px 4px;background:var(--card);border:1px solid var(--border);border-radius:8px">';
         h += '<div style="font-size:11px;color:var(--text-light);margin-bottom:2px">' + c.label + '</div>';
         h += '<div style="font-size:16px;font-weight:800;color:' + cColor + '">' + c.v + '</div>';
         h += '</div>';
       }
       h += '</div>';
-      h += '<div style="margin-top:8px;font-size:10px;color:var(--text-light);text-align:center;opacity:0.75">Approximate only — scale 400\u2013700, historical national pass ~425. Not an official MCCQE score.</div>';
+      h += '<div style="margin-top:8px;font-size:10px;color:var(--text-light);text-align:center;opacity:0.75">Approximate only \u2014 NAC scale 500\u2013700, mean 600, pass 577 (MCC May 2023 standard-setting). Not an official NAC score.</div>';
       h += '</div>';
     }
 
@@ -13682,26 +13692,27 @@ function clampEvalScore_(v) {
   return Math.max(0, Math.min(3, n));
 }
 
-// Roll the 6 raw rubric domains into MCCQE Part 2's 3 composite domains + an overall
-// 400-700 scaled score. APPROXIMATION ONLY — the real exam uses calibrated psychometrics;
+// Roll the 6 raw rubric domains into the NAC Examination's 3 composite domains + an overall
+// 500-700 scaled score. APPROXIMATION ONLY — the real exam uses calibrated psychometrics;
 // we just want learners to see a familiar number so they know roughly where they stand.
+// Per MCC May 2023 standard-setting: NAC scale 500–700, mean 600, SD 25, pass 577.
 //   dataAcq       ← historyTaking + physicalExam          (0..6)
 //   problemSolving ← clinicalReasoning + investigations + diagnosis  (0..9)
 //   communication  ← communication + handHygiene + closingRitual      (0..5)
-// Each composite scaled to 100..300 (centered on 200). Overall = 400 + 300 * (total/max).
+// Each composite and the overall are mapped linearly into 500..700 (zero→500, perfect→700).
 function _computeMCCScaledScores_(e) {
   if (!e) return null;
   var dataMax = 6, psMax = 9, commMax = 5;
   var dataRaw = (e.historyTaking || 0) + (e.physicalExam || 0);
   var psRaw   = (e.clinicalReasoning || 0) + (e.investigations || 0) + (e.diagnosis || 0);
   var commRaw = (e.communication || 0) + (typeof e.handHygiene === 'number' ? e.handHygiene : 0) + (typeof e.closingRitual === 'number' ? e.closingRitual : 0);
-  function scale(raw, max) { return Math.round(100 + (raw / max) * 200); }
+  function scale(raw, max) { return Math.round(500 + (raw / max) * 200); }
   var dataAcq = scale(dataRaw, dataMax);
   var problemSolving = scale(psRaw, psMax);
   var communication = scale(commRaw, commMax);
   // Overall uses 6 primary domains only (keep same total cap the UI already shows)
   var primaryTotal = (e.historyTaking || 0) + (e.physicalExam || 0) + (e.communication || 0) + (e.clinicalReasoning || 0) + (e.investigations || 0) + (e.diagnosis || 0);
-  var overall = Math.round(400 + (primaryTotal / 18) * 300);
+  var overall = Math.round(500 + (primaryTotal / 18) * 200);
   return { dataAcq: dataAcq, problemSolving: problemSolving, communication: communication, overall: overall };
 }
 
